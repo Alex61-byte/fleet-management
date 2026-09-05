@@ -1,0 +1,206 @@
+{
+  "semantic": {
+    "color": {
+      "light": {
+        "canvas": { "$type": "color", "$value": "{color.gray.25}", "$description": "App content backdrop" },
+        "surface": { "$type": "color", "$value": "{color.gray.0}", "$description": "Default page / auth backdrop alias of raised white" },
+        "surface-raised": { "$type": "color", "$value": "{color.gray.0}", "$description": "Panels, cards, auth card, KPI tiles" },
+        "surface-sunken": { "$type": "color", "$value": "{color.gray.50}", "$description": "Table header, toolbar well, input hover well" },
+        "surface-overlay": { "$type": "color", "$value": "{color.overlay.scrim}" },
+        "sidebar": { "$type": "color", "$value": "{color.navy.900}" },
+        "sidebar-hover": { "$type": "color", "$value": "{color.navy.800}" },
+        "sidebar-selected": { "$type": "color", "$value": "{color.navy.700}" },
+        "nav-fg": { "$type": "color", "$value": "{color.gray.200}" },
+        "nav-fg-muted": { "$type": "color", "$value": "{color.gray.400}" },
+        "nav-fg-selected": { "$type": "color", "$value": "{color.gray.0}" },
+        "text-primary": { "$type": "color", "$value": "{color.gray.900}" },
+        "text-secondary": { "$type": "color", "$value": "{color.gray.500}" },
+        "text-inverse": { "$type": "color", "$value": "{color.gray.0}" },
+        "border": { "$type": "color", "$value": "{color.gray.200}" },
+        "divider": { "$type": "color", "$value": "{color.gray.100}" },
+        "table-border": { "$type": "color", "$value": "{color.gray.100}" },
+        "table-header": { "$type": "color", "$value": "{color.gray.50}" },
+        "table-row-hover": { "$type": "color", "$value": "{color.navy.50}" },
+        "table-row-selected": { "$type": "color", "$value": "{color.navy.100}" },
+        "brand": { "$type": "color", "$value": "{color.navy.600}" },
+        "brand-hover": { "$type": "color", "$value": "{color.navy.500}" },
+        "brand-pressed": { "$type": "color", "$value": "{color.navy.700}" },
+        "brand-subtle": { "$type": "color", "$value": "{color.navy.50}" },
+        "brand-accent": { "$type": "color", "$value": "{color.steel.500}", "$description": "2px chrome bar and mark country band only — not body, nav, or buttons" },
+        "mark-fill": { "$type": "color", "$value": "{color.navy.600}", "$description": "Shielded mark: shield and plate character blocks. Public plate: character blocks, right bolt, and plate edge (stroke)" },
+        "mark-glyph": { "$type": "color", "$value": "{color.gray.0}", "$description": "Shielded mark: keyline, plate face, and left bolt — also the contrasting frame on navy sidebar. Not the public-header plate face against surface-raised" },
+        "mark-plate-face": { "$type": "color", "$value": "{color.gray.0}", "$description": "Unshielded public-header plate enamel. Always light so navy mark-fill ink reads. Contrast vs surface-raised is carried by mark-fill plate edge on light; face vs canvas/header is AA on dark" },
+        "link": { "$type": "color", "$value": "{color.navy.600}" },
+        "link-hover": { "$type": "color", "$value": "{color.navy.500}" },
+        "link-pressed": { "$type": "color", "$value": "{color.navy.700}" },
+        "danger": { "$type": "color", "$value": "{color.red.600}" },
+        "danger-hover": { "$type": "color", "$value": "{color.red.700}" },
+        "danger-subtle": { "$type": "color", "$value": "{color.red.50}" },
+        "warning": { "$type": "color", "$value": "{color.amber.700}" },
+        "warning-subtle": { "$type": "color", "$value": "{color.amber.50}" },
+        "nav-urgency-critical": { "$type": "color", "$value": "{color.red.600}", "$description": "US-28 Vehicles nav/tab critical fill (daysUntil < 7). Solid — not danger-subtle (pastel fails on navy rail)" },
+        "nav-urgency-critical-hover": { "$type": "color", "$value": "{color.red.700}" },
+        "nav-urgency-soon": { "$type": "color", "$value": "{color.amber.700}", "$description": "US-28 Vehicles nav/tab soon fill (daysUntil = 7 exactly). Solid — not warning-subtle" },
+        "nav-urgency-soon-hover": { "$type": "color", "$value": "{color.amber.800}" },
+        "nav-urgency-fg": { "$type": "color", "$value": "{color.gray.0}", "$description": "Foreground on nav urgency fills (light and dark). Same as text-inverse" },
+        "success": { "$type": "color", "$value": "{color.green.700}" },
+        "success-subtle": { "$type": "color", "$value": "{color.green.50}" },
+        "info": { "$type": "color", "$value": "{color.blue.700}" },
+        "info-subtle": { "$type": "color", "$value": "{color.blue.50}" },
+        "focus": { "$type": "color", "$value": "{color.navy.500}" },
+        "ring": { "$type": "color", "$value": "{color.navy.500}" },
+        "disabled": { "$type": "color", "$value": "{color.gray.400}" },
+        "disabled-surface": { "$type": "color", "$value": "{color.gray.100}" },
+        "hover": { "$type": "color", "$value": "{color.gray.50}" },
+        "pressed": { "$type": "color", "$value": "{color.gray.100}" },
+        "selected": { "$type": "color", "$value": "{color.navy.50}" }
+      },
+      "dark": {
+        "canvas": { "$type": "color", "$value": "{color.gray.950}" },
+        "surface": { "$type": "color", "$value": "{color.gray.900}" },
+        "surface-raised": { "$type": "color", "$value": "{color.gray.800}" },
+        "surface-sunken": { "$type": "color", "$value": "{color.gray.950}" },
+        "surface-overlay": { "$type": "color", "$value": "{color.overlay.scrim}" },
+        "sidebar": { "$type": "color", "$value": "{color.navy.950}" },
+        "sidebar-hover": { "$type": "color", "$value": "{color.navy.800}" },
+        "sidebar-selected": { "$type": "color", "$value": "{color.navy.700}" },
+        "nav-fg": { "$type": "color", "$value": "{color.gray.200}" },
+        "nav-fg-muted": { "$type": "color", "$value": "{color.gray.400}" },
+        "nav-fg-selected": { "$type": "color", "$value": "{color.gray.0}" },
+        "text-primary": { "$type": "color", "$value": "{color.gray.50}" },
+        "text-secondary": { "$type": "color", "$value": "{color.gray.300}" },
+        "text-inverse": { "$type": "color", "$value": "{color.gray.0}" },
+        "border": { "$type": "color", "$value": "{color.gray.700}" },
+        "divider": { "$type": "color", "$value": "{color.gray.800}" },
+        "table-border": { "$type": "color", "$value": "{color.gray.800}" },
+        "table-header": { "$type": "color", "$value": "{color.gray.900}" },
+        "table-row-hover": { "$type": "color", "$value": "{color.navy.900}" },
+        "table-row-selected": { "$type": "color", "$value": "{color.navy.800}" },
+        "brand": { "$type": "color", "$value": "{color.navy.400}" },
+        "brand-hover": { "$type": "color", "$value": "{color.navy.300}" },
+        "brand-pressed": { "$type": "color", "$value": "{color.navy.500}" },
+        "brand-subtle": { "$type": "color", "$value": "{color.navy.900}" },
+        "brand-accent": { "$type": "color", "$value": "{color.steel.300}", "$description": "2px chrome bar and mark country band only — not body, nav, or buttons" },
+        "mark-fill": { "$type": "color", "$value": "{color.navy.400}", "$description": "Shielded mark: shield and plate character blocks. Public plate: character blocks, right bolt, and plate edge (stroke)" },
+        "mark-glyph": { "$type": "color", "$value": "{color.gray.0}", "$description": "Shielded mark: keyline, plate face, and left bolt — also the contrasting frame on navy sidebar. Not the public-header plate face against surface-raised" },
+        "mark-plate-face": { "$type": "color", "$value": "{color.gray.0}", "$description": "Unshielded public-header plate enamel (light on dark surface-raised). Ink remains mark-fill. Do not reuse this as a navy shield" },
+        "link": { "$type": "color", "$value": "{color.navy.400}" },
+        "link-hover": { "$type": "color", "$value": "{color.navy.300}" },
+        "link-pressed": { "$type": "color", "$value": "{color.navy.500}" },
+        "danger": { "$type": "color", "$value": "{color.red.400}" },
+        "danger-hover": { "$type": "color", "$value": "{color.red.500}" },
+        "danger-subtle": { "$type": "color", "$value": "{color.red.900}" },
+        "warning": { "$type": "color", "$value": "{color.amber.400}" },
+        "warning-subtle": { "$type": "color", "$value": "{color.amber.900}" },
+        "nav-urgency-critical": { "$type": "color", "$value": "{color.red.500}", "$description": "US-28 Vehicles nav/tab critical fill (daysUntil < 7). Solid on dark chrome" },
+        "nav-urgency-critical-hover": { "$type": "color", "$value": "{color.red.400}" },
+        "nav-urgency-soon": { "$type": "color", "$value": "{color.amber.600}", "$description": "US-28 Vehicles nav/tab soon fill (daysUntil = 7). Solid on dark chrome" },
+        "nav-urgency-soon-hover": { "$type": "color", "$value": "{color.amber.500}" },
+        "nav-urgency-fg": { "$type": "color", "$value": "{color.gray.0}", "$description": "Foreground on nav urgency fills (light and dark)" },
+        "success": { "$type": "color", "$value": "{color.green.400}" },
+        "success-subtle": { "$type": "color", "$value": "{color.green.900}" },
+        "info": { "$type": "color", "$value": "{color.blue.400}" },
+        "info-subtle": { "$type": "color", "$value": "{color.blue.900}" },
+        "focus": { "$type": "color", "$value": "{color.navy.300}" },
+        "ring": { "$type": "color", "$value": "{color.navy.300}" },
+        "disabled": { "$type": "color", "$value": "{color.gray.500}" },
+        "disabled-surface": { "$type": "color", "$value": "{color.gray.800}" },
+        "hover": { "$type": "color", "$value": "{color.gray.800}" },
+        "pressed": { "$type": "color", "$value": "{color.gray.700}" },
+        "selected": { "$type": "color", "$value": "{color.navy.900}" }
+      }
+    },
+    "component": {
+      "button": {
+        "primary": {
+          "bg": { "$type": "color", "$value": "{semantic.color.light.brand}" },
+          "fg": { "$type": "color", "$value": "{semantic.color.light.text-inverse}" },
+          "bg-hover": { "$type": "color", "$value": "{semantic.color.light.brand-hover}" },
+          "bg-pressed": { "$type": "color", "$value": "{semantic.color.light.brand-pressed}" }
+        },
+        "secondary": {
+          "bg": { "$type": "color", "$value": "{semantic.color.light.surface-raised}" },
+          "fg": { "$type": "color", "$value": "{semantic.color.light.text-primary}" },
+          "border": { "$type": "color", "$value": "{semantic.color.light.border}" },
+          "bg-hover": { "$type": "color", "$value": "{semantic.color.light.hover}" }
+        },
+        "danger": {
+          "bg": { "$type": "color", "$value": "{semantic.color.light.danger}" },
+          "fg": { "$type": "color", "$value": "{semantic.color.light.text-inverse}" },
+          "bg-hover": { "$type": "color", "$value": "{semantic.color.light.danger-hover}" }
+        },
+        "ghost": {
+          "bg": { "$type": "color", "$value": "transparent" },
+          "fg": { "$type": "color", "$value": "{semantic.color.light.text-primary}" },
+          "bg-hover": { "$type": "color", "$value": "{semantic.color.light.hover}" }
+        },
+        "icon": {
+          "size": { "$type": "dimension", "$value": "{spacing.hit}" }
+        }
+      },
+      "input": {
+        "bg": { "$type": "color", "$value": "{semantic.color.light.surface-raised}" },
+        "bg-hover": { "$type": "color", "$value": "{semantic.color.light.surface-sunken}" },
+        "border": { "$type": "color", "$value": "{semantic.color.light.border}" },
+        "border-focus": { "$type": "color", "$value": "{semantic.color.light.focus}" },
+        "border-error": { "$type": "color", "$value": "{semantic.color.light.danger}" }
+      },
+      "badge": {
+        "warning-bg": { "$type": "color", "$value": "{semantic.color.light.warning-subtle}" },
+        "warning-fg": { "$type": "color", "$value": "{semantic.color.light.warning}" },
+        "danger-bg": { "$type": "color", "$value": "{semantic.color.light.danger-subtle}" },
+        "danger-fg": { "$type": "color", "$value": "{semantic.color.light.danger}" },
+        "success-bg": { "$type": "color", "$value": "{semantic.color.light.success-subtle}" },
+        "success-fg": { "$type": "color", "$value": "{semantic.color.light.success}" },
+        "neutral-bg": { "$type": "color", "$value": "{semantic.color.light.surface-sunken}" },
+        "neutral-fg": { "$type": "color", "$value": "{semantic.color.light.text-secondary}" }
+      },
+      "nav": {
+        "bg": { "$type": "color", "$value": "{semantic.color.light.sidebar}" },
+        "item-fg": { "$type": "color", "$value": "{semantic.color.light.nav-fg}" },
+        "item-hover-bg": { "$type": "color", "$value": "{semantic.color.light.sidebar-hover}" },
+        "item-selected-bg": { "$type": "color", "$value": "{semantic.color.light.sidebar-selected}" },
+        "item-selected-fg": { "$type": "color", "$value": "{semantic.color.light.nav-fg-selected}" },
+        "urgency-critical-bg": { "$type": "color", "$value": "{semantic.color.light.nav-urgency-critical}" },
+        "urgency-critical-bg-hover": { "$type": "color", "$value": "{semantic.color.light.nav-urgency-critical-hover}" },
+        "urgency-soon-bg": { "$type": "color", "$value": "{semantic.color.light.nav-urgency-soon}" },
+        "urgency-soon-bg-hover": { "$type": "color", "$value": "{semantic.color.light.nav-urgency-soon-hover}" },
+        "urgency-fg": { "$type": "color", "$value": "{semantic.color.light.nav-urgency-fg}" },
+        "$description": "US-28 Vehicles item only. Worst-wins red over orange. Do not reuse badge *-subtle pastels on navy rail. List/detail 30-day badges unchanged (A1)."
+      },
+      "table": {
+        "header-bg": { "$type": "color", "$value": "{semantic.color.light.table-header}" },
+        "row-hover": { "$type": "color", "$value": "{semantic.color.light.table-row-hover}" },
+        "row-selected": { "$type": "color", "$value": "{semantic.color.light.table-row-selected}" },
+        "border": { "$type": "color", "$value": "{semantic.color.light.table-border}" }
+      },
+      "toolbar": {
+        "bg": { "$type": "color", "$value": "{semantic.color.light.surface-raised}" },
+        "border": { "$type": "color", "$value": "{semantic.color.light.divider}" }
+      },
+      "link": {
+        "fg": { "$type": "color", "$value": "{semantic.color.light.link}" },
+        "fg-hover": { "$type": "color", "$value": "{semantic.color.light.link-hover}" },
+        "fg-pressed": { "$type": "color", "$value": "{semantic.color.light.link-pressed}" },
+        "fg-disabled": { "$type": "color", "$value": "{semantic.color.light.disabled}" },
+        "underline-offset": { "$type": "dimension", "$value": "{spacing.link-underline-offset}" },
+        "$description": "Inline and auth text links. Not sidebar nav. Visited omitted — muted brand on dark is not reliably AA."
+      },
+      "mark": {
+        "fill": { "$type": "color", "$value": "{semantic.color.light.mark-fill}" },
+        "glyph": { "$type": "color", "$value": "{semantic.color.light.mark-glyph}" },
+        "accent": { "$type": "color", "$value": "{semantic.color.light.brand-accent}" },
+        "plate-face": { "$type": "color", "$value": "{semantic.color.light.mark-plate-face}" },
+        "size": { "$type": "dimension", "$value": "{spacing.mark}" },
+        "size-auth": { "$type": "dimension", "$value": "{spacing.mark-auth}" },
+        "size-public": { "$type": "dimension", "$value": "{spacing.mark-public}" },
+        "size-public-width": { "$type": "dimension", "$value": "{spacing.mark-public-width}" },
+        "$description": "Fleet registration plate SVG. Shielded: fill = shield + character blocks; glyph = keyline + plate face + left bolt; accent = country band. Public header (unshielded): plate-face enamel + fill edge/ink + accent band; no navy shield. Wrappers are size only — no bg-mark-fill."
+      },
+      "lockup": {
+        "bar": { "$type": "dimension", "$value": "{spacing.brand-bar}" },
+        "bar-fg": { "$type": "color", "$value": "{semantic.color.light.brand-accent}" }
+      }
+    }
+  }
+}

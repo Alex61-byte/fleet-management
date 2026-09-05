@@ -1,0 +1,17 @@
+{
+  "motion": {
+    "duration": {
+      "instant": { "$type": "duration", "$value": "0ms" },
+      "fast": { "$type": "duration", "$value": "120ms" },
+      "base": { "$type": "duration", "$value": "180ms" }
+    },
+    "easing": {
+      "standard": { "$type": "cubicBezier", "$value": [0.2, 0, 0, 1] }
+    },
+    "reduce": {
+      "$type": "boolean",
+      "$value": true,
+      "$description": "Honor Reduce Motion: no entrance/sidebar collapse animation; badges, banners, and focus appear instantly"
+    }
+  }
+}

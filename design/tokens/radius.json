@@ -1,0 +1,10 @@
+{
+  "radius": {
+    "none": { "$type": "dimension", "$value": "0px" },
+    "sm": { "$type": "dimension", "$value": "4px" },
+    "md": { "$type": "dimension", "$value": "6px", "$description": "Buttons, inputs, table (enterprise, not bubbly)" },
+    "lg": { "$type": "dimension", "$value": "8px", "$description": "Raised panels, KPI tiles, auth card" },
+    "xl": { "$type": "dimension", "$value": "12px" },
+    "full": { "$type": "dimension", "$value": "9999px" }
+  }
+}
