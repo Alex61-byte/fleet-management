@@ -1,0 +1,24 @@
+{
+  "elevation": {
+    "none": {
+      "$type": "shadow",
+      "$value": { "offsetX": "0px", "offsetY": "0px", "blur": "0px", "spread": "0px", "color": "#00000000" },
+      "$description": "Canvas, sidebar, table body — hairline divider instead of shadow"
+    },
+    "raised": {
+      "$type": "shadow",
+      "$value": { "offsetX": "0px", "offsetY": "1px", "blur": "2px", "spread": "0px", "color": "#0c121914" },
+      "$description": "KPI tile, form panel, auth card — one step above canvas"
+    },
+    "overlay": {
+      "$type": "shadow",
+      "$value": { "offsetX": "0px", "offsetY": "8px", "blur": "24px", "spread": "0px", "color": "#0c121929" },
+      "$description": "Sheets, dialogs, popovers"
+    },
+    "focus-ring": {
+      "$type": "shadow",
+      "$value": { "offsetX": "0px", "offsetY": "0px", "blur": "0px", "spread": "2px", "color": "{semantic.color.light.ring}" },
+      "$description": "Visible focus; map to ring-focus in Tailwind. Dark uses semantic.color.dark.ring"
+    }
+  }
+}
