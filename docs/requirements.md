@@ -132,6 +132,8 @@ Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin user
 | **Must** | Company sign-up creates company + first Owner with email, password, **company registration number**, **VAT number**, and **address** |
 | **Must** | Address entry supports **assistive free lookup** (OpenStreetMap / Nominatim-style); store formatted address text (lat/lon optional) |
 | **Must** | Owner/Admin sign-in on web and mobile |
+| **Must** | Stay signed in on web and mobile: short-lived access tokens renew **silently** via refresh (Owner/Admin and Driver) |
+| **Must** | Full re-login at most about every **14 days** per refresh-token family (or earlier on this-client sign-out / security end) |
 | **Must** | Owner/Admin password reset |
 | **Must** | Owner/Admin optional TOTP (authenticator app only); enable and disable |
 | **Must** | Owner creates additional Admins |
@@ -150,7 +152,7 @@ Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin user
 | **Must** | Owner/Admin hard-delete driver profile (irreversible; ends that identity’s access) |
 | **Should** | Resend invitation for drivers still pending invite accept |
 | **Should** | Disable driver login without deleting the driver profile |
-| **Won't** | Dispatch/tracking; extra roles; SMS MFA/invites; driver MFA; driver fleet UI; legal catalog; file upload this slice; temp password for drivers; paid maps APIs; soft-delete/restore drivers; bulk driver delete; driver self-delete; audit history for deletes |
+| **Won't** | Dispatch/tracking; extra roles; SMS MFA/invites; driver MFA; driver fleet UI; legal catalog; file upload this slice; temp password for drivers; paid maps APIs; soft-delete/restore drivers; bulk driver delete; driver self-delete; audit history for deletes; sliding extension of the 14-day session window; logout-everywhere; device/session list UI |
 
 ## 5. Open questions & assumptions
 
@@ -191,6 +193,7 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 | A29 | Company **registration number**, **VAT number**, and **address** are **required** strings on sign-up (reasonable max length; exact caps are implementation detail within product limits). |
 | A30 | Address **lookup** is client-side free Nominatim/OSM-style assist; user may also type free-text. Stored value is **formatted address text**; **lat/lon optional**, not required. |
 | A31 | Paid geocoding / Google Places is **out of scope**. Product does not require server-side paid maps. |
+| A32 | Access token is **short-lived** (product default **~15 minutes**). Absolute **refresh-family** lifetime is **14 days** from family start; refresh rotation **does not** extend `expires_at`. |
 
 ### Open questions (not invented)
 

@@ -3,12 +3,12 @@
 import { vehiclesNavA11yLabel, type VehiclesNavUrgency } from "@fleet/sdk";
 import { themeClasses } from "../../../design/tailwind.theme";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
 import { useAuth } from "../lib/auth-context";
 import { useVehiclesNavUrgency } from "../lib/vehicles-nav-urgency";
 import { NavIcon, navIconForHref } from "./nav-icons";
-import { Banner, OfflineBanner, PrimaryButton, PrimaryLink } from "./ui";
+import { Banner, OfflineBanner, PrimaryButton } from "./ui";
 
 function vehiclesNavClass(urgency: VehiclesNavUrgency, active: boolean): string {
   const base = "min-h-hit px-2 mx-1 rounded-md text-label font-medium flex flex-row items-center gap-1.5 focus-visible:shadow-ring";
@@ -40,27 +40,19 @@ export function AppShell({
 }) {
   const { me, ready, offline, signOut } = useAuth();
   const path = usePathname();
+  const router = useRouter();
   const ownerAdmin = Boolean(me && me.role !== "driver");
   const vehiclesUrgency = useVehiclesNavUrgency(ownerAdmin);
 
-  if (!ready) {
-    return (
-      <main className={`${themeClasses.page} min-h-screen p-3`}>
-        <div className="h-6 w-40 bg-disabled-surface rounded-md" />
-      </main>
-    );
-  }
+  // US-15 / US-29: unauthenticated or session ended → sign-in (banner lives there).
+  useEffect(() => {
+    if (ready && !me) router.replace("/sign-in");
+  }, [ready, me, router]);
 
-  if (!me) {
+  if (!ready || !me) {
     return (
       <main className={`${themeClasses.page} min-h-screen p-3`}>
-        <div className="mx-auto max-w-[400px] flex flex-col gap-2">
-          <h1 className={themeClasses.title}>Sign in required</h1>
-          <p className={`${themeClasses.body} text-text-secondary`}>
-            Fleet and driver records are only available after you sign in.
-          </p>
-          <PrimaryLink href="/sign-in">Sign in</PrimaryLink>
-        </div>
+        <div className="h-6 w-40 bg-disabled-surface rounded-md" aria-busy="true" />
       </main>
     );
   }

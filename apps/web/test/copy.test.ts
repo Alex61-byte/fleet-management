@@ -16,7 +16,11 @@ test("web copy matches design for credential errors", () => {
 test("US-29 session-ended banner copy on sign-in", () => {
   const session = readFileSync(join(root, "lib/session.ts"), "utf8");
   const signIn = readFileSync(join(root, "app/sign-in/page.tsx"), "utf8");
+  const auth = readFileSync(join(root, "lib/auth-context.tsx"), "utf8");
+  const shell = readFileSync(join(root, "components/app-shell.tsx"), "utf8");
   assert.match(session, /Your session ended\. Sign in again to continue\./);
   assert.match(signIn, /takeSessionEndedMessage/);
   assert.match(signIn, /tone="warning"/);
+  assert.match(auth, /setOnSessionInvalid/);
+  assert.match(shell, /router\.replace\("\/sign-in"\)/);
 });

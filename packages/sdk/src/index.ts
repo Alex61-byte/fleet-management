@@ -250,11 +250,25 @@ async function readError(res: Response): Promise<FleetApiError> {
 export class FleetClient {
   /** Single-flight refresh promise (US-29). */
   private refreshInFlight: Promise<boolean> | null = null;
+  /** Fired when a stored refresh fails (session ended); not on explicit logout. */
+  private sessionInvalidHandler: (() => void) | null = null;
 
   constructor(
     private readonly baseUrl: string,
     private readonly tokens: TokenStore,
   ) {}
+
+  /**
+   * Register UI handler for forced session end (clear `me`, route to sign-in).
+   * Called after refresh failure clears tokens (US-29).
+   */
+  setOnSessionInvalid(handler: (() => void) | null): void {
+    this.sessionInvalidHandler = handler;
+  }
+
+  private notifySessionInvalid(): void {
+    this.sessionInvalidHandler?.();
+  }
 
   /**
    * Exchange stored refresh for a new token pair.
@@ -284,6 +298,7 @@ export class FleetClient {
       return true;
     } catch {
       this.tokens.clear();
+      this.notifySessionInvalid();
       return false;
     }
   }

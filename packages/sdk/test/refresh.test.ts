@@ -97,6 +97,7 @@ test("US-29 authenticated 401 triggers single refresh then retry", async () => {
 
 test("US-29 refresh failure on 401 path surfaces FleetApiError and clears", async () => {
   const tokens = memoryTokens({ access: "expired", refresh: "dead-r" });
+  let invalidCalls = 0;
   globalThis.fetch = async (input) => {
     const url = String(input);
     if (url.endsWith("/v1/auth/refresh")) {
@@ -111,6 +112,9 @@ test("US-29 refresh failure on 401 path surfaces FleetApiError and clears", asyn
     });
   };
   const client = new FleetClient("http://api.test", tokens);
+  client.setOnSessionInvalid(() => {
+    invalidCalls += 1;
+  });
   await assert.rejects(() => client.me(), (err: unknown) => {
     assert.ok(err instanceof FleetApiError);
     assert.equal(err.status, 401);
@@ -118,4 +122,5 @@ test("US-29 refresh failure on 401 path surfaces FleetApiError and clears", asyn
   });
   assert.equal(tokens.getAccess(), null);
   assert.equal(tokens.getRefresh(), null);
+  assert.equal(invalidCalls, 1);
 });
