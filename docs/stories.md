@@ -446,13 +446,13 @@ Hard delete is **distinct** from disable login (**US-16**). Do not fold delete i
 
 **Acceptance**
 
-- **Given** I completed sign-in successfully and my refresh-token family is younger than **14 days**  
+- **Given** I completed sign-in (Owner/Admin or Driver) on **web or mobile** and my refresh-token family is younger than **14 days**  
   **When** my access token expires and the app needs an authenticated API call (including startup session probe)  
-  **Then** a new access token is obtained via refresh without asking for email/password and I remain signed in.
+  **Then** a new access token is obtained via refresh **without** email/password and **without** TOTP (if Owner/Admin), and I remain signed in.
 
 - **Given** my refresh-token family started **14 or more days** ago  
   **When** refresh is attempted (or access fails and refresh is required)  
-  **Then** I am not signed in and I must complete sign-in again.
+  **Then** I am not signed in and I must complete **full** sign-in again (existing sign-in; TOTP if enabled for Owner/Admin).
 
 - **Given** I am signed in  
   **When** I explicitly sign out **on this client**  
@@ -466,7 +466,7 @@ Hard delete is **distinct** from disable login (**US-16**). Do not fold delete i
   **When** the app starts  
   **Then** I am still treated as signed in after silent renewal if needed (tokens persist per client storage rules).
 
-Silent renewal is **not** a new screen. After forced session end (14-day cap or revoke), use existing sign-in; optional session-ended copy is Design-owned.
+Silent renewal is **not** a new screen. After forced session end (14-day cap or revoke), clients **must show the existing sign-in screen** (not a bare “sign in required” placeholder); optional session-ended copy is Design-owned.
 
 ## US-30 — Parallel sessions on multiple devices / web + mobile **(Must)**
 
@@ -574,7 +574,7 @@ Spec **states** (empty, loading, error, success, warning, denied), **density**, 
 
 | Screen | Role | Stories |
 | --- | --- | --- |
-| Sign-in | All | US-02, US-10, US-29, US-30 — then branch by role; optional session-ended banner; multi-device no extra chrome |
+| Sign-in | All | US-02, US-04, US-10, US-29, US-30 — then branch by role; optional session-ended banner; multi-device no extra chrome; silent refresh has no chrome |
 | Invite accept / set password | Driver invitee | US-09 (deep link / token path); unknown email cannot continue |
 | Owner/Admin TOTP step | Owner/Admin | US-04 |
 | Owner/Admin password reset | Owner/Admin | US-03 |

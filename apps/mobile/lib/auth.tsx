@@ -106,6 +106,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void hydrateTokens().then(() => reload());
   }, [reload]);
 
+  // US-29: mid-session refresh failure clears me; owner/driver layouts redirect to sign-in.
+  useEffect(() => {
+    api.setOnSessionInvalid(() => {
+      markSessionEnded();
+      setMe(null);
+    });
+    return () => api.setOnSessionInvalid(null);
+  }, []);
+
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
       setOffline(state.isConnected === false);

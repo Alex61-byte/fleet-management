@@ -17,8 +17,14 @@ test("mobile copy matches design", () => {
 test("US-29 session-ended banner copy on sign-in", () => {
   const tokens = readFileSync(join(root, "lib/tokens.ts"), "utf8");
   const signIn = readFileSync(join(root, "app/sign-in.tsx"), "utf8");
+  const auth = readFileSync(join(root, "lib/auth.tsx"), "utf8");
+  const ownerLayout = readFileSync(join(root, "app/(owner)/_layout.tsx"), "utf8");
+  const driverLayout = readFileSync(join(root, "app/(driver)/_layout.tsx"), "utf8");
   assert.match(tokens, /Your session ended\. Sign in again to continue\./);
   assert.match(signIn, /takeSessionEndedMessage/);
+  assert.match(auth, /setOnSessionInvalid/);
+  assert.match(ownerLayout, /Redirect href="\/sign-in"/);
+  assert.match(driverLayout, /Redirect href="\/sign-in"/);
   assert.match(signIn, /tone="warning"/);
 });
 

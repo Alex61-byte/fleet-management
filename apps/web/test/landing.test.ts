@@ -35,9 +35,10 @@ test("Owner/Admin home lives under /home", () => {
   assert.match(home, /Due soon or expired/);
 });
 
-test("AppShell Home href is /home and unsigned-in stays US-15 denied", () => {
+test("AppShell Home href is /home and unsigned-in redirects to sign-in", () => {
   assert.match(shell, /href: "\/home", label: "Home"/);
-  assert.match(shell, /Sign in required/);
+  assert.match(shell, /router\.replace\("\/sign-in"\)/);
+  assert.doesNotMatch(shell, /Sign in required/);
   assert.doesNotMatch(shell, /href: "\/", label: "Home"/);
   assert.doesNotMatch(shell, /publicHeader/);
 });

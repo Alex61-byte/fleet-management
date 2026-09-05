@@ -87,6 +87,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
+  // US-29: mid-session refresh failure must clear auth so shells route to sign-in.
+  useEffect(() => {
+    api.setOnSessionInvalid(() => {
+      markSessionEnded();
+      setMe(null);
+    });
+    return () => api.setOnSessionInvalid(null);
+  }, []);
+
   useEffect(() => {
     const on = () => setOffline(!navigator.onLine);
     on();

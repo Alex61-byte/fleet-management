@@ -45,7 +45,7 @@ flowchart TB
 | Default | Empty `authCard` |
 | Loading | Submit busy; fields disabled |
 | Wrong credentials (E2) | `bannerDanger` “Sign-in details are not correct.” Do not reveal which field. **Same UX** for wrong email, wrong Owner/Admin password, wrong driver password, **and pending driver with no password yet (E31)** — not signed in; no branch to home or invite accept from this failure alone |
-| Session ended (14-day / revoke / failed refresh) | `bannerWarning` “Your session ended. Sign in again to continue.” |
+| Session ended (14-day / revoke / failed refresh) | Clients **navigate to this sign-in screen** (not an in-app “Sign in required” placeholder). `bannerWarning` “Your session ended. Sign in again to continue.” |
 | TOTP required | Same auth canvas; replace inner form with [totp-challenge.md](totp-challenge.md) — not fully signed in. **Drivers never** enter this step |
 | Driver subsequent (invite accepted, password set) | **Web and mobile** → [driver-home.md](driver-home.md); **no** forced change; **no** Owner/Admin chrome |
 | Owner/Admin | Owner home (after optional TOTP) — Owner/Admin shell, not driver |
