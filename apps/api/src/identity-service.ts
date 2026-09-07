@@ -395,6 +395,7 @@ export class IdentityService {
       throw errors.notFound();
     }
     await this.store.withTransaction(async (tx) => {
+      await tx.voidOpenOutsForDriver(id);
       await tx.deleteDriverTravelForDriver(id);
       await tx.clearPrincipalAuthSide(id);
       await tx.deletePrincipal(id);

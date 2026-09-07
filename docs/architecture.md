@@ -64,7 +64,7 @@ One bounded context in-process: Identity, Fleet. HTTP `/v1`. Next.js and Expo ar
 **Option A.** One Fastify `/v1` API is the system of record. Next.js and Expo call it. Postgres owns data.
 
 - **Identity:** company, principals (Owner, Admin, Driver), credentials, TOTP, sessions, password reset.
-- **Fleet:** vehicles + compliance dates; expiry computed on read.
+- **Fleet:** vehicles + compliance dates + optional **vehicle.mileage** + **vehicle handovers** (Out/In, damage images — [ADR-015](adr/ADR-015-vehicle-handovers.md)) (master odometer reading; unit derived from country — [ADR-014](adr/ADR-014-vehicle-mileage.md)); expiry computed on read; **optional side appearance images** (paths in Postgres, bytes in **Supabase Storage** via API **S3 gateway** / `OBJECT_STORAGE_*` — [ADR-013](adr/ADR-013-vehicle-side-images.md)).
 - **No event bus.** Reserve in-process hooks later for `vehicle.created` if tracking needs it.
 - **Auth:** opaque refresh + short-lived access token (see ADR-002). Same contract for web and mobile. Next.js may store refresh in httpOnly cookie as a **client** detail; API still Bearer-access.
 - **Clients:** Next.js = Owner/Admin management **+** driver minimal shell. Expo = role shells after login. API enforces; UI hides Owner nav for drivers (defense in depth). Local orchestration is Turborepo on npm workspaces; Expo Metro (`npm run dev:mobile`) runs in a dedicated TTY so the QR prints ([ADR-006](adr/ADR-006-turborepo-orchestration.md)).
@@ -121,6 +121,8 @@ flowchart TD
 ```
 
 **Expiry:** Fleet read model adds `warnings[]` per vehicle. Rule: date not null AND (date < today OR date ≤ today+30). Calendar dates, **UTC date** comparison (timezone not in BA — flagged below).
+
+**Vehicle mileage (US-45–US-50):** Optional `mileage` on vehicle row; `mileage_unit` derived on read via same country rules as driver odometer (A34). Not auto-synced from `driver_travel_selections`. Details: [ADR-014](adr/ADR-014-vehicle-mileage.md), [contracts/http-v1.md](contracts/http-v1.md).
 
 **Sync:** All this slice is request/response. No consumers. Driver hard delete is Identity request/response only (no outbox).
 

@@ -86,6 +86,13 @@ ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS make TEXT NOT NULL DEFAULT '';
 ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS model TEXT NOT NULL DEFAULT '';
 ALTER TABLE vehicles DROP COLUMN IF EXISTS car;
 
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS image_front_path TEXT;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS image_left_path TEXT;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS image_right_path TEXT;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS image_back_path TEXT;
+
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS mileage DOUBLE PRECISION;
+
 CREATE TABLE IF NOT EXISTS driver_travel_selections (
   id UUID PRIMARY KEY,
   company_id UUID NOT NULL REFERENCES companies (id),
@@ -101,3 +108,57 @@ CREATE INDEX IF NOT EXISTS driver_travel_driver_id ON driver_travel_selections (
 CREATE INDEX IF NOT EXISTS driver_travel_company_id ON driver_travel_selections (company_id);
 CREATE UNIQUE INDEX IF NOT EXISTS driver_travel_one_active
   ON driver_travel_selections (driver_id) WHERE active = true;
+
+CREATE TABLE IF NOT EXISTS vehicle_handovers (
+  id UUID PRIMARY KEY,
+  company_id UUID NOT NULL REFERENCES companies (id),
+  vehicle_id UUID NOT NULL REFERENCES vehicles (id),
+  driver_id UUID REFERENCES principals (id) ON DELETE SET NULL,
+  type TEXT NOT NULL CHECK (type IN ('out', 'in')),
+  status TEXT NOT NULL CHECK (status IN ('open', 'closed', 'voided')),
+  handover_out_id UUID REFERENCES vehicle_handovers (id),
+  mileage DOUBLE PRECISION NOT NULL,
+  mileage_unit TEXT NOT NULL CHECK (mileage_unit IN ('mi', 'km')),
+  next_service_days INTEGER NOT NULL CHECK (next_service_days >= 1),
+  next_service_distance DOUBLE PRECISION NOT NULL,
+  next_service_distance_unit TEXT NOT NULL CHECK (next_service_distance_unit IN ('mi', 'km')),
+  damages_text TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ,
+  voided_at TIMESTAMPTZ,
+  CONSTRAINT vehicle_handovers_out_shape CHECK (
+    type <> 'out' OR (handover_out_id IS NULL)
+  ),
+  CONSTRAINT vehicle_handovers_in_shape CHECK (
+    type <> 'in' OR (handover_out_id IS NOT NULL AND status = 'closed')
+  )
+);
+
+CREATE INDEX IF NOT EXISTS vehicle_handovers_vehicle_created
+  ON vehicle_handovers (vehicle_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS vehicle_handovers_company
+  ON vehicle_handovers (company_id);
+CREATE INDEX IF NOT EXISTS vehicle_handovers_out_fk
+  ON vehicle_handovers (handover_out_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS vehicle_handovers_one_open_out_per_vehicle
+  ON vehicle_handovers (vehicle_id)
+  WHERE type = 'out' AND status = 'open';
+
+CREATE UNIQUE INDEX IF NOT EXISTS vehicle_handovers_one_open_out_per_driver
+  ON vehicle_handovers (driver_id)
+  WHERE type = 'out' AND status = 'open' AND driver_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS vehicle_handover_images (
+  id UUID PRIMARY KEY,
+  company_id UUID NOT NULL REFERENCES companies (id),
+  vehicle_id UUID NOT NULL REFERENCES vehicles (id),
+  handover_id UUID NOT NULL REFERENCES vehicle_handovers (id) ON DELETE CASCADE,
+  storage_path TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS vehicle_handover_images_handover
+  ON vehicle_handover_images (handover_id, sort_order);
+

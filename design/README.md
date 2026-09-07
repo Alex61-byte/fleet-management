@@ -4,7 +4,53 @@ BA sources: [docs/requirements.md](../docs/requirements.md), [docs/business-rule
 
 **Out of visual scope:** dispatch boards, **ops tracking maps** (live GPS / slippy / vehicle pins), trip UI, SMS MFA, document upload, country-law catalog, search/filters not in BA, two app store listings. **Exception — public landing only:** a **static** street-map **image** in the hero (US-24). Not a map product.
 
-## 0. This pass — Company legal fields + driver invite (US-01/07/09/09a/10)
+## 0. This pass — Vehicle handovers (US-51–US-60)
+
+**Did not** implement `apps/web` or `apps/mobile`. **Did not** invent contracts/ADRs. **Did not** add new hex or semantic color tokens.
+
+| Problem | Spec now |
+| --- | --- |
+| Driver Out / In on active next-travel | [pages/driver-home.md](pages/driver-home.md) — handover panel under next-travel; Out vs In + US-60 open-Out cue |
+| Required fields + optional damages/images | [pages/handover.md](pages/handover.md) — mileage, next_service_days/distance; ≤10 images ≤5MB; units from country |
+| Owner/Admin history | [pages/vehicles.md](pages/vehicles.md) — third tab **Handovers**; newest-first list + read-only detail; no edit/delete; drivers never see tab |
+| Damage preview | Thumb grid + simplified reuse of `vehicleSideViewer*` (not side-slot manage) |
+| Token drift | Reuse `panel` `vehicleFormTab*` `badgeNeutral`/`badgeOk` `banner*` `emptyState`; minimal `handoverDamage*` classes only |
+
+**Classes / tokens:** `themeClasses.handoverDamageGrid`, `handoverDamageThumb`, `handoverDamageThumbFocus`, `handoverDamageThumbRemove`. No new spacing/color tokens (thumbs use spacing `6` = 48px).
+
+**Next specialist: Senior Software Architect** — handover create/history/detail contracts, authz (driver write / Owner read), image refs, mileage write-through; then BE → FE.
+
+## 0-prior. Vehicle side preview size + view-only viewer (US-41–US-44)
+
+**Did not** implement `apps/web` or `apps/mobile`. **Did not** invent contracts/ADRs. **Did not** change list Photos cue or clear-confirm copy.
+
+| Problem | Spec now |
+| --- | --- |
+| Small 96px side frames hard to inspect | [pages/vehicles.md](pages/vehicles.md) — `vehicle-side-slot` **176px**; grid max token 400px; filled frame opens viewer |
+| No inspect path without replace/clear | View-only modal (web) / full-screen (mobile); zoom +/− Must; pinch Should mobile; close unchanged data |
+| Modal vs clear sheet confusion | Viewer ≠ clear confirm; mobile viewer is **full-screen**, not bottom sheet ([_patterns.md](pages/_patterns.md) Image viewer) |
+| Token / hex drift | Spacing + motion zoom tokens; `themeClasses.vehicleSideFrameFilled` + `vehicleSideViewer*` — no raw hex |
+
+**Classes / tokens:** `spacing.vehicle-side-slot` (176px), `vehicle-side-grid-max`, `vehicle-side-viewer-toolbar`; `motion.vehicle-side-zoom` (1–3, step 0.5); `themeClasses.vehicleSideFrameFilled`, `vehicleSideViewer*`.
+
+**Next specialist: Senior Software Architect** — confirm API no-op for view/zoom (client-only); FE owns modal/sheet wiring; clear-confirm remains separate; then BE no-op → FE.
+
+## 0-prior. Vehicle side appearance images (US-35–US-39)
+
+**Did not** implement `apps/web` or `apps/mobile`. **Did not** add compliance document upload. **Did not** invent contracts/ADRs.
+
+| Problem | Spec now |
+| --- | --- |
+| Optional FRONT/LEFT/RIGHT/BACK photos on create/edit | [pages/vehicles.md](pages/vehicles.md) — Appearance section in the single form `panel`; 2×2 slots; empty / filled / replace / clear / uploading / per-side error |
+| List four-up gallery risk | **Should** compact `vehicleSidePresence` chip (“Photos”) only when ≥1 side filled — not a gallery column |
+| Token drift / hex | Spacing token `vehicle-side-slot` (now 176px per US-41); themeClasses for frames/actions/presence; reuse `buttonSecondary` `buttonGhost` `errorText` `skeleton` `caption` `sectionTitle` |
+| Drivers | No side-image manage UI; denied paths unchanged |
+
+**Classes / tokens:** `spacing.vehicle-side-slot`; `themeClasses.vehicleSideSection|Grid|Slot|Frame*|Preview|Actions|Presence*`.
+
+**Next specialist: Senior Software Architect** — storage references, upload/replace/clear interaction contract, list `has_side_image` (or equivalent) for presence cue; then BE → FE.
+
+## 0-prior. Company legal fields + driver invite (US-01/07/09/09a/10)
 
 **Did not** implement `apps/web` or `apps/mobile`. **No** new color/spacing tokens. Address lookup is page-local on sign-up (existing field classes).
 

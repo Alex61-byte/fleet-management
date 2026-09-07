@@ -2,8 +2,9 @@
 
 import { FleetApiError, mapAuthError, type Driver } from "@fleet/sdk";
 import { useParams, useRouter } from "next/navigation";
-import { FormEvent, useEffect, useId, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { AppShell, Denied, ErrorRetry } from "../../../components/app-shell";
+import { ConfirmDeleteDialog } from "../../../components/confirm-delete-dialog";
 import {
   Banner,
   DangerButton,
@@ -33,9 +34,6 @@ export default function EditDriverPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const [resendMsg, setResendMsg] = useState("");
-  const deleteTitleId = useId();
-  const deleteBodyId = useId();
-  const deleteCancelRef = useRef<HTMLButtonElement>(null);
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
 
   async function load() {
@@ -57,19 +55,6 @@ export default function EditDriverPage() {
   useEffect(() => {
     void load();
   }, [id]);
-
-  useEffect(() => {
-    if (!confirmDelete) return;
-    deleteCancelRef.current?.focus();
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setConfirmDelete(false);
-        queueMicrotask(() => deleteTriggerRef.current?.focus());
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [confirmDelete]);
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -249,49 +234,23 @@ export default function EditDriverPage() {
             </DangerButton>
           </div>
 
-          {confirmDelete ? (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-surface-overlay p-3"
-              role="presentation"
-              onClick={() => {
-                if (!deleting) closeDeleteConfirm();
-              }}
-            >
-              <div
-                className={`${themeClasses.raised} shadow-overlay p-3 flex flex-col gap-2 w-full max-w-[400px]`}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={deleteTitleId}
-                aria-describedby={deleteBodyId}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <h2 id={deleteTitleId} className={themeClasses.sectionTitle}>
-                  Delete driver?
-                </h2>
-                <p id={deleteBodyId} className={themeClasses.body}>
-                  {driver.email} will be removed from your company. They cannot sign in. This cannot be
-                  undone.
-                </p>
-                <p className={themeClasses.caption}>To add them later, create a new driver.</p>
-                <SecondaryButton
-                  ref={deleteCancelRef}
-                  type="button"
-                  disabled={deleting}
-                  onClick={closeDeleteConfirm}
-                >
-                  Cancel
-                </SecondaryButton>
-                <DangerButton
-                  type="button"
-                  disabled={deleting || offline}
-                  aria-label="Delete permanently"
-                  onClick={() => void onDeletePermanently()}
-                >
-                  {deleting ? "Deleting…" : "Delete permanently"}
-                </DangerButton>
-              </div>
-            </div>
-          ) : null}
+          <ConfirmDeleteDialog
+            open={confirmDelete}
+            title="Delete driver?"
+            body={
+              <>
+                {driver.email} will be removed from your company. They cannot sign in. This cannot be
+                undone.
+              </>
+            }
+            caption="To add them later, create a new driver."
+            confirmLabel="Delete permanently"
+            confirmBusyLabel="Deleting…"
+            busy={deleting}
+            disabledConfirm={offline}
+            onCancel={closeDeleteConfirm}
+            onConfirm={() => void onDeletePermanently()}
+          />
         </div>
       ) : null}
     </AppShell>

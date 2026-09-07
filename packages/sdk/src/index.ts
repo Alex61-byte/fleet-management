@@ -163,6 +163,279 @@ export function mapAuthError(code: string, fallback: string): string {
   }
 }
 
+export type VehicleSide = "FRONT" | "LEFT" | "RIGHT" | "BACK";
+
+export const VEHICLE_SIDES: VehicleSide[] = ["FRONT", "LEFT", "RIGHT", "BACK"];
+
+export const VEHICLE_SIDE_LABEL: Record<VehicleSide, string> = {
+  FRONT: "Front",
+  LEFT: "Left",
+  RIGHT: "Right",
+  BACK: "Back",
+};
+
+export type SideImage = { path: string; url: string };
+
+/** Legacy RN `{ uri }` shape (classic XHR). Prefer {@link BytesImageFile} on Expo. */
+export type LocalImageFile = {
+  uri: string;
+  name?: string;
+  type?: string;
+};
+
+/**
+ * Expo winter fetch FormData accepts string | Blob | objects with `bytes()`
+ * (e.g. expo-file-system `File`). `{ uri }` parts throw Unsupported FormDataPart.
+ */
+export type BytesImageFile = {
+  bytes: () => Promise<Uint8Array>;
+  name?: string;
+  type?: string;
+  size?: number;
+};
+
+export type SideImageUploadFile = Blob | LocalImageFile | BytesImageFile;
+
+const DEFAULT_SIDE_IMAGE_NAME = "photo.jpg";
+const DEFAULT_SIDE_IMAGE_TYPE = "image/jpeg";
+
+/**
+ * Client mirror of API `MAX_VEHICLE_IMAGE_BYTES` (apps/api vehicle-image-storage).
+ * Server remains source of truth (E36); clients use this to decide passthrough vs compress.
+ */
+export const MAX_VEHICLE_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** Long-edge caps (px) tried in order when source exceeds MAX_VEHICLE_IMAGE_BYTES. */
+export const SIDE_IMAGE_LONG_EDGES = [2048, 1600, 1280] as const;
+
+/** JPEG quality ladder (0–1) tried per long-edge step. */
+export const SIDE_IMAGE_JPEG_QUALITIES = [0.85, 0.75, 0.65, 0.55] as const;
+
+export type SideImagePreparePlan =
+  | { action: "passthrough" }
+  | {
+      action: "compress";
+      longEdges: readonly number[];
+      qualities: readonly number[];
+    };
+
+/** Decide whether to upload original or run client compress ladder. */
+export function sideImagePreparePlan(byteLength: number): SideImagePreparePlan {
+  if (!Number.isFinite(byteLength) || byteLength < 0) {
+    return {
+      action: "compress",
+      longEdges: SIDE_IMAGE_LONG_EDGES,
+      qualities: SIDE_IMAGE_JPEG_QUALITIES,
+    };
+  }
+  if (byteLength <= MAX_VEHICLE_IMAGE_BYTES) return { action: "passthrough" };
+  return {
+    action: "compress",
+    longEdges: SIDE_IMAGE_LONG_EDGES,
+    qualities: SIDE_IMAGE_JPEG_QUALITIES,
+  };
+}
+
+/** Scale so the longer side is at most `maxLongEdge` (aspect preserved). */
+export function fitLongEdge(
+  width: number,
+  height: number,
+  maxLongEdge: number,
+): { width: number; height: number } {
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+  const long = Math.max(w, h);
+  if (long <= maxLongEdge) return { width: w, height: h };
+  const scale = maxLongEdge / long;
+  return {
+    width: Math.max(1, Math.round(w * scale)),
+    height: Math.max(1, Math.round(h * scale)),
+  };
+}
+
+/**
+ * Walk geometry × quality ladder with a platform encoder.
+ * Stops at first candidate with byteLength ≤ MAX_VEHICLE_IMAGE_BYTES.
+ */
+export async function runSideImageCompressLadder<T>(
+  encode: (longEdge: number, quality: number) => Promise<{ byteLength: number; payload: T } | null>,
+): Promise<{ ok: true; payload: T } | { ok: false; reason: "still_too_large" }> {
+  for (const longEdge of SIDE_IMAGE_LONG_EDGES) {
+    for (const quality of SIDE_IMAGE_JPEG_QUALITIES) {
+      const candidate = await encode(longEdge, quality);
+      if (!candidate) continue;
+      if (candidate.byteLength > 0 && candidate.byteLength <= MAX_VEHICLE_IMAGE_BYTES) {
+        return { ok: true, payload: candidate.payload };
+      }
+    }
+  }
+  return { ok: false, reason: "still_too_large" };
+}
+
+/** JPEG filename for compressed side uploads. */
+export function jpegSideImageFilename(originalName?: string | null, sideHint?: string): string {
+  const base =
+    originalName?.trim().replace(/\.[^.]+$/, "") ||
+    sideHint?.trim().toLowerCase() ||
+    "photo";
+  const safe = base.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "photo";
+  return `${safe}.jpg`;
+}
+
+export const SIDE_IMAGE_STILL_TOO_LARGE_MESSAGE =
+  "Image must be 5 MB or smaller. Try another photo.";
+
+function isBytesImageFile(file: SideImageUploadFile): file is BytesImageFile {
+  return (
+    typeof file === "object" &&
+    file !== null &&
+    "bytes" in file &&
+    typeof (file as BytesImageFile).bytes === "function"
+  );
+}
+
+function isLocalImageFile(file: SideImageUploadFile): file is LocalImageFile {
+  return (
+    typeof file === "object" &&
+    file !== null &&
+    !isBytesImageFile(file) &&
+    "uri" in file &&
+    typeof (file as LocalImageFile).uri === "string" &&
+    (file as LocalImageFile).uri.length > 0
+  );
+}
+
+/**
+ * Build multipart body for vehicle side upload (field name `file`).
+ * Order matters for Expo winter fetch (convertFormDataAsync):
+ * 1) Blob/File (web) — must win before bytes(): modern Blob also has bytes()
+ * 2) objects with `bytes()` (expo-file-system File)
+ * 3) legacy `{ uri, name, type }` (classic RN XHR only — Expo fetch rejects these)
+ */
+export function sideImageUploadFormData(
+  file: SideImageUploadFile,
+  filename = DEFAULT_SIDE_IMAGE_NAME,
+): FormData {
+  const form = new FormData();
+  const safeName = filename.trim() || DEFAULT_SIDE_IMAGE_NAME;
+
+  // Blob before bytes(): Node/Web Blob implements bytes() but needs the filename arg.
+  if (typeof Blob !== "undefined" && file instanceof Blob) {
+    form.append("file", file, safeName);
+    return form;
+  }
+
+  if (isBytesImageFile(file)) {
+    const name = (file.name?.trim() || safeName).trim() || DEFAULT_SIDE_IMAGE_NAME;
+    const type = file.type?.trim() || DEFAULT_SIDE_IMAGE_TYPE;
+    // Ensure content-disposition filename/type for native File-like objects.
+    const part = file as BytesImageFile & { name?: string; type?: string };
+    if (!part.name) {
+      try {
+        Object.defineProperty(part, "name", { value: name, configurable: true });
+      } catch {
+        /* native getters may be non-configurable */
+      }
+    }
+    if (!part.type) {
+      try {
+        Object.defineProperty(part, "type", { value: type, configurable: true });
+      } catch {
+        /* ignore */
+      }
+    }
+    form.append("file", part as unknown as Blob);
+    return form;
+  }
+
+  if (isLocalImageFile(file)) {
+    const name = (file.name?.trim() || safeName).trim() || DEFAULT_SIDE_IMAGE_NAME;
+    const type = file.type?.trim() || DEFAULT_SIDE_IMAGE_TYPE;
+    form.append("file", { uri: file.uri, name, type } as unknown as Blob);
+    return form;
+  }
+
+  throw new Error("sideImageUploadFormData: expected Blob, BytesImageFile, or LocalImageFile");
+}
+
+/** Append one image part under `fieldName` (e.g. handover `damages`). */
+export function appendImageFormPart(
+  form: FormData,
+  fieldName: string,
+  file: SideImageUploadFile,
+  filename = DEFAULT_SIDE_IMAGE_NAME,
+): void {
+  const safeName = filename.trim() || DEFAULT_SIDE_IMAGE_NAME;
+
+  if (typeof Blob !== "undefined" && file instanceof Blob) {
+    form.append(fieldName, file, safeName);
+    return;
+  }
+
+  if (isBytesImageFile(file)) {
+    const name = (file.name?.trim() || safeName).trim() || DEFAULT_SIDE_IMAGE_NAME;
+    const type = file.type?.trim() || DEFAULT_SIDE_IMAGE_TYPE;
+    const part = file as BytesImageFile & { name?: string; type?: string };
+    if (!part.name) {
+      try {
+        Object.defineProperty(part, "name", { value: name, configurable: true });
+      } catch {
+        /* native getters may be non-configurable */
+      }
+    }
+    if (!part.type) {
+      try {
+        Object.defineProperty(part, "type", { value: type, configurable: true });
+      } catch {
+        /* ignore */
+      }
+    }
+    form.append(fieldName, part as unknown as Blob);
+    return;
+  }
+
+  if (isLocalImageFile(file)) {
+    const name = (file.name?.trim() || safeName).trim() || DEFAULT_SIDE_IMAGE_NAME;
+    const type = file.type?.trim() || DEFAULT_SIDE_IMAGE_TYPE;
+    form.append(fieldName, { uri: file.uri, name, type } as unknown as Blob);
+    return;
+  }
+
+  throw new Error("appendImageFormPart: expected Blob, BytesImageFile, or LocalImageFile");
+}
+
+export type OdometerUnit = "mi" | "km";
+
+/** Miles jurisdictions (A34 / ADR-012). Empty/unknown → km. */
+const MILES_COUNTRY_KEYS = new Set(
+  [
+    "us",
+    "usa",
+    "united states",
+    "united states of america",
+    "gb",
+    "uk",
+    "united kingdom",
+    "great britain",
+    "lr",
+    "liberia",
+    "mm",
+    "myanmar",
+    "burma",
+  ].map((s) => s),
+);
+
+export function normalizeCountryKey(country: string | null | undefined): string {
+  return (country ?? "").trim().toLowerCase().replace(/\./g, "").replace(/\s+/g, " ");
+}
+
+export function odometerUnitForCountry(country: string | null | undefined): OdometerUnit {
+  const key = normalizeCountryKey(country);
+  if (!key) return "km";
+  if (MILES_COUNTRY_KEYS.has(key)) return "mi";
+  return "km";
+}
+
 export type Vehicle = {
   id: string;
   company_id: string;
@@ -170,11 +443,17 @@ export type Vehicle = {
   model: string;
   license_plate: string;
   country_of_registration: string | null;
+  /** Optional current odometer reading on the vehicle; null = unknown. */
+  mileage: number | null;
+  /** Read-only; derived from country_of_registration (A34). */
+  mileage_unit: OdometerUnit;
   insurance_on: string | null;
   inspection_on: string | null;
   road_tax_on: string | null;
   registration_on: string | null;
   warnings: Warning[];
+  has_side_images: boolean;
+  side_images: Record<VehicleSide, SideImage | null>;
 };
 
 export type VehicleWrite = {
@@ -182,6 +461,8 @@ export type VehicleWrite = {
   model?: string;
   license_plate?: string;
   country_of_registration?: string | null;
+  /** Omit to leave unchanged on PATCH; null or "" clears. */
+  mileage?: number | string | null;
   insurance_on?: string | null;
   inspection_on?: string | null;
   road_tax_on?: string | null;
@@ -200,14 +481,14 @@ export type Home = {
   }[];
 };
 
-export type OdometerUnit = "mi" | "km";
-
 export type DriverVehicle = {
   id: string;
   make: string;
   model: string;
   license_plate: string;
   country_of_registration: string | null;
+  mileage: number | null;
+  mileage_unit: OdometerUnit;
   odometer_unit: OdometerUnit;
   label: string;
 };
@@ -227,8 +508,90 @@ export type DriverTravel = {
   } | null;
 };
 
+export type HandoverType = "out" | "in";
+export type HandoverStatus = "open" | "closed" | "voided";
+
+export type HandoverDriverRef = { id: string; email: string } | null;
+
+export type HandoverVehicleSummary = {
+  id: string;
+  make: string;
+  model: string;
+  license_plate: string;
+  label: string;
+};
+
+export type HandoverDamageImage = {
+  id: string;
+  path: string;
+  url: string;
+  sort_order: number;
+};
+
+export type HandoverListItem = {
+  id: string;
+  vehicle_id: string;
+  company_id: string;
+  type: HandoverType;
+  status: HandoverStatus;
+  handover_out_id: string | null;
+  driver: HandoverDriverRef;
+  mileage: number;
+  mileage_unit: OdometerUnit;
+  next_service_days: number;
+  next_service_distance: number;
+  next_service_distance_unit: OdometerUnit;
+  damages_text: string | null;
+  damage_image_count: number;
+  created_at: string;
+  closed_at: string | null;
+  voided_at: string | null;
+};
+
+export type HandoverDetail = HandoverListItem & {
+  damage_images: HandoverDamageImage[];
+  vehicle: HandoverVehicleSummary | null;
+  paired_out: {
+    id: string;
+    mileage: number;
+    mileage_unit: OdometerUnit;
+    created_at: string;
+  } | null;
+};
+
+export type HandoverActive = {
+  id: string;
+  type: "out";
+  status: "open";
+  vehicle_id: string;
+  mileage: number;
+  mileage_unit: OdometerUnit;
+  created_at: string;
+  vehicle: HandoverVehicleSummary | null;
+};
+
+export type CreateHandoverInput = {
+  type: HandoverType;
+  mileage: number | string;
+  next_service_days: number | string;
+  next_service_distance: number | string;
+  damages_text?: string;
+  /** Optional damage photos (0–10). Field name `damages`. */
+  damages?: SideImageUploadFile[];
+};
+
 export function odometerUnitLabel(unit: OdometerUnit): string {
-  return unit === "mi" ? "Miles" : "Kilometres";
+  return unit === "mi" ? "Miles" : "Kilometers";
+}
+
+/** Format vehicle mileage for list/detail; empty string when unknown. */
+export function formatVehicleMileage(
+  mileage: number | null | undefined,
+  unit: OdometerUnit | null | undefined,
+): string {
+  if (mileage == null || !Number.isFinite(mileage)) return "";
+  const u = unit ?? "km";
+  return `${mileage} ${u}`;
 }
 
 export type TokenStore = {
@@ -306,18 +669,29 @@ export class FleetClient {
   private async request<T>(
     method: string,
     path: string,
-    opts?: { body?: unknown; auth?: boolean; empty?: boolean; _skipRefresh?: boolean; _retried?: boolean },
+    opts?: {
+      body?: unknown;
+      formData?: FormData;
+      auth?: boolean;
+      empty?: boolean;
+      _skipRefresh?: boolean;
+      _retried?: boolean;
+    },
   ): Promise<T> {
     const headers: Record<string, string> = { accept: "application/json" };
-    if (opts?.body !== undefined) headers["content-type"] = "application/json";
+    if (opts?.body !== undefined && !opts.formData) headers["content-type"] = "application/json";
     if (opts?.auth !== false) {
       const access = this.tokens.getAccess();
       if (access) headers.authorization = `Bearer ${access}`;
     }
+    let body: BodyInit | undefined;
+    if (opts?.formData) body = opts.formData;
+    else if (opts?.body !== undefined) body = JSON.stringify(opts.body);
+
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers,
-      body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body,
     });
 
     // US-29: silent refresh once on authenticated 401, then retry.
@@ -495,6 +869,25 @@ export class FleetClient {
     return this.request<Vehicle>("PATCH", `/v1/vehicles/${id}`, { body });
   }
 
+  /**
+   * US-35/36 — multipart field name `file`.
+   * Web: Blob/File. Expo: expo-file-system File (`bytes()`). Avoid bare `{ uri }` on Expo fetch.
+   */
+  putVehicleSideImage(
+    id: string,
+    side: VehicleSide,
+    file: SideImageUploadFile,
+    filename = "photo.jpg",
+  ) {
+    const form = sideImageUploadFormData(file, filename);
+    return this.request<Vehicle>("PUT", `/v1/vehicles/${id}/sides/${side}`, { formData: form });
+  }
+
+  /** US-37 — clear one side (idempotent). */
+  clearVehicleSideImage(id: string, side: VehicleSide) {
+    return this.request<Vehicle>("DELETE", `/v1/vehicles/${id}/sides/${side}`);
+  }
+
   home() {
     return this.request<Home>("GET", "/v1/home");
   }
@@ -509,6 +902,41 @@ export class FleetClient {
 
   putDriverTravel(body: { vehicle_id: string; odometer: number | string }) {
     return this.request<DriverTravel>("PUT", "/v1/driver/travel", { body });
+  }
+
+  /** US-60 — open Out for signed-in driver, or null. */
+  getDriverActiveHandover() {
+    return this.request<{ handover: HandoverActive | null }>("GET", "/v1/driver/handovers/active");
+  }
+
+  /** US-51/52 — multipart create Out or In (active next-travel vehicle). */
+  createDriverHandover(input: CreateHandoverInput) {
+    const form = new FormData();
+    form.append("type", input.type);
+    form.append("mileage", String(input.mileage));
+    form.append("next_service_days", String(input.next_service_days));
+    form.append("next_service_distance", String(input.next_service_distance));
+    if (input.damages_text !== undefined) form.append("damages_text", input.damages_text);
+    for (const file of input.damages ?? []) {
+      appendImageFormPart(form, "damages", file, "damage.jpg");
+    }
+    return this.request<HandoverDetail>("POST", "/v1/driver/handovers", { formData: form });
+  }
+
+  /** US-55 — Owner/Admin handover history for a vehicle. */
+  listVehicleHandovers(vehicleId: string) {
+    return this.request<{ items: HandoverListItem[] }>(
+      "GET",
+      `/v1/vehicles/${vehicleId}/handovers`,
+    );
+  }
+
+  /** US-56 — Owner/Admin handover detail (+ signed damage URLs). */
+  getVehicleHandover(vehicleId: string, handoverId: string) {
+    return this.request<HandoverDetail>(
+      "GET",
+      `/v1/vehicles/${vehicleId}/handovers/${handoverId}`,
+    );
   }
 }
 

@@ -1,7 +1,7 @@
 import { vehiclesNavA11yLabel } from "@fleet/sdk";
-import { Redirect, Tabs } from "expo-router";
+import { Redirect, Tabs, useRouter } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
-import { tabBarIconForName } from "../../components/nav-icons";
+import { NavIcon, tabBarIconForName } from "../../components/nav-icons";
 import { useAuth } from "../../lib/auth";
 import { useVehiclesNavUrgency } from "../../lib/vehicles-nav-urgency";
 
@@ -14,6 +14,7 @@ const TAB_BAR_BG = "#ffffff";
 
 export default function OwnerLayout() {
   const { me, ready } = useAuth();
+  const router = useRouter();
   const ownerAdmin = Boolean(me && me.role !== "driver");
   const vehiclesUrgency = useVehiclesNavUrgency(ownerAdmin);
 
@@ -27,14 +28,13 @@ export default function OwnerLayout() {
   if (!me) return <Redirect href="/sign-in" />;
   if (me.role === "driver") return <Redirect href="/(driver)/denied" />;
 
-  const vehiclesTabStyle =
+  const vehiclesUrgent = vehiclesUrgency !== "none";
+  const vehiclesUrgencyBg =
     vehiclesUrgency === "critical"
-      ? { backgroundColor: NAV_URGENCY_CRITICAL }
+      ? NAV_URGENCY_CRITICAL
       : vehiclesUrgency === "warning"
-        ? { backgroundColor: NAV_URGENCY_SOON }
+        ? NAV_URGENCY_SOON
         : undefined;
-  const vehiclesTint =
-    vehiclesUrgency === "none" ? undefined : NAV_URGENCY_FG;
 
   return (
     <Tabs
@@ -48,6 +48,8 @@ export default function OwnerLayout() {
           paddingBottom: 4,
           backgroundColor: TAB_BAR_BG,
         },
+        // Global tints only. Never put urgency white on tabBar*TintColor for Vehicles —
+        // BottomTabBar applies the *focused* route's tints to every tab (white-on-white).
         tabBarActiveTintColor: TAB_ACTIVE,
         tabBarInactiveTintColor: TAB_INACTIVE,
         tabBarLabelStyle: {
@@ -66,6 +68,13 @@ export default function OwnerLayout() {
       />
       <Tabs.Screen
         name="drivers"
+        listeners={{
+          // Nested stack can restore `[id]`; tab should always open the list.
+          tabPress: (event) => {
+            event.preventDefault();
+            router.navigate("/(owner)/drivers");
+          },
+        }}
         options={{
           title: "Drivers",
           headerShown: false,
@@ -74,14 +83,49 @@ export default function OwnerLayout() {
       />
       <Tabs.Screen
         name="vehicles"
-        options={{
-          title: "Vehicles",
-          headerShown: false,
-          tabBarIcon: tabBarIconForName("truck"),
-          tabBarAccessibilityLabel: vehiclesNavA11yLabel(vehiclesUrgency),
-          tabBarActiveTintColor: vehiclesTint ?? TAB_ACTIVE,
-          tabBarInactiveTintColor: vehiclesTint ?? TAB_INACTIVE,
-          tabBarItemStyle: vehiclesTabStyle,
+        listeners={{
+          // Nested stack can restore `[id]`; tab should always open the list.
+          tabPress: (event) => {
+            event.preventDefault();
+            router.navigate("/(owner)/vehicles");
+          },
+        }}
+        options={({ navigation }) => {
+          const focused = navigation.isFocused();
+          return {
+            title: "Vehicles",
+            headerShown: false,
+            tabBarAccessibilityLabel: vehiclesNavA11yLabel(vehiclesUrgency),
+            // US-28: fill + inverse fg on this item only (not bar-wide tints).
+            tabBarIcon: ({ color, size }) => (
+              <NavIcon
+                name="truck"
+                color={
+                  vehiclesUrgent
+                    ? NAV_URGENCY_FG
+                    : typeof color === "string"
+                      ? color
+                      : TAB_INACTIVE
+                }
+                size={size}
+              />
+            ),
+            tabBarLabelStyle: {
+              fontSize: 13,
+              fontWeight: "600",
+              marginTop: 2,
+              ...(vehiclesUrgent ? { color: NAV_URGENCY_FG } : null),
+            },
+            tabBarItemStyle: vehiclesUrgent
+              ? {
+                  backgroundColor: vehiclesUrgencyBg,
+                  // Selected + urgency: top edge in nav-urgency-fg (design tabItemUrgencySelected).
+                  ...(focused
+                    ? { borderTopWidth: 2, borderTopColor: NAV_URGENCY_FG }
+                    : { borderTopWidth: 0 }),
+                }
+              : undefined,
+          };
         }}
       />
       <Tabs.Screen

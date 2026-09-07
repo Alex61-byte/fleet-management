@@ -9,7 +9,8 @@ A company that runs vehicles and drivers has no shared place to:
 
 - Create the company (with legal registration details and address) and let Owners/Admins sign in (web and mobile), reset password, and optionally use authenticator-app MFA.
 - Invite drivers by email (no Admin-set temporary password); drivers receive an invitation via **Resend**, create their own password, then sign in on **web and mobile**.
-- Keep vehicle records (make/model, plate, insurance, inspection dates, country of registration, road tax) and see when those dates are about to expire.
+- Keep vehicle records (make/model, plate, optional current mileage/odometer reading, insurance, inspection dates, country of registration, road tax) and see when those dates are about to expire.
+- Record **vehicle handovers** (**Out** when taking / **In** when returning) with mileage, next-service days/distance, optional damage notes and photos; let Owner/Admin review handover history on the vehicle.
 
 **What success looks like**
 
@@ -21,19 +22,23 @@ A company that runs vehicles and drivers has no shared place to:
 - Owner/Admin can **hard-delete** a driver profile (permanent remove). **Disable login without delete** remains available as Should (US-16).
 - After the driver accepts the invite and sets a password, later logins use that password on web or mobile (no MFA for drivers). Post-auth driver UX is **minimal home** only (not Owner/Admin fleet UI).
 - Owner/Admin can create and edit vehicles and compliance **dates**; the product **warns** when insurance, inspection, road tax, or registration is within the warning window or already expired.
+- Owner/Admin can optionally record **current vehicle mileage** (odometer reading) on the vehicle; unit is **Miles** or **Kilometers** from **country of registration** (same rule as driver odometer). Empty/unknown allowed. Distinct from driver next-travel odometer.
 - Owner/Admin **edit vehicle** opens with fields **prepopulated** from stored data; **create** stays blank.
+- Owner/Admin can attach **optional appearance photos** of a vehicle from **four sides** (**FRONT**, **LEFT**, **RIGHT**, **BACK**): at most one image per side, replace or clear per side. Files live in **Supabase Storage**; the product stores **references** (path/URL), not file bytes in the database. **Not** insurance/inspection/tax/registration document upload.
 - **Vehicles** nav (web side nav + mobile Owner/Admin tabs) shows **orange** when any company section date is **exactly 7 days** out and **red** when any is **&lt; 7 days** or overdue (fleet-wide worst-wins); list/detail keep the 30-day warnings.
 - Drivers never see Owner/Admin screens; people who are not signed in cannot open fleet or driver records.
 - A signed-in **driver** can **select a company vehicle for their next travel** and record the current **odometer** reading. Odometer unit is **miles or kilometres** based on the vehicle’s **country of registration** (not a free choice by the driver).
+- With an active next-travel vehicle, a driver can complete **Handover Out** and **Handover In** (required mileage, next service days, next service distance; optional damages text/images). Successful handover **updates vehicle current mileage**.
+- Owner/Admin vehicle UI has a **third tab Handovers** (history + detail, read-only). **Drivers do not** see that tab.
 
 ## 2. Actors & stakeholders
 
 | Actor | Who they are | What they do in this slice |
 | --- | --- | --- |
 | **Company** | The fleet organization created at sign-up | Owns drivers, vehicles, and company users. Holds registration number, VAT, and address. Not a person who logs in. |
-| **Owner** | First user at company sign-up | Signs up the company (legal + address fields); signs in web + mobile; reset password; optional TOTP; creates Admins; invites/manages drivers (including hard-delete) and fleet. Last Owner cannot be removed (A5). |
-| **Admin** | Created by an Owner | Same operational work as Owner for drivers (invite, including hard-delete) and fleet; signs in web + mobile; reset password; optional TOTP. Does not create the company. Does not create other Admins (A10). |
-| **Driver** | Profile invited by Owner/Admin | Receives invite email (Resend); accepts invite with token + own password on **web and mobile**; later signs in with email + self-set password; **minimal driver home** including **select vehicle for next travel + odometer**; no MFA; no Owner/Admin fleet admin screens. Cannot start accept if email/invite is not valid in the system. |
+| **Owner** | First user at company sign-up | Signs up the company (legal + address fields); signs in web + mobile; reset password; optional TOTP; creates Admins; invites/manages drivers (including hard-delete) and fleet; **read-only vehicle handover history**. Last Owner cannot be removed (A5). |
+| **Admin** | Created by an Owner | Same operational work as Owner for drivers (invite, including hard-delete) and fleet; **read-only vehicle handover history**; signs in web + mobile; reset password; optional TOTP. Does not create the company. Does not create other Admins (A10). |
+| **Driver** | Profile invited by Owner/Admin | Receives invite email (Resend); accepts invite with token + own password on **web and mobile**; later signs in with email + self-set password; **minimal driver home** including **select vehicle for next travel + odometer** and **Handover Out/In** on the selected vehicle; no MFA; no Owner/Admin fleet admin screens or Handovers history tab. Cannot start accept if email/invite is not valid in the system. |
 | **Invitee (not in system)** | Person with no pending driver invite / unknown email | Must **not** be able to continue invite accept or password setup on web or mobile. |
 
 **Not in this slice:** dispatcher, mechanic.
@@ -106,17 +111,18 @@ flowchart TD
 
 ### In scope
 
-Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin users, driver **invite via Resend**, driver **self-set password** on accept (web + mobile), subsequent driver login, minimal home, hard delete of driver profiles, vehicle records with compliance dates and expiry warnings.
+Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin users, driver **invite via Resend**, driver **self-set password** on accept (web + mobile), subsequent driver login, minimal home, hard delete of driver profiles, vehicle records with compliance dates, optional **current vehicle mileage**, and expiry warnings, optional vehicle side appearance images (FRONT/LEFT/RIGHT/BACK) via Supabase Storage references, driver **Handover Out/In** (mileage, next service days/distance, optional damages text + images), Owner/Admin **Handovers** history tab on vehicle (read-only).
 
 ### Out of scope
 
-- Dispatch, trips, assignments, live tracking, geofence
+- Dispatch, live tracking, geofence, multi-stop trip planning. **Exception:** structured **Handover Out/In** (US-51+) is in scope (not full dispatch)
+- Edit/delete historical handovers; Owner/Admin-created handovers; driver access to Owner Handovers admin tab
 - Dispatcher or mechanic roles
 - Two separate mobile store listings / two apps
 - Driver fleet / Owner-Admin management UI (drivers still get auth + minimal home only on web)
 - Driver MFA
 - Built-in legal catalog of country regulations
-- Document file upload for insurance/inspection/tax/registration
+- Compliance **document** file upload (insurance/inspection/tax/registration PDFs or scans). **Exception:** vehicle **side appearance** images (US-35–US-39) are in scope and are not compliance documents
 - SMS MFA / SMS invites
 - **Temporary password** path for new drivers (retired)
 - Paid maps / Google Places (or other paid geocoding) for address lookup
@@ -124,6 +130,9 @@ Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin user
 - Delete of Owner/Admin users (except existing last-Owner protection only)
 - Driver self-serve password reset (still A9 unless later decided)
 - Global sign-out-everywhere
+- Auto-update of vehicle mileage from driver next-travel odometer
+- mi↔km conversion when country of registration changes
+- Driver write of vehicle inventory mileage
 
 ### MoSCoW
 
@@ -143,16 +152,35 @@ Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin user
 | **Must** | Subsequent driver login on **web and mobile** with self-set password; minimal driver home (not Owner fleet UI) |
 | **Must** | One mobile product; after login, driver vs Owner/Admin experience by role |
 | **Must** | Owner/Admin create and edit vehicles: make, model, license plate, insurance, inspection needed (Admin-entered dates), country of registration, road taxes |
+| **Must** | Owner/Admin optional vehicle **mileage** (current odometer reading): null allowed; if set ≥ 0 max 1 decimal |
+| **Must** | Vehicle **mileage unit** derived from country of registration (A34); read-only; labels Miles / Kilometers |
+| **Must** | Mileage on Owner/Admin vehicle list/detail/create/edit when present; create/edit can set or clear |
 | **Must** | Country is a field on the vehicle; no regulation catalog |
+| **Should** | Driver company vehicle list may show current vehicle mileage read-only |
+| **Must** | Driver **Handover Out** when taking selected (active next-travel) vehicle |
+| **Must** | Driver **Handover In** when returning vehicle (closes open Out) |
+| **Must** | Handover required fields: mileage; next service days; next service distance (unit from country) |
+| **Must** | Optional damages text + optional damage images (multi, caps) linked to handover and vehicle |
+| **Must** | Out→In pairing; one open Out per vehicle; one open Out per driver; same driver closes In |
+| **Must** | Successful handover updates `vehicle.mileage` (monotonic rules); next-travel PUT still does not |
+| **Must** | Owner/Admin third vehicle tab **Handovers**: history + detail read-only (web + mobile) |
+| **Must** | Drivers cannot see Handovers history tab / company handover admin |
+| **Should** | Driver home shows open Out / start In cue when applicable |
 | **Must** | Store compliance dates and warn on expiry |
 | **Must** | Edit vehicle form prepopulated from stored vehicle (web + mobile); create stays blank |
 | **Must** | Vehicles web side nav + mobile Owner/Admin tab urgency: orange at daysUntil = 7, red when daysUntil &lt; 7 or overdue (worst-wins, company only) |
 | **Must** | Driver cannot open Owner/Admin screens |
 | **Must** | Unauthenticated person cannot open fleet or driver management |
 | **Must** | Owner/Admin hard-delete driver profile (irreversible; ends that identity’s access) |
+| **Must** | Owner/Admin optional vehicle side images: FRONT, LEFT, RIGHT, BACK; one per side; replace; clear; web + mobile |
+| **Must** | Side image files in Supabase Storage; product stores references only (no DB blobs) |
+| **Must** | Side images: any image type; max 5 MB each; non-image rejected; optional on create/edit |
+| **Must** | Confirm modal before any delete of a user-visible asset or record (standing pattern; driver hard-delete, side-image clear, future deletes) |
+| **Must** | Side-image clear (filled side): icon control opens confirm; delete runs only after confirm (web + mobile) |
 | **Should** | Resend invitation for drivers still pending invite accept |
 | **Should** | Disable driver login without deleting the driver profile |
-| **Won't** | Dispatch/tracking; extra roles; SMS MFA/invites; driver MFA; driver fleet UI; legal catalog; file upload this slice; temp password for drivers; paid maps APIs; soft-delete/restore drivers; bulk driver delete; driver self-delete; audit history for deletes; sliding extension of the 14-day session window; logout-everywhere; device/session list UI |
+| **Should** | Vehicle list compact cue when any side image exists (not a four-side gallery on the list) |
+| **Won't** | Dispatch/tracking; extra roles; SMS MFA/invites; driver MFA; driver fleet UI; legal catalog; compliance document upload; multi-image per side; driver-managed vehicle images; temp password for drivers; paid maps APIs; soft-delete/restore drivers; bulk driver delete; driver self-delete; audit history for deletes; sliding extension of the 14-day session window; logout-everywhere; device/session list UI; auto-sync travel odometer → vehicle.mileage; user-chosen mileage unit; auto-convert mi↔km on country change; edit/delete historical handovers; Owner/Admin create handover; driver Handovers admin tab; damage images as side-appearance slots |
 
 ## 5. Open questions & assumptions
 
@@ -163,7 +191,7 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 | ID | Assumption |
 | --- | --- |
 | A1 | Expiry warning window is **30 days** for **insurance, inspection, and road tax** only. |
-| A2 | Compliance in this slice is **date fields only**; document upload later. |
+| A2 | Compliance **documents** (insurance/inspection/tax/registration files) remain **out of scope**. **Vehicle side appearance images** (FRONT/LEFT/RIGHT/BACK) are **in scope** and are **not** compliance documents **(A35–A40)**. |
 | A3 | *(Retired)* Temp-password reuse rule. Superseded by invite + self-set password; no Admin temp password to reuse. |
 | A4 | Minimum password length is **8** for all passwords in this slice (Owner/Admin, driver on invite accept). |
 | A5 | Last Owner cannot be deleted/removed. |
@@ -194,6 +222,28 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 | A30 | Address **lookup** is client-side free Nominatim/OSM-style assist; user may also type free-text. Stored value is **formatted address text**; **lat/lon optional**, not required. |
 | A31 | Paid geocoding / Google Places is **out of scope**. Product does not require server-side paid maps. |
 | A32 | Access token is **short-lived** (product default **~15 minutes**). Absolute **refresh-family** lifetime is **14 days** from family start; refresh rotation **does not** extend `expires_at`. |
+| A35 | Exactly four sides: **FRONT**, **LEFT**, **RIGHT**, **BACK**. No other side keys in this slice. |
+| A36 | Side images are **optional**; create/edit may omit any or all sides. |
+| A37 | **One** image per side; a new upload **replaces** the previous for that side. |
+| A38 | Binary files in **Supabase Storage**; fleet record stores **reference(s)** only (path and/or URL as implemented)—**not** Postgres/file blobs in-app DB. |
+| A39 | Allowed types: **any image type** (not limited to JPEG/PNG/WebP); max **5 MB** per image. **Non-image** files and oversize files rejected for that side. |
+| A40 | Owner/Admin **clear** removes that side’s reference and the product **must not** keep presenting that image; storage object is removed or equivalent cleanup. **Clear of a filled side requires confirmation (A41) before the clear runs.** Drivers have **no** side-image manage UI; next-travel list does **not** require side images this slice. List gallery is **Should** presence only. |
+| A41 | **Confirm-before-delete** is **Must** for in-product actions that **delete** user-visible assets or records (e.g. hard-delete driver, clear vehicle side image, and any future delete). First control activation opens confirm only; Cancel/dismiss makes no change. Does not require confirm for non-delete flows (e.g. disable login) unless those stories say so. |
+| A42 | Vehicle **mileage** = optional **current odometer reading** on the fleet vehicle record. Product field label is the unit (**Miles** / **Kilometers**). API/storage concept name: **`mileage`**. |
+| A43 | Driver **next-travel odometer** (`driver_travel_selections`) remains **separate**. This slice does **not** overwrite vehicle.mileage when travel is saved. |
+| A44 | Driver read-only display of vehicle.mileage is **Should**, not Must. |
+| A45 | **Handover Out** starts open vehicle custody; **Handover In** closes it. Pair = Out → In on the same vehicle. |
+| A46 | Driver may create handovers only for the vehicle of their **active next-travel selection** (US-33). No separate assignment entity this slice. |
+| A47 | At most **one open Out** per **vehicle** and per **driver**. In must be by the **same driver** who created the open Out. |
+| A48 | **Mileage**, **next_service_days**, **next_service_distance** are **required** on both Out and In. |
+| A49 | **Damages text** optional. **Damage images** optional. Images do **not** hard-require text. |
+| A50 | Damage images: **1–10** per handover; image types; **max 5 MB** each. Object storage + DB references; linked to **handover_id** and **vehicle_id**. |
+| A51 | Units for handover mileage and next_service_distance derived from vehicle **country of registration** (A34)—not driver-chosen. Store value + unit at write. |
+| A52 | On successful Out or In, **update `vehicle.mileage`** to the handover mileage. Does **not** change A43 for plain next-travel PUT. |
+| A53 | Monotonicity: handover mileage ≥ 0, max 1 decimal; if vehicle.mileage set, handover ≥ it; on In, ≥ paired Out mileage. |
+| A54 | **next_service_days**: integer ≥ 1. **next_service_distance**: number ≥ 0, max 1 decimal. |
+| A55 | Owner and Admin only see Handovers history tab + detail; Drivers cannot. History **read-only** this slice. |
+| A56 | Handover damage images are **not** vehicle side appearance images and **not** compliance documents. |
 
 ### Open questions (not invented)
 
@@ -215,4 +265,4 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 
 ## 6. Next specialist
 
-**Design Specialist** — tokens and page specs for screens listed in [stories.md](stories.md) handoff (sign-up extra fields + address lookup; create driver email-only; invite accept / set password web+mobile; resend pending; list status “invite pending”). Do not start architecture or application code.
+**Design Specialist** — tokens and page specs for Owner/Admin **Vehicles create/edit** four-side image slots (empty/filled/replace/clear, upload error) and optional list presence cue (**Should**). Web + mobile. Do not start architecture or application code until design is done for this slice.

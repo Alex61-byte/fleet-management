@@ -102,6 +102,9 @@ export const fleetTheme = {
     "mark-public-width": "40px",
     "nav-icon": "20px",
     "hero-map": "320px",
+    "vehicle-side-slot": "176px",
+    "vehicle-side-grid-max": "400px",
+    "vehicle-side-viewer-toolbar": "56px",
     "brand-bar": "2px",
     "link-underline-offset": "2px",
     "app-bar": "56px",
@@ -286,7 +289,9 @@ export const themeClasses = {
   buttonGhost:
     "min-h-hit px-2 rounded-md bg-transparent text-text-primary font-sans text-label font-medium",
   buttonGhostHover: "bg-hover",
-  buttonIcon: "h-hit w-hit items-center justify-center rounded-md",
+  /** Square icon control: flex box + zero UA padding so glyph is optically centered */
+  buttonIcon:
+    "inline-flex h-hit w-hit shrink-0 items-center justify-center rounded-md p-0 leading-none",
   buttonDisabled: "bg-disabled-surface text-disabled",
   buttonFocus: "shadow-ring",
   input:
@@ -316,6 +321,69 @@ export const themeClasses = {
     "bg-warning-subtle text-warning border border-warning rounded-md px-2 py-1.5",
   emptyState: "py-8 items-center",
   skeleton: "bg-disabled-surface rounded-sm",
+  /** US-35–US-39 vehicle create/edit — Details | Images tabs (web; mobile may match) */
+  vehicleForm: "flex flex-col gap-2 w-full max-w-[720px]",
+  vehicleFormTabList:
+    "flex flex-row gap-0 border-b border-divider -mb-px",
+  vehicleFormTab:
+    "min-h-hit px-2 font-sans text-label font-medium text-text-secondary border-b-2 border-transparent -mb-px hover:text-text-primary hover:bg-hover rounded-t-md",
+  vehicleFormTabSelected:
+    "min-h-hit px-2 font-sans text-label font-semibold text-text-primary border-b-2 border-brand -mb-px rounded-t-md",
+  vehicleFormTabPanel: "flex flex-col gap-2 pt-2",
+  vehicleFormDetails: "flex flex-col gap-2 max-w-[400px]",
+  /** US-35–US-39 + US-41–US-44 vehicle side appearance — Owner/Admin create/edit only */
+  vehicleSideSection: "flex flex-col gap-2",
+  vehicleSideGrid:
+    "grid grid-cols-2 gap-2 w-full max-w-vehicle-side-grid-max",
+  vehicleSideSlot: "flex flex-col gap-1 min-w-0",
+  vehicleSideFrame:
+    "h-vehicle-side-slot w-full max-w-vehicle-side-slot bg-surface-sunken border border-border rounded-md overflow-hidden items-center justify-center",
+  vehicleSideFrameFocus: "shadow-ring border-focus",
+  vehicleSideFrameError: "border-danger",
+  /** Filled frame is the viewer open control (US-42); empty stays add-target only */
+  vehicleSideFrameFilled:
+    "h-vehicle-side-slot w-full max-w-vehicle-side-slot bg-surface-sunken border border-border rounded-md overflow-hidden items-center justify-center min-h-hit cursor-pointer",
+  vehicleSidePreview: "h-full w-full",
+  vehicleSideActions: "flex flex-row flex-wrap items-center gap-1",
+  vehicleSidePresence:
+    "inline-flex flex-row items-center gap-0.5 px-1 py-0.5 rounded-sm bg-surface-sunken text-text-secondary text-caption font-medium",
+  vehicleSidePresenceIcon: "h-nav-icon w-nav-icon shrink-0",
+  /**
+   * US-42–US-44 view-only side image viewer.
+   * Web: centered dialog over scrim. Mobile: full-screen modal (not clear-confirm bottom sheet).
+   * Reuses surface-overlay + shadow-overlay; separate from delete/clear confirm sheets.
+   */
+  vehicleSideViewerOverlay:
+    "fixed inset-0 z-30 flex items-center justify-center bg-surface-overlay",
+  vehicleSideViewerOverlayMobile:
+    "absolute inset-0 z-30 flex flex-col bg-canvas",
+  vehicleSideViewerDialog:
+    "flex flex-col w-full max-w-[720px] max-h-[90vh] m-2 bg-surface-raised border border-border rounded-lg shadow-overlay overflow-hidden",
+  vehicleSideViewerScreen:
+    "flex flex-col flex-1 min-h-0 w-full bg-canvas",
+  vehicleSideViewerToolbar:
+    "h-vehicle-side-viewer-toolbar shrink-0 px-2 flex flex-row items-center justify-between gap-1 border-b border-divider bg-surface-raised",
+  vehicleSideViewerTitle:
+    "font-sans text-label font-semibold text-text-primary min-w-0 truncate",
+  vehicleSideViewerZoomGroup: "flex flex-row items-center gap-1",
+  vehicleSideViewerStage:
+    "flex-1 min-h-0 min-w-0 bg-surface-sunken items-center justify-center overflow-hidden p-2",
+  vehicleSideViewerImage: "max-h-full max-w-full",
+  /** Close / zoom use buttonIcon + buttonFocus; names from vehicles.md a11y table */
+  vehicleSideViewerClose: "text-text-primary",
+  vehicleSideViewerZoomOut: "text-text-primary",
+  vehicleSideViewerZoomIn: "text-text-primary",
+  /**
+   * US-51–US-56 handover damage photos (driver attach + Owner detail).
+   * Not vehicle side FRONT/LEFT/RIGHT/BACK slots. Thumbs 48px (spacing 6).
+   * Enlarge reuses vehicleSideViewer*. Remove control is driver pre-submit only.
+   */
+  handoverDamageGrid: "flex flex-row flex-wrap gap-1 items-start",
+  handoverDamageThumb:
+    "relative h-6 w-6 shrink-0 rounded-md overflow-hidden bg-surface-sunken border border-border items-center justify-center",
+  handoverDamageThumbFocus: "shadow-ring border-focus",
+  handoverDamageThumbRemove:
+    "absolute -top-0.5 -right-0.5 inline-flex h-hit w-hit min-h-hit min-w-hit items-center justify-center",
   appBarMobile:
     "h-app-bar bg-surface-raised border-b border-divider px-2 flex flex-row items-center gap-1",
   appBarProduct: "text-title font-semibold text-text-primary tracking-tight",

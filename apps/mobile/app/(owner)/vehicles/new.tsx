@@ -9,15 +9,16 @@ export default function NewVehicle() {
   const { offline } = useAuth();
   const router = useRouter();
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-2">
+    <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-2 gap-2">
       <Stack.Screen options={{ title: "Add vehicle" }} />
       <VehicleForm
         offline={offline}
         submitLabel="Save vehicle"
         onSubmit={async (body) => {
-          await api.createVehicle(body);
+          const created = await api.createVehicle(body);
           notifyVehiclesChanged();
-          router.replace("/(owner)/vehicles");
+          router.replace(`/(owner)/vehicles/${created.id}`);
+          return created;
         }}
       />
     </ScrollView>

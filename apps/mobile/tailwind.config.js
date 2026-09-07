@@ -15,6 +15,14 @@ module.exports = {
       fontWeight: fleetTheme.fontWeight,
       fontFamily: fleetTheme.fontFamily,
       borderRadius: fleetTheme.borderRadius,
+      maxWidth: {
+        "vehicle-side-slot": fleetTheme.spacing["vehicle-side-slot"],
+        "vehicle-side-grid-max": fleetTheme.spacing["vehicle-side-grid-max"],
+      },
+      height: {
+        "vehicle-side-slot": fleetTheme.spacing["vehicle-side-slot"],
+        "vehicle-side-viewer-toolbar": fleetTheme.spacing["vehicle-side-viewer-toolbar"],
+      },
       minHeight: { hit: "44px" },
       minWidth: { hit: "44px" },
     },

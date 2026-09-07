@@ -32,6 +32,7 @@ Authenticated routes: header `Authorization: Bearer <access_token>`.
 | 409 | `email_in_use` | Register, create admin, create/edit driver |
 | 409 | `invite_not_pending` | Resend when driver already accepted / has password set (E32) |
 | 429 | `rate_limited` | Login/forgot/invite preview·accept (backend should apply) |
+| 502 or 503 | `storage_unavailable` | Supabase Storage upload/delete/sign failed (vehicle side images) |
 
 **Retired codes (must not be returned):** `password_reused`, `password_change_required`, `driver_web_not_allowed`.
 
@@ -268,11 +269,26 @@ Allowed while login disabled (accept still blocked).
   "model": "Transit",
   "license_plate": "B-01-FLE",
   "country_of_registration": "RO",
+  "mileage": 12345.5,
+  "mileage_unit": "km",
   "insurance_on": "2026-01-15",
   "inspection_on": null,
   "road_tax_on": "2026-03-01",
   "registration_on": "2020-06-01",
-  "warnings": []
+  "warnings": [],
+  "has_side_images": true,
+  "side_images": {
+    "FRONT": {
+      "path": "{company_id}/{vehicle_id}/front.jpg",
+      "url": "https://<supabase-signed-get>"
+    },
+    "LEFT": null,
+    "RIGHT": {
+      "path": "{company_id}/{vehicle_id}/right.webp",
+      "url": "https://<supabase-signed-get>"
+    },
+    "BACK": null
+  }
 }
 ```
 
@@ -281,19 +297,42 @@ Allowed while login disabled (accept still blocked).
 | `make` | Required on create; non-empty trimmed string |
 | `model` | Required on create; non-empty trimmed string |
 | `license_plate` | Required on create; non-empty trimmed string |
+| `mileage` | Optional current odometer reading on the **vehicle** record. `null` = unknown. When set: number ≥ 0, max 1 decimal (same parse as driver travel odometer). **Not** driver_travel odometer. |
+| `mileage_unit` | Read-only on responses: `"mi"` \| `"km"` derived from `country_of_registration` (A34). **Not** accepted on write. Always present on Vehicle reads. |
 | dates / country | Optional; null allowed |
 | `warnings` | Server-computed on reads (insurance/inspection/road_tax only) |
+| `has_side_images` | `true` if any side has a stored path (**Should** list presence cue) |
+| `side_images` | Always keys `FRONT` \| `LEFT` \| `RIGHT` \| `BACK`. Empty: `null`. Filled: `{ "path", "url" }` (`path` = Storage key; `url` = signed GET ~1h) |
+| Image bytes | **Not** on POST/PATCH vehicle. Upload only via side routes after vehicle exists |
 
-**Removed:** `car`.
+**Removed:** `car`. Storage: [ADR-013](../adr/ADR-013-vehicle-side-images.md). Mileage: [ADR-014](../adr/ADR-014-vehicle-mileage.md). Owner/Admin only; drivers **403** on fleet vehicle + image routes.
 
 ### `GET /v1/vehicles` · `GET /v1/vehicles?expiring=true`
-`{ "items": Vehicle[] }`
+`{ "items": Vehicle[] }` — each item includes `mileage`, `mileage_unit`, `has_side_images` and `side_images`.
 
 ### `POST /v1/vehicles`
-Body: `make`, `model`, `license_plate` required; optional country + date fields. **201** Vehicle. **400** `validation_error` if make/model/plate missing or blank after trim.
+Body: `make`, `model`, `license_plate` required; optional country, date fields, and `mileage` (`number` \| `string` \| `null`; omit or null = unknown). **No** image parts. **No** `mileage_unit` on write. **201** Vehicle with empty sides. **400** `validation_error` if make/model/plate missing or blank after trim, or mileage invalid (negative / non-numeric / >1 decimal).
 
 ### `GET /v1/vehicles/:id` · `PATCH /v1/vehicles/:id`
-PATCH body: any subset of write fields. **200** Vehicle. **404** other company / missing.
+PATCH body: write fields only (make, model, plate, country, dates, `mileage`). Clear mileage with `null` or empty string. **Must not** accept `mileage_unit`, `side_images`, paths, or files. **200** Vehicle. **404** other company / missing.
+
+### `PUT /v1/vehicles/:id/sides/:side`
+
+Upload or **replace** one side. `:side` = `FRONT` \| `LEFT` \| `RIGHT` \| `BACK`.
+
+| | |
+| --- | --- |
+| Body | `multipart/form-data` file field **`file`** |
+| Types | Any **image** detected by file magic (`image/*`); non-image → `validation_error` |
+| Max size | **5 MB** |
+
+**200** Vehicle. **400** `validation_error` (bad side/type/size/missing file). **403** driver. **404** other company. **502/503** `storage_unavailable` — prior side unchanged.
+
+Object key: `{company_id}/{vehicle_id}/{side_lower}.{ext}` in bucket `vehicle-images`.
+
+### `DELETE /v1/vehicles/:id/sides/:side`
+
+Clear **one** side: delete that side’s object from Supabase Storage (S3 `DeleteObject` on the stored path) and null the DB path. Other sides unchanged. Idempotent if already empty. **200** Vehicle (`side_images.<SIDE>` = `null`). Same authz as PUT. **502/503** `storage_unavailable` if the object could not be removed — DB path unchanged so the product does not claim empty while the blob may still exist.
 
 ### `GET /v1/home`
 ```json
@@ -319,6 +358,21 @@ PATCH body: any subset of write fields. **200** Vehicle. **404** other company /
 
 If Resend is unset, create still succeeds with `invite_email_sent: false` (dev). Tests may inject a fake mailer.
 
+## Env (Fleet — vehicle side images)
+
+| Var | Purpose |
+| --- | --- |
+| `OBJECT_STORAGE_DRIVER` | `supabase` (default; same as management-platform) |
+| `OBJECT_STORAGE_ENDPOINT` | Supabase Storage S3 gateway, e.g. `https://<ref>.storage.supabase.co/storage/v1/s3` |
+| `OBJECT_STORAGE_REGION` | e.g. `eu-west-2` |
+| `OBJECT_STORAGE_FORCE_PATH_STYLE` | `true` for Supabase S3 gateway |
+| `OBJECT_STORAGE_ACCESS_KEY_ID` | Storage → Configuration → S3 → Access keys |
+| `OBJECT_STORAGE_SECRET_ACCESS_KEY` | Matching secret — **API only**; not a service_role JWT |
+| `OBJECT_STORAGE_BUCKET` | Private bucket (default `vehicle-images`) |
+| `VEHICLE_IMAGE_SIGNED_URL_TTL_SEC` | Optional. Default `3600` (presigned GET lifetime) |
+
+Image routes use `@aws-sdk/client-s3` against Supabase Storage S3 (management-platform approach). Dev/test may inject a fake storage port; if unset/misconfigured and no fake, image upload/clear/sign → `storage_unavailable`. Field-only vehicle CRUD does not require object storage.
+
 ## Driver next travel (US-33 / US-34)
 
 Driver-only. Owner/Admin → **403** `forbidden`. Drivers remain **403** on owner fleet write routes.
@@ -332,6 +386,8 @@ Driver-only. Owner/Admin → **403** `forbidden`. Drivers remain **403** on owne
   "model": "Transit",
   "license_plate": "B-01-FLE",
   "country_of_registration": "RO",
+  "mileage": 12345.5,
+  "mileage_unit": "km",
   "odometer_unit": "km",
   "label": "Ford Transit"
 }
@@ -339,7 +395,9 @@ Driver-only. Owner/Admin → **403** `forbidden`. Drivers remain **403** on owne
 
 | Field | Notes |
 | --- | --- |
-| `odometer_unit` | `"mi"` or `"km"` — server-derived from `country_of_registration` (A34). Not client-chosen. |
+| `mileage` | Optional vehicle master mileage (`null` if unknown). Read-only for drivers. |
+| `mileage_unit` | Same derivation as `odometer_unit` / A34. |
+| `odometer_unit` | `"mi"` or `"km"` — server-derived from `country_of_registration` (A34). Not client-chosen. Used for next-travel odometer entry. |
 | `label` | `"Make Model"` convenience |
 
 **Miles** when normalized country is one of: `us`, `usa`, `united states`, `united states of america`, `gb`, `uk`, `united kingdom`, `great britain`, `lr`, `liberia`, `mm`, `myanmar`, `burma`. **Else km** (including empty/null).
@@ -378,3 +436,100 @@ Body: `{ "vehicle_id": "uuid", "odometer": number | string }`
 - Unit stored from vehicle country at write time (not from body).
 
 Odometer: ≥ 0; max 1 decimal; values may be sent as number or numeric string.
+
+**Mileage:** `PUT /v1/driver/travel` **must not** update `vehicles.mileage` (A43 / ADR-014). Handover Out/In **does** set `vehicles.mileage` (A52 / ADR-015).
+
+## Vehicle handovers (US-51–US-60)
+
+Fleet. See [ADR-015](../adr/ADR-015-vehicle-handovers.md).  
+Damage bytes: same Supabase S3 gateway as side images ([ADR-013](../adr/ADR-013-vehicle-side-images.md)); keys under `{company_id}/{vehicle_id}/handovers/{handover_id}/{image_id}.{ext}`.
+
+### Error codes (handover)
+
+| BA | HTTP | `error.code` |
+| --- | --- | --- |
+| E45 | 409 | `handover_no_active_travel` |
+| E46 | 409 | `handover_vehicle_open` |
+| E47 | 409 | `handover_driver_open` |
+| E48 | 409 | `handover_no_open_out` |
+| E49 | 409 | `handover_wrong_driver` |
+| E50–E53 | 400 | `validation_error` |
+| E54 / E55 | 403 | `forbidden` |
+| E56 | 404 | `not_found` |
+| E57 | — | No PATCH/DELETE routes |
+| E58 | 503 | `storage_unavailable` |
+
+### Handover list item
+
+```json
+{
+  "id": "uuid",
+  "vehicle_id": "uuid",
+  "company_id": "uuid",
+  "type": "out",
+  "status": "open",
+  "handover_out_id": null,
+  "driver": { "id": "uuid", "email": "driver@fleet.example" },
+  "mileage": 12010.5,
+  "mileage_unit": "km",
+  "next_service_days": 30,
+  "next_service_distance": 500.0,
+  "next_service_distance_unit": "km",
+  "damages_text": null,
+  "damage_image_count": 0,
+  "created_at": "2026-09-07T10:00:00.000Z",
+  "closed_at": null,
+  "voided_at": null
+}
+```
+
+| Field | Notes |
+| --- | --- |
+| `type` | `out` \| `in` |
+| `status` | `open` \| `closed` \| `voided` (In is always `closed` at create) |
+| `handover_out_id` | Set on In → paired Out id; `null` on Out |
+| `driver` | `{ id, email }` or `null` if principal removed after hard-delete |
+| `mileage_unit` / `next_service_distance_unit` | Frozen at write from vehicle country (A34). Not client-supplied |
+| `damage_image_count` | List convenience; detail expands images |
+
+### Handover detail
+
+List fields plus `damage_images[]` (`id`, `path`, `url` signed on Owner/Admin detail, `sort_order`), optional `vehicle` summary, optional `paired_out` on In.
+
+### `GET /v1/driver/handovers/active`
+
+Driver only. Owner/Admin → **403** `forbidden`.
+
+**200** `{ "handover": HandoverActive | null }` — caller’s open Out, else `null` (US-60).
+
+### `POST /v1/driver/handovers`
+
+Driver only. Owner/Admin → **403** `forbidden` (E54).  
+`Content-Type: multipart/form-data`.
+
+| Part | Required | Notes |
+| --- | --- | --- |
+| `type` | yes | `out` \| `in` (lowercase) |
+| `mileage` | yes | ≥ 0; max 1 decimal |
+| `next_service_days` | yes | integer ≥ 1 |
+| `next_service_distance` | yes | ≥ 0; max 1 decimal |
+| `damages_text` | no | optional string |
+| `damages` | no | file field repeated (0..10). Image by magic; max **5 MB** |
+
+**Not accepted:** `vehicle_id`, unit fields, paths.
+
+**Vehicle** = caller’s active next-travel selection only.
+
+**201** HandoverDetail. Side effects: persist Out (`open`) or In (`closed` + Out → `closed`); set `vehicles.mileage` = submitted mileage.
+
+**Errors:** see table above (E45–E54, E58).
+
+### `GET /v1/vehicles/:vehicleId/handovers`
+
+Owner/Admin same company. Driver → **403** (E55). Other company / missing vehicle → **404** (E56).
+
+**200** `{ "items": HandoverListItem[] }` newest first (`created_at` DESC). Includes voided and closed.
+
+### `GET /v1/vehicles/:vehicleId/handovers/:handoverId`
+
+Owner/Admin same company. **200** HandoverDetail with signed damage image URLs. **404** if handover not on that vehicle/company.

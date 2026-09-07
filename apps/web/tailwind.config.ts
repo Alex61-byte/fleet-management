@@ -18,7 +18,15 @@ const config: Config = {
       boxShadow: fleetTheme.boxShadow,
       borderWidth: fleetTheme.borderWidth,
       underlineOffset: fleetTheme.underlineOffset,
-      maxWidth: { "auth-card": fleetTheme.spacing["auth-card"] },
+      maxWidth: {
+        "auth-card": fleetTheme.spacing["auth-card"],
+        "vehicle-side-slot": fleetTheme.spacing["vehicle-side-slot"],
+        "vehicle-side-grid-max": fleetTheme.spacing["vehicle-side-grid-max"],
+      },
+      height: {
+        "vehicle-side-slot": fleetTheme.spacing["vehicle-side-slot"],
+        "vehicle-side-viewer-toolbar": fleetTheme.spacing["vehicle-side-viewer-toolbar"],
+      },
       minHeight: { hit: "44px" },
       minWidth: { hit: "44px" },
     },

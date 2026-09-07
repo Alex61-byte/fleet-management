@@ -1,6 +1,12 @@
 "use client";
 
-import { warningA11y, vehicleLabel, type Vehicle } from "@fleet/sdk";
+import {
+  formatVehicleMileage,
+  odometerUnitLabel,
+  warningA11y,
+  vehicleLabel,
+  type Vehicle,
+} from "@fleet/sdk";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell, ErrorRetry } from "../../components/app-shell";
@@ -56,10 +62,24 @@ export default function VehiclesPage() {
               <Link
                 href={`/vehicles/${v.id}`}
                 className={`${themeClasses.raised} p-2 min-h-hit flex flex-col gap-0.5`}
-                aria-label={warningA11y(`${vehicleLabel(v)}, ${v.license_plate}`, v.warnings)}
+                aria-label={warningA11y(
+                  `${vehicleLabel(v)}, ${v.license_plate}${v.has_side_images ? ", has photos" : ""}`,
+                  v.warnings,
+                )}
               >
-                <span className={themeClasses.label}>{vehicleLabel(v)}</span>
+                <span className={`${themeClasses.label} inline-flex flex-wrap items-center gap-1`}>
+                  {vehicleLabel(v)}
+                  {v.has_side_images === true ? (
+                    <span className={themeClasses.vehicleSidePresence}>Photos</span>
+                  ) : null}
+                </span>
                 <span className={themeClasses.caption}>{v.license_plate}</span>
+                {v.mileage != null ? (
+                  <span className={themeClasses.caption}>
+                    {formatVehicleMileage(v.mileage, v.mileage_unit)} ·{" "}
+                    {odometerUnitLabel(v.mileage_unit ?? "km")}
+                  </span>
+                ) : null}
                 <ExpiryBadges warnings={v.warnings} />
               </Link>
             </li>

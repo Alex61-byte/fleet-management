@@ -16,9 +16,10 @@ export default function NewVehiclePage() {
         offline={offline}
         submitLabel="Save vehicle"
         onSubmit={async (body) => {
-          await api.createVehicle(body);
+          const created = await api.createVehicle(body);
           notifyVehiclesChanged();
-          router.replace("/vehicles");
+          router.replace(`/vehicles/${created.id}`);
+          return created;
         }}
       />
     </AppShell>

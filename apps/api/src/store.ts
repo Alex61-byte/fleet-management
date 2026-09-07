@@ -1,4 +1,11 @@
-import type { DriverTravelSelection, Principal, Role, Vehicle } from "./domain.ts";
+import type {
+  DriverTravelSelection,
+  Principal,
+  Role,
+  Vehicle,
+  VehicleHandover,
+  VehicleHandoverImage,
+} from "./domain.ts";
 
 export type RefreshRow = {
   id: string;
@@ -62,6 +69,16 @@ export interface Store {
   deactivateDriverTravel(driverId: string): Promise<void>;
   insertDriverTravel(row: DriverTravelSelection): Promise<void>;
   deleteDriverTravelForDriver(driverId: string): Promise<void>;
+  insertHandover(row: VehicleHandover): Promise<void>;
+  updateHandover(row: VehicleHandover): Promise<void>;
+  findHandover(id: string, companyId: string): Promise<VehicleHandover | undefined>;
+  findOpenOutForDriver(driverId: string): Promise<VehicleHandover | undefined>;
+  findOpenOutForVehicle(vehicleId: string, companyId: string): Promise<VehicleHandover | undefined>;
+  listHandoversForVehicle(vehicleId: string, companyId: string): Promise<VehicleHandover[]>;
+  insertHandoverImage(row: VehicleHandoverImage): Promise<void>;
+  listHandoverImages(handoverId: string): Promise<VehicleHandoverImage[]>;
+  countHandoverImages(handoverId: string): Promise<number>;
+  voidOpenOutsForDriver(driverId: string): Promise<void>;
 }
 
 export class MemoryStore implements Store {
@@ -73,6 +90,8 @@ export class MemoryStore implements Store {
   resets = new Map<string, ResetRow>();
   vehicles = new Map<string, Vehicle>();
   driverTravel = new Map<string, DriverTravelSelection>();
+  handovers = new Map<string, VehicleHandover>();
+  handoverImages = new Map<string, VehicleHandoverImage>();
 
   async withTransaction<T>(fn: (s: Store) => Promise<T>): Promise<T> {
     return fn(this);
@@ -246,6 +265,102 @@ export class MemoryStore implements Store {
   async deleteDriverTravelForDriver(driverId: string): Promise<void> {
     for (const [id, row] of [...this.driverTravel.entries()]) {
       if (row.driverId === driverId) this.driverTravel.delete(id);
+    }
+  }
+
+  async insertHandover(row: VehicleHandover): Promise<void> {
+    if (row.type === "out" && row.status === "open") {
+      for (const h of this.handovers.values()) {
+        if (h.type === "out" && h.status === "open" && h.vehicleId === row.vehicleId) {
+          const err = new Error("unique");
+          (err as Error & { code: string }).code = "23505";
+          throw err;
+        }
+        if (
+          h.type === "out" &&
+          h.status === "open" &&
+          row.driverId &&
+          h.driverId === row.driverId
+        ) {
+          const err = new Error("unique");
+          (err as Error & { code: string }).code = "23505";
+          throw err;
+        }
+      }
+    }
+    this.handovers.set(row.id, { ...row });
+  }
+
+  async updateHandover(row: VehicleHandover): Promise<void> {
+    this.handovers.set(row.id, { ...row });
+  }
+
+  async findHandover(id: string, companyId: string): Promise<VehicleHandover | undefined> {
+    const h = this.handovers.get(id);
+    if (!h || h.companyId !== companyId) return undefined;
+    return { ...h };
+  }
+
+  async findOpenOutForDriver(driverId: string): Promise<VehicleHandover | undefined> {
+    for (const h of this.handovers.values()) {
+      if (h.type === "out" && h.status === "open" && h.driverId === driverId) return { ...h };
+    }
+    return undefined;
+  }
+
+  async findOpenOutForVehicle(
+    vehicleId: string,
+    companyId: string,
+  ): Promise<VehicleHandover | undefined> {
+    for (const h of this.handovers.values()) {
+      if (
+        h.type === "out" &&
+        h.status === "open" &&
+        h.vehicleId === vehicleId &&
+        h.companyId === companyId
+      ) {
+        return { ...h };
+      }
+    }
+    return undefined;
+  }
+
+  async listHandoversForVehicle(
+    vehicleId: string,
+    companyId: string,
+  ): Promise<VehicleHandover[]> {
+    return [...this.handovers.values()]
+      .filter((h) => h.vehicleId === vehicleId && h.companyId === companyId)
+      .map((h) => ({ ...h }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  async insertHandoverImage(row: VehicleHandoverImage): Promise<void> {
+    this.handoverImages.set(row.id, { ...row });
+  }
+
+  async listHandoverImages(handoverId: string): Promise<VehicleHandoverImage[]> {
+    return [...this.handoverImages.values()]
+      .filter((img) => img.handoverId === handoverId)
+      .map((img) => ({ ...img }))
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt);
+  }
+
+  async countHandoverImages(handoverId: string): Promise<number> {
+    let n = 0;
+    for (const img of this.handoverImages.values()) {
+      if (img.handoverId === handoverId) n += 1;
+    }
+    return n;
+  }
+
+  async voidOpenOutsForDriver(driverId: string): Promise<void> {
+    const now = Date.now();
+    for (const h of this.handovers.values()) {
+      if (h.type === "out" && h.status === "open" && h.driverId === driverId) {
+        h.status = "voided";
+        h.voidedAt = now;
+      }
     }
   }
 }
