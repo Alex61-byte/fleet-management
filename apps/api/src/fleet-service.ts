@@ -1,24 +1,54 @@
-import { errors } from "./errors.ts";
+import { AppError, errors } from "./errors.ts";
 import { newId } from "./crypto.ts";
-import type { AccessClaims, DriverTravelSelection, Vehicle } from "./domain.ts";
+import type {
+  AccessClaims,
+  DriverTravelSelection,
+  HandoverType,
+  Vehicle,
+  VehicleHandover,
+  VehicleHandoverImage,
+  VehicleSide,
+} from "./domain.ts";
 import {
   odometerUnitForCountry,
   parseOdometer,
   toVehicleJson,
   vehicleLabel,
+  vehicleSidePath,
+  withVehicleSidePath,
 } from "./domain.ts";
 import type { Store } from "./store.ts";
+import { isUniqueViolation } from "./store.ts";
+import {
+  detectImage,
+  handoverDamageObjectKey,
+  MAX_HANDOVER_DAMAGE_IMAGES,
+  MAX_VEHICLE_IMAGE_BYTES,
+  sideObjectKey,
+  type VehicleImageStorage,
+} from "./vehicle-image-storage.ts";
 
 export type VehicleWrite = {
   make?: string;
   model?: string;
   license_plate?: string;
   country_of_registration?: string | null;
+  mileage?: number | string | null;
   insurance_on?: string | null;
   inspection_on?: string | null;
   road_tax_on?: string | null;
   registration_on?: string | null;
 };
+
+function parseOptionalMileage(raw: unknown): number | null {
+  if (raw === null) return null;
+  if (typeof raw === "string" && raw.trim() === "") return null;
+  try {
+    return parseOdometer(raw);
+  } catch {
+    throw errors.validation("mileage must be a number ≥ 0 with at most 1 decimal");
+  }
+}
 
 function assertCompanyUser(claims: AccessClaims) {
   if (claims.role === "driver") throw errors.forbidden();
@@ -44,6 +74,7 @@ function applyWrite(target: Vehicle, body: VehicleWrite): Vehicle {
       body.country_of_registration === undefined
         ? target.countryOfRegistration
         : body.country_of_registration,
+    mileage: body.mileage !== undefined ? parseOptionalMileage(body.mileage) : target.mileage,
     insuranceOn: body.insurance_on === undefined ? target.insuranceOn : body.insurance_on,
     inspectionOn: body.inspection_on === undefined ? target.inspectionOn : body.inspection_on,
     roadTaxOn: body.road_tax_on === undefined ? target.roadTaxOn : body.road_tax_on,
@@ -51,14 +82,37 @@ function applyWrite(target: Vehicle, body: VehicleWrite): Vehicle {
   };
 }
 
+function emptyVehicle(companyId: string): Vehicle {
+  return {
+    id: newId(),
+    companyId,
+    make: "",
+    model: "",
+    licensePlate: "",
+    countryOfRegistration: null,
+    mileage: null,
+    insuranceOn: null,
+    inspectionOn: null,
+    roadTaxOn: null,
+    registrationOn: null,
+    imageFrontPath: null,
+    imageLeftPath: null,
+    imageRightPath: null,
+    imageBackPath: null,
+  };
+}
+
 function toDriverVehicleJson(v: Vehicle) {
+  const unit = odometerUnitForCountry(v.countryOfRegistration);
   return {
     id: v.id,
     make: v.make,
     model: v.model,
     license_plate: v.licensePlate,
     country_of_registration: v.countryOfRegistration,
-    odometer_unit: odometerUnitForCountry(v.countryOfRegistration),
+    mileage: v.mileage,
+    mileage_unit: unit,
+    odometer_unit: unit,
     label: vehicleLabel(v.make, v.model),
   };
 }
@@ -83,11 +137,38 @@ function toTravelJson(row: DriverTravelSelection, vehicle: Vehicle | undefined) 
 }
 
 export class FleetService {
-  constructor(private readonly store: Store) {}
+  constructor(
+    private readonly store: Store,
+    private readonly images: VehicleImageStorage | null = null,
+  ) {}
+
+  private requireImages(): VehicleImageStorage {
+    if (!this.images) throw errors.storageUnavailable();
+    return this.images;
+  }
+
+  private async vehicleJson(vehicle: Vehicle) {
+    const storage = this.images;
+    return toVehicleJson(
+      vehicle,
+      undefined,
+      storage
+        ? async (path) => {
+            try {
+              return await storage.signedUrl(path);
+            } catch {
+              throw errors.storageUnavailable();
+            }
+          }
+        : undefined,
+    );
+  }
 
   async list(claims: AccessClaims, expiring?: boolean) {
     assertCompanyUser(claims);
-    let items = (await this.store.listVehicles(claims.company_id)).map((v) => toVehicleJson(v));
+    let items = await Promise.all(
+      (await this.store.listVehicles(claims.company_id)).map((v) => this.vehicleJson(v)),
+    );
     if (expiring) items = items.filter((v) => v.warnings.length > 0);
     return { items };
   }
@@ -97,30 +178,21 @@ export class FleetService {
     const make = requireText(body.make, "make");
     const model = requireText(body.model, "model");
     const licensePlate = requireText(body.license_plate, "license_plate");
-    const vehicle: Vehicle = applyWrite(
-      {
-        id: newId(),
-        companyId: claims.company_id,
-        make,
-        model,
-        licensePlate,
-        countryOfRegistration: null,
-        insuranceOn: null,
-        inspectionOn: null,
-        roadTaxOn: null,
-        registrationOn: null,
-      },
-      { ...body, make, model, license_plate: licensePlate },
-    );
+    const vehicle: Vehicle = applyWrite(emptyVehicle(claims.company_id), {
+      ...body,
+      make,
+      model,
+      license_plate: licensePlate,
+    });
     await this.store.insertVehicle(vehicle);
-    return toVehicleJson(vehicle);
+    return this.vehicleJson(vehicle);
   }
 
   async get(claims: AccessClaims, id: string) {
     assertCompanyUser(claims);
     const vehicle = await this.store.findVehicle(id, claims.company_id);
     if (!vehicle) throw errors.notFound();
-    return toVehicleJson(vehicle);
+    return this.vehicleJson(vehicle);
   }
 
   async patch(claims: AccessClaims, id: string, body: VehicleWrite) {
@@ -129,14 +201,85 @@ export class FleetService {
     if (!existing) throw errors.notFound();
     const vehicle = applyWrite(existing, body);
     await this.store.updateVehicle(vehicle);
-    return toVehicleJson(vehicle);
+    return this.vehicleJson(vehicle);
+  }
+
+  async putSideImage(
+    claims: AccessClaims,
+    id: string,
+    side: VehicleSide,
+    bytes: Uint8Array,
+  ) {
+    assertCompanyUser(claims);
+    if (bytes.byteLength === 0) throw errors.validation("file is required");
+    if (bytes.byteLength > MAX_VEHICLE_IMAGE_BYTES) {
+      throw errors.validation("Image must be 5 MB or smaller.");
+    }
+    const detected = detectImage(bytes);
+    if (!detected) throw errors.validation("Upload an image file.");
+
+    const existing = await this.store.findVehicle(id, claims.company_id);
+    if (!existing) throw errors.notFound();
+
+    const storage = this.requireImages();
+    const path = sideObjectKey(existing.companyId, existing.id, side, detected.ext);
+    const previous = vehicleSidePath(existing, side);
+
+    try {
+      await storage.upload(path, bytes, detected.mime);
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw errors.storageUnavailable();
+    }
+
+    const updated = withVehicleSidePath(existing, side, path);
+    await this.store.updateVehicle(updated);
+
+    if (previous && previous !== path) {
+      try {
+        await storage.remove(previous);
+      } catch {
+        /* best-effort orphan cleanup on replace */
+      }
+    }
+
+    return this.vehicleJson(updated);
+  }
+
+  /**
+   * US-37 — delete one side’s object from storage and clear the DB path.
+   * Storage delete runs first so we never claim empty while the blob still exists.
+   * Idempotent when the side is already empty.
+   */
+  async clearSideImage(claims: AccessClaims, id: string, side: VehicleSide) {
+    assertCompanyUser(claims);
+    const existing = await this.store.findVehicle(id, claims.company_id);
+    if (!existing) throw errors.notFound();
+
+    const previous = vehicleSidePath(existing, side);
+    if (!previous) return this.vehicleJson(existing);
+
+    const storage = this.requireImages();
+    try {
+      await storage.remove(previous);
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw errors.storageUnavailable();
+    }
+
+    const updated = withVehicleSidePath(existing, side, null);
+    await this.store.updateVehicle(updated);
+    return this.vehicleJson(updated);
   }
 
   async home(claims: AccessClaims) {
     assertCompanyUser(claims);
     const { drivers, vehicles } = await this.store.counts(claims.company_id);
-    const expiring_vehicles = (await this.store.listVehicles(claims.company_id))
-      .map((v) => toVehicleJson(v))
+    const expiring_vehicles = (
+      await Promise.all(
+        (await this.store.listVehicles(claims.company_id)).map((v) => this.vehicleJson(v)),
+      )
+    )
       .filter((v) => v.warnings.length > 0)
       .map((v) => ({
         id: v.id,
@@ -197,5 +340,336 @@ export class FleetService {
       await tx.insertDriverTravel(row);
     });
     return toTravelJson(row, vehicle);
+  }
+
+  private async driverRef(driverId: string | null) {
+    if (!driverId) return null;
+    const p = await this.store.findPrincipalById(driverId);
+    if (!p) return null;
+    return { id: p.id, email: p.email };
+  }
+
+  private vehicleSummary(vehicle: Vehicle) {
+    return {
+      id: vehicle.id,
+      make: vehicle.make,
+      model: vehicle.model,
+      license_plate: vehicle.licensePlate,
+      label: vehicleLabel(vehicle.make, vehicle.model),
+    };
+  }
+
+  private async handoverListItem(row: VehicleHandover) {
+    const damage_image_count = await this.store.countHandoverImages(row.id);
+    return {
+      id: row.id,
+      vehicle_id: row.vehicleId,
+      company_id: row.companyId,
+      type: row.type,
+      status: row.status,
+      handover_out_id: row.handoverOutId,
+      driver: await this.driverRef(row.driverId),
+      mileage: row.mileage,
+      mileage_unit: row.mileageUnit,
+      next_service_days: row.nextServiceDays,
+      next_service_distance: row.nextServiceDistance,
+      next_service_distance_unit: row.nextServiceDistanceUnit,
+      damages_text: row.damagesText,
+      damage_image_count,
+      created_at: new Date(row.createdAt).toISOString(),
+      closed_at: row.closedAt ? new Date(row.closedAt).toISOString() : null,
+      voided_at: row.voidedAt ? new Date(row.voidedAt).toISOString() : null,
+    };
+  }
+
+  private async damageImagesJson(images: VehicleHandoverImage[], sign: boolean) {
+    const out: Array<{ id: string; path: string; url: string; sort_order: number }> = [];
+    for (const img of images) {
+      let url = "";
+      if (sign) {
+        const storage = this.requireImages();
+        try {
+          url = await storage.signedUrl(img.storagePath);
+        } catch (err) {
+          if (err instanceof AppError) throw err;
+          throw errors.storageUnavailable();
+        }
+      }
+      out.push({
+        id: img.id,
+        path: img.storagePath,
+        url,
+        sort_order: img.sortOrder,
+      });
+    }
+    return out;
+  }
+
+  private async handoverDetail(
+    row: VehicleHandover,
+    opts: { signImages: boolean; vehicle?: Vehicle },
+  ) {
+    const base = await this.handoverListItem(row);
+    const images = await this.store.listHandoverImages(row.id);
+    let vehicle = opts.vehicle;
+    if (!vehicle) {
+      vehicle = await this.store.findVehicle(row.vehicleId, row.companyId);
+    }
+    let paired_out: {
+      id: string;
+      mileage: number;
+      mileage_unit: string;
+      created_at: string;
+    } | null = null;
+    if (row.handoverOutId) {
+      const out = await this.store.findHandover(row.handoverOutId, row.companyId);
+      if (out) {
+        paired_out = {
+          id: out.id,
+          mileage: out.mileage,
+          mileage_unit: out.mileageUnit,
+          created_at: new Date(out.createdAt).toISOString(),
+        };
+      }
+    }
+    return {
+      ...base,
+      damage_images: await this.damageImagesJson(images, opts.signImages),
+      vehicle: vehicle ? this.vehicleSummary(vehicle) : null,
+      paired_out,
+    };
+  }
+
+  async getDriverActiveHandover(claims: AccessClaims) {
+    assertDriver(claims);
+    const open = await this.store.findOpenOutForDriver(claims.sub);
+    if (!open || open.companyId !== claims.company_id) return { handover: null };
+    const vehicle = await this.store.findVehicle(open.vehicleId, claims.company_id);
+    return {
+      handover: {
+        id: open.id,
+        type: open.type,
+        status: open.status,
+        vehicle_id: open.vehicleId,
+        mileage: open.mileage,
+        mileage_unit: open.mileageUnit,
+        created_at: new Date(open.createdAt).toISOString(),
+        vehicle: vehicle ? this.vehicleSummary(vehicle) : null,
+      },
+    };
+  }
+
+  async createDriverHandover(
+    claims: AccessClaims,
+    input: {
+      type?: string;
+      mileage?: unknown;
+      next_service_days?: unknown;
+      next_service_distance?: unknown;
+      damages_text?: unknown;
+      damageFiles?: Uint8Array[];
+    },
+  ) {
+    assertDriver(claims);
+    const typeRaw = typeof input.type === "string" ? input.type.trim().toLowerCase() : "";
+    if (typeRaw !== "out" && typeRaw !== "in") {
+      throw errors.validation("type must be out or in");
+    }
+    const type = typeRaw as HandoverType;
+
+    let mileage: number;
+    try {
+      mileage = parseOdometer(input.mileage);
+    } catch {
+      throw errors.validation("mileage must be a number ≥ 0 with at most 1 decimal");
+    }
+
+    const daysRaw = input.next_service_days;
+    let nextServiceDays: number;
+    if (typeof daysRaw === "number" && Number.isInteger(daysRaw)) {
+      nextServiceDays = daysRaw;
+    } else if (typeof daysRaw === "string" && /^\d+$/.test(daysRaw.trim())) {
+      nextServiceDays = Number(daysRaw.trim());
+    } else {
+      throw errors.validation("next_service_days must be an integer ≥ 1");
+    }
+    if (!Number.isInteger(nextServiceDays) || nextServiceDays < 1) {
+      throw errors.validation("next_service_days must be an integer ≥ 1");
+    }
+
+    let nextServiceDistance: number;
+    try {
+      nextServiceDistance = parseOdometer(input.next_service_distance);
+    } catch {
+      throw errors.validation(
+        "next_service_distance must be a number ≥ 0 with at most 1 decimal",
+      );
+    }
+
+    let damagesText: string | null = null;
+    if (input.damages_text !== undefined && input.damages_text !== null) {
+      if (typeof input.damages_text !== "string") {
+        throw errors.validation("damages_text must be a string");
+      }
+      const trimmed = input.damages_text.trim();
+      damagesText = trimmed.length ? trimmed : null;
+    }
+
+    const damageFiles = input.damageFiles ?? [];
+    if (damageFiles.length > MAX_HANDOVER_DAMAGE_IMAGES) {
+      throw errors.validation("At most 10 damage images are allowed.");
+    }
+    for (const bytes of damageFiles) {
+      if (bytes.byteLength === 0) throw errors.validation("Upload an image file.");
+      if (bytes.byteLength > MAX_VEHICLE_IMAGE_BYTES) {
+        throw errors.validation("Image must be 5 MB or smaller.");
+      }
+      if (!detectImage(bytes)) throw errors.validation("Upload an image file.");
+    }
+
+    const travel = await this.store.findActiveDriverTravel(claims.sub);
+    if (!travel || travel.companyId !== claims.company_id) {
+      throw errors.handoverNoActiveTravel();
+    }
+    const vehicle = await this.store.findVehicle(travel.vehicleId, claims.company_id);
+    if (!vehicle) throw errors.handoverNoActiveTravel();
+
+    const unit = odometerUnitForCountry(vehicle.countryOfRegistration);
+    if (vehicle.mileage != null && mileage < vehicle.mileage) {
+      throw errors.validation("Mileage cannot be lower than the vehicle’s current reading.");
+    }
+
+    let openOut: VehicleHandover | undefined;
+    if (type === "out") {
+      const vehicleOpen = await this.store.findOpenOutForVehicle(vehicle.id, claims.company_id);
+      if (vehicleOpen) throw errors.handoverVehicleOpen();
+      const driverOpen = await this.store.findOpenOutForDriver(claims.sub);
+      if (driverOpen) throw errors.handoverDriverOpen();
+    } else {
+      openOut = await this.store.findOpenOutForVehicle(vehicle.id, claims.company_id);
+      if (!openOut) throw errors.handoverNoOpenOut();
+      if (openOut.driverId !== claims.sub) throw errors.handoverWrongDriver();
+      if (mileage < openOut.mileage) {
+        throw errors.validation("Mileage cannot be lower than the Out mileage.");
+      }
+    }
+
+    const now = Date.now();
+    const handoverId = newId();
+    const uploadedPaths: string[] = [];
+    const imageRows: VehicleHandoverImage[] = [];
+
+    if (damageFiles.length) {
+      const storage = this.requireImages();
+      for (let i = 0; i < damageFiles.length; i++) {
+        const bytes = damageFiles[i]!;
+        const detected = detectImage(bytes)!;
+        const imageId = newId();
+        const path = handoverDamageObjectKey(
+          claims.company_id,
+          vehicle.id,
+          handoverId,
+          imageId,
+          detected.ext,
+        );
+        try {
+          await storage.upload(path, bytes, detected.mime);
+        } catch (err) {
+          for (const p of uploadedPaths) {
+            try {
+              await storage.remove(p);
+            } catch {
+              /* best-effort */
+            }
+          }
+          if (err instanceof AppError) throw err;
+          throw errors.storageUnavailable();
+        }
+        uploadedPaths.push(path);
+        imageRows.push({
+          id: imageId,
+          companyId: claims.company_id,
+          vehicleId: vehicle.id,
+          handoverId,
+          storagePath: path,
+          sortOrder: i,
+          createdAt: now,
+        });
+      }
+    }
+
+    const row: VehicleHandover = {
+      id: handoverId,
+      companyId: claims.company_id,
+      vehicleId: vehicle.id,
+      driverId: claims.sub,
+      type,
+      status: type === "out" ? "open" : "closed",
+      handoverOutId: type === "in" ? openOut!.id : null,
+      mileage,
+      mileageUnit: unit,
+      nextServiceDays,
+      nextServiceDistance,
+      nextServiceDistanceUnit: unit,
+      damagesText,
+      createdAt: now,
+      closedAt: type === "in" ? now : null,
+      voidedAt: null,
+    };
+
+    try {
+      await this.store.withTransaction(async (tx) => {
+        if (type === "in" && openOut) {
+          await tx.updateHandover({
+            ...openOut,
+            status: "closed",
+            closedAt: now,
+          });
+        }
+        await tx.insertHandover(row);
+        for (const img of imageRows) {
+          await tx.insertHandoverImage(img);
+        }
+        await tx.updateVehicle({ ...vehicle, mileage });
+      });
+    } catch (err) {
+      if (uploadedPaths.length && this.images) {
+        for (const p of uploadedPaths) {
+          try {
+            await this.images.remove(p);
+          } catch {
+            /* best-effort */
+          }
+        }
+      }
+      if (isUniqueViolation(err)) {
+        if (type === "out") throw errors.handoverVehicleOpen();
+        throw errors.handoverNoOpenOut();
+      }
+      throw err;
+    }
+
+    return this.handoverDetail(row, { signImages: false, vehicle: { ...vehicle, mileage } });
+  }
+
+  async listVehicleHandovers(claims: AccessClaims, vehicleId: string) {
+    assertCompanyUser(claims);
+    const vehicle = await this.store.findVehicle(vehicleId, claims.company_id);
+    if (!vehicle) throw errors.notFound();
+    const rows = await this.store.listHandoversForVehicle(vehicleId, claims.company_id);
+    const items = [];
+    for (const row of rows) {
+      items.push(await this.handoverListItem(row));
+    }
+    return { items };
+  }
+
+  async getVehicleHandover(claims: AccessClaims, vehicleId: string, handoverId: string) {
+    assertCompanyUser(claims);
+    const vehicle = await this.store.findVehicle(vehicleId, claims.company_id);
+    if (!vehicle) throw errors.notFound();
+    const row = await this.store.findHandover(handoverId, claims.company_id);
+    if (!row || row.vehicleId !== vehicleId) throw errors.notFound();
+    return this.handoverDetail(row, { signImages: true, vehicle });
   }
 }

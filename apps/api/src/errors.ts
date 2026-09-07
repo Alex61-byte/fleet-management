@@ -40,4 +40,24 @@ export const errors = {
     new AppError(409, "invite_not_pending", "This driver has already accepted their invitation."),
   rateLimited: () =>
     new AppError(429, "rate_limited", "Too many attempts. Try again later."),
+  storageUnavailable: () =>
+    new AppError(503, "storage_unavailable", "Image storage is unavailable."),
+  handoverNoActiveTravel: () =>
+    new AppError(
+      409,
+      "handover_no_active_travel",
+      "Select a vehicle for next travel before handover.",
+    ),
+  handoverVehicleOpen: () =>
+    new AppError(409, "handover_vehicle_open", "This vehicle already has an open handover out."),
+  handoverDriverOpen: () =>
+    new AppError(409, "handover_driver_open", "You already have an open handover out."),
+  handoverNoOpenOut: () =>
+    new AppError(409, "handover_no_open_out", "There is no open handover out to close."),
+  handoverWrongDriver: () =>
+    new AppError(
+      409,
+      "handover_wrong_driver",
+      "Only the driver who took the vehicle out can hand it back in.",
+    ),
 };

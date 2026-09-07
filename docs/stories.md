@@ -559,7 +559,7 @@ Spec **states** (empty, loading, error, success, warning, denied), **density**, 
 | Password reset | US-03 | Request reset; set new password (Owner/Admin only) |
 | Owner/Admin home (post-login) | US-02 | Entry to drivers and fleet; not driver UI |
 | Invite accept / set password | US-09 | Token from link; email match; create password; gate before minimal home; unknown email cannot continue |
-| Driver home (minimal) | US-10 | Identity + sign-out; **no** Owner side nav / fleet / driver admin |
+| Driver home / start (minimal) | US-10 | Identity + hub to Next travel / Handover + sign-out; **no** auto-open handover form; **no** Owner side nav / fleet / driver admin |
 | Enable/disable TOTP | US-04, US-05 | Off → on (authenticator); on → off |
 | Create Admin | US-06 | Owner only; deny Admin |
 | Driver list | US-07, US-08, US-09a, US-16, US-27 | Company drivers; empty state; pending invite status |
@@ -582,7 +582,7 @@ Spec **states** (empty, loading, error, success, warning, denied), **density**, 
 | Create Admin | Owner | US-06 |
 | Driver list / create / edit | Owner/Admin | US-07, US-08, US-09a, US-16, US-27 |
 | Vehicle list / create / edit + expiry warning | Owner/Admin | US-11–13 |
-| Driver home | Driver, after invite accept | US-10 — **no** Owner/Admin navigation (web + mobile) |
+| Driver home / start | Driver, after invite accept | US-10 — calm start hub; travel & handover are opt-in screens; **no** Owner/Admin navigation (web + mobile) |
 | Denied Owner/Admin areas | Driver | US-14 / E8 (not blanket web denial) |
 | Unauthenticated | None | US-15 — no fleet |
 
@@ -635,7 +635,7 @@ When page specs exist, next specialist is **Senior Software Architect**.
 
 - **Given** I am selecting a vehicle whose country is any other value (e.g. RO, DE) or empty  
   **When** I enter odometer  
-  **Then** the unit shown and stored is **kilometres**.
+  **Then** the unit shown and stored is **kilometers**.
 
 - **Given** I enter a negative odometer or leave it blank  
   **When** I submit  
@@ -644,4 +644,462 @@ When page specs exist, next specialist is **Senior Software Architect**.
 - **Given** I successfully selected with odometer  
   **When** I view driver home  
   **Then** I see the active vehicle identity, plate, odometer value, and unit.
+
+
+## US-35 — Optional vehicle side images on create/edit **(Must)**
+
+**As** an Owner or Admin  
+**I need** to attach optional photos of a vehicle from FRONT, LEFT, RIGHT, and BACK  
+**So that** the fleet record shows what the vehicle looks like from all sides.
+
+**Acceptance**
+
+- **Given** I am signed in as Owner or Admin  
+  **When** I create or edit a company vehicle and attach a valid image to one or more of FRONT, LEFT, RIGHT, BACK  
+  **Then** each attached side stores a reference to the image in Supabase Storage for my company’s vehicle.
+
+- **Given** I create or edit a vehicle  
+  **When** I save without any side images  
+  **Then** the vehicle is still saved; all four sides may be empty.
+
+- **Given** I am on create or edit  
+  **When** I only fill some sides  
+  **Then** filled sides have images and unfilled sides remain empty.
+
+
+## US-36 — One image per side; replace **(Must)**
+
+**As** an Owner or Admin  
+**I need** at most one current photo per side and to replace it when I upload again  
+**So that** the record stays unambiguous.
+
+**Acceptance**
+
+- **Given** a vehicle already has a FRONT image  
+  **When** I upload a new valid FRONT image  
+  **Then** FRONT shows the new image and the previous FRONT is no longer the current image.
+
+- **Given** a side already has an image  
+  **When** I upload without clearing first  
+  **Then** the upload is treated as replace (not a second concurrent image for that side).
+
+
+## US-37 — Clear a side image **(Must)**
+
+**As** an Owner or Admin  
+**I need** to remove a side photo using a clear **icon** and a **confirmation** step  
+**So that** outdated or wrong photos are not shown and I do not clear a photo by mistake.
+
+**Acceptance**
+
+- **Given** a vehicle has an image on LEFT and I am on web or mobile as Owner/Admin  
+  **When** I activate the clear **icon** for LEFT  
+  **Then** a **confirmation modal** (or sheet) appears and LEFT is **not** cleared yet.
+
+- **Given** the clear confirmation is open for LEFT  
+  **When** I cancel or dismiss  
+  **Then** LEFT still shows its image; storage for that side is unchanged by this attempt **(E41)**.
+
+- **Given** the clear confirmation is open for LEFT  
+  **When** I confirm clear  
+  **Then** LEFT is empty on subsequent reads, the storage object for that side is deleted (or equivalent cleanup), and the product does not present that file as current. Other sides’ images remain.
+
+- **Given** a side is already empty  
+  **When** I view that side slot  
+  **Then** there is no clear-delete action required; if clear is invoked, the side stays empty (**idempotent**); no storage error is required.
+
+## US-40 — Confirm before delete (pattern) **(Must)**
+
+**As** the product  
+**I need** every delete of a user-visible asset or record to require confirmation  
+**So that** operators do not destroy data with one accidental activation.
+
+**Acceptance**
+
+- **Given** a product action deletes a user-visible asset or record (including future features)  
+  **When** the user would perform that delete  
+  **Then** a confirmation modal/sheet is required before the delete runs; first activation of the trigger only opens confirm.
+
+- **Given** US-27 hard-delete driver  
+  **When** I use delete on driver edit  
+  **Then** confirm remains required; pattern is consistent with side-image clear **(A41)**.
+
+
+## US-38 — Side image validation and authz **(Must)**
+
+**As** the product  
+**I need** type/size limits and role/company isolation on side images  
+**So that** storage and tenancy stay safe.
+
+**Acceptance**
+
+- **Given** I upload a valid image of any image type that is ≤ 5 MB
+  **When** the upload is submitted for a side
+  **Then** that side is updated with the new image reference.
+- **Given** I upload a non-image file or a file larger than 5 MB  
+  **When** the upload is submitted for a side  
+  **Then** that side is not updated; I see a validation/error state for that side.
+
+- **Given** I am a driver, unsigned-in, or acting on another company’s vehicle  
+  **When** I try to upload, replace, or clear a side image  
+  **Then** the operation fails and images are unchanged.
+
+- **Given** storage fails after client validation  
+  **When** upload cannot complete  
+  **Then** that side keeps its prior reference (or empty); no broken reference is stored.
+
+
+## US-39 — Edit prepopulate side images + list cue **(Must / Should)**
+
+**As** an Owner or Admin  
+**I need** edit to show existing side images and a light list cue when any exist  
+**So that** I can manage photos without guessing.
+
+**Acceptance**
+
+- **Given** a vehicle has some side images  
+  **When** I open edit  
+  **Then** filled sides show their current images and empty sides show empty slots, with other vehicle fields prepopulated.
+
+- **Given** a vehicle has at least one side image (**Should**)  
+  **When** I view the vehicles list  
+  **Then** I see a compact presence cue (not a four-up gallery on the list row).
+
+- **Given** a vehicle has no side images  
+  **When** I view the list  
+  **Then** there is no photo-presence cue for that row.
+
+
+## US-45 — Optional vehicle mileage on create **(Must)**
+
+**As** an Owner or Admin  
+**I need** to optionally record the vehicle’s current odometer reading when I create a vehicle  
+**So that** fleet inventory holds known mileage without requiring it for every asset.
+
+**Acceptance**
+
+- **Given** I am signed in as Owner or Admin  
+  **When** I create a vehicle with a valid mileage (number ≥ 0, at most 1 decimal)  
+  **Then** the vehicle is stored with that mileage and a server-derived mileage unit from country of registration.
+
+- **Given** I create a vehicle  
+  **When** I leave mileage empty  
+  **Then** the vehicle is saved with unknown/null mileage.
+
+- **Given** I enter negative mileage, non-numeric mileage, or more than 1 decimal place  
+  **When** I submit create  
+  **Then** the vehicle is not saved with that mileage (validation; E42).
+
+
+## US-46 — Edit or clear vehicle mileage **(Must)**
+
+**As** an Owner or Admin  
+**I need** to change or clear a vehicle’s stored mileage on edit  
+**So that** the fleet record stays current when the reading is known or becomes unknown.
+
+**Acceptance**
+
+- **Given** I am signed in as Owner or Admin and the vehicle is in my company  
+  **When** I open edit vehicle  
+  **Then** stored mileage is prepopulated (empty if null), with unit label Miles or Kilometers from country.
+
+- **Given** the vehicle is in my company  
+  **When** I set a valid new mileage and save  
+  **Then** stored mileage shows the new value.
+
+- **Given** the vehicle has mileage set  
+  **When** I clear mileage (empty/null) and save  
+  **Then** mileage is unknown/null on subsequent reads.
+
+- **Given** the vehicle is in another company  
+  **When** I try to edit mileage  
+  **Then** it is not changed.
+
+
+## US-47 — Mileage unit from country **(Must)**
+
+**As** an Owner or Admin  
+**I need** the mileage control to use Miles or Kilometers from registration country  
+**So that** unit matches driver odometer rules and is not a free choice.
+
+**Acceptance**
+
+- **Given** country of registration is a miles jurisdiction (US/USA/United States, GB/UK/United Kingdom, LR/Liberia, MM/Myanmar and common aliases)  
+  **When** I view or edit mileage  
+  **Then** the unit shown is **Miles** and mileage_unit is **mi**.
+
+- **Given** country is any other non-empty value or empty/unknown  
+  **When** I view or edit mileage  
+  **Then** the unit shown is **Kilometers** and mileage_unit is **km**.
+
+- **Given** I am on create or edit  
+  **When** I try to pick a unit myself  
+  **Then** there is no unit selector; unit follows country only.
+
+- **Given** a vehicle has a stored mileage number and I change country so the derived unit flips  
+  **When** I save  
+  **Then** the number is **not** auto-converted; only the unit label/mileage_unit changes (E43).
+
+
+## US-48 — Vehicle mileage authz **(Must)**
+
+**As** the product  
+**I need** only Owner/Admin of the vehicle’s company to write vehicle mileage  
+**So that** drivers and other companies cannot alter fleet master data.
+
+**Acceptance**
+
+- **Given** I am a driver, unsigned-in, or acting on another company’s vehicle  
+  **When** I try to set vehicle mileage  
+  **Then** the write fails and mileage is unchanged (E44).
+
+- **Given** a driver saves next-travel odometer  
+  **When** the travel selection is stored  
+  **Then** vehicle.mileage is **not** updated (A43).
+
+
+## US-49 — Owner/Admin list shows mileage when present **(Must)**
+
+**As** an Owner or Admin  
+**I need** to see stored mileage on the vehicles list when it is known  
+**So that** I can scan fleet readings without opening every edit screen.
+
+**Acceptance**
+
+- **Given** a company vehicle has mileage set  
+  **When** I view the Owner/Admin vehicles list  
+  **Then** I see the mileage value with the correct unit (Miles or Kilometers / mi or km).
+
+- **Given** a company vehicle has null mileage  
+  **When** I view the list  
+  **Then** I do not see a fabricated mileage value for that row.
+
+
+## US-50 — Driver list may show vehicle mileage read-only **(Should)**
+
+**As** a signed-in driver  
+**I need** optional read-only current vehicle mileage on the company vehicle list  
+**So that** I can see fleet-recorded readings without editing vehicles.
+
+**Acceptance**
+
+- **Given** I am a driver listing company vehicles for next travel and a vehicle has mileage  
+  **When** the list is shown  
+  **Then** I **may** see mileage + unit read-only.
+
+- **Given** I am a driver  
+  **When** I use driver home  
+  **Then** I still cannot create or edit vehicle mileage (fleet admin remains denied).
+
+## US-51 — Driver Handover Out **(Must)**
+
+**As** a signed-in driver  
+**I need** to complete a Handover Out when taking my selected vehicle  
+**So that** custody start, mileage, and next-service data are recorded.
+
+**Acceptance**
+
+- **Given** I am a driver with an active next-travel vehicle and that vehicle has no open Out and I have no open Out  
+  **When** I submit Handover Out with valid mileage, next_service_days, and next_service_distance  
+  **Then** an Out handover is stored open, linked to me and the vehicle, and `vehicle.mileage` equals the submitted mileage.
+
+- **Given** damages text and/or images are omitted  
+  **When** I submit valid required fields  
+  **Then** Out still succeeds.
+
+- **Given** I have no active next-travel selection  
+  **When** I try Handover Out  
+  **Then** it fails and no handover is created (E45).
+
+- **Given** the vehicle already has an open Out  
+  **When** I try Handover Out  
+  **Then** it fails (E46).
+
+## US-52 — Driver Handover In **(Must)**
+
+**As** a signed-in driver  
+**I need** to complete a Handover In when returning the vehicle  
+**So that** the open Out is closed and return condition is recorded.
+
+**Acceptance**
+
+- **Given** I have an open Out on my active next-travel vehicle  
+  **When** I submit Handover In with valid required fields and mileage ≥ Out mileage and ≥ current vehicle.mileage  
+  **Then** In is stored, the pair is closed, and `vehicle.mileage` updates to In mileage.
+
+- **Given** I have no open Out on that vehicle  
+  **When** I try In  
+  **Then** it fails (E48).
+
+- **Given** another driver holds the open Out  
+  **When** I try In  
+  **Then** it fails (E49).
+
+## US-53 — Handover field validation **(Must)**
+
+**As** the product  
+**I need** required fields and numeric rules enforced on Out and In  
+**So that** incomplete or invalid handovers are not stored.
+
+**Acceptance**
+
+- **Given** mileage, next_service_days, or next_service_distance is missing  
+  **When** I submit Out or In  
+  **Then** rejected (E50).
+
+- **Given** mileage negative, non-numeric, >1 decimal, or below monotonic floor  
+  **When** I submit  
+  **Then** rejected (E51).
+
+- **Given** next_service_days is not an integer ≥ 1, or next_service_distance invalid  
+  **When** I submit  
+  **Then** rejected (E52).
+
+- **Given** country implies miles vs km  
+  **When** I enter mileage / next_service_distance  
+  **Then** unit label and stored unit follow A34 (no unit picker).
+
+## US-54 — Damage images on handover **(Must)**
+
+**As** a signed-in driver  
+**I need** to attach optional damage photos on Out or In  
+**So that** condition evidence is stored with the handover and vehicle.
+
+**Acceptance**
+
+- **Given** I attach 1–10 valid images (≤5 MB, image type) on Out or In  
+  **When** handover succeeds  
+  **Then** each image is stored in object storage with references linked to that handover and vehicle.
+
+- **Given** I attach a non-image or file >5 MB or would exceed 10 images  
+  **When** I submit  
+  **Then** upload/handover rejected for that fault (E53); no broken references.
+
+- **Given** images are present and damages text is empty  
+  **When** I submit otherwise valid handover  
+  **Then** handover is accepted (A49).
+
+## US-55 — Owner/Admin Handovers tab (history) **(Must)**
+
+**As** an Owner or Admin  
+**I need** a third tab on the vehicle page for handover history  
+**So that** I can review Out/In activity for that asset.
+
+**Acceptance**
+
+- **Given** I open a company vehicle as Owner/Admin (web or mobile)  
+  **When** the vehicle UI is shown  
+  **Then** I see tabs including **Details**, **Images**, and **Handovers** (third).
+
+- **Given** the vehicle has handovers  
+  **When** I open the Handovers tab  
+  **Then** I see a history list (type Out/In, time, driver, mileage summary) newest-first.
+
+- **Given** the vehicle has no handovers  
+  **When** I open Handovers  
+  **Then** I see empty state.
+
+- **Given** I am a driver  
+  **When** I use vehicle/fleet UI  
+  **Then** I do **not** get the Handovers history tab (E55).
+
+## US-56 — Owner/Admin handover detail **(Must)**
+
+**As** an Owner or Admin  
+**I need** to open a handover from history and see full details  
+**So that** I can inspect mileage, next service, damages text, and photos.
+
+**Acceptance**
+
+- **Given** I am Owner/Admin on Handovers history  
+  **When** I open one handover  
+  **Then** I see type, timestamps, driver identity (if available), mileage + unit, next_service_days, next_service_distance + unit, damages text, and damage images (or empty).
+
+- **Given** history/detail  
+  **When** I look for edit or delete  
+  **Then** none are offered this slice (E57).
+
+## US-57 — Handover authz and tenancy **(Must)**
+
+**As** the product  
+**I need** role and company checks on handover create and history  
+**So that** custody data stays isolated.
+
+**Acceptance**
+
+- **Given** unsigned-in or Owner/Admin  
+  **When** they attempt driver handover create  
+  **Then** denied; no handover (E54).
+
+- **Given** driver or Owner/Admin of another company  
+  **When** they access this company’s handovers  
+  **Then** not found / denied (E56).
+
+- **Given** driver  
+  **When** they call Owner/Admin handover history for a vehicle  
+  **Then** denied (E55).
+
+## US-58 — Edge: already out / wrong vehicle / incomplete **(Must)**
+
+**As** a driver  
+**I need** clear failure when Out/In is not allowed  
+**So that** I do not create duplicate or orphan custody.
+
+**Acceptance**
+
+- **Given** I already have an open Out on vehicle A  
+  **When** I try Out on vehicle B (even if selected)  
+  **Then** rejected (E47) until I complete In on A (or open Out is otherwise cleared per delete rules).
+
+- **Given** my active selection is vehicle A but open Out is on A  
+  **When** I complete In for A with valid fields  
+  **Then** success (US-52).
+
+- **Given** required fields incomplete  
+  **When** I submit  
+  **Then** no handover row created (E50).
+
+## US-59 — Mileage write-through and monotonicity **(Must)**
+
+**As** the product  
+**I need** handover mileage to update fleet mileage safely  
+**So that** vehicle.mileage reflects latest custody reading without regressions.
+
+**Acceptance**
+
+- **Given** successful Out or In with mileage M  
+  **When** handover is stored  
+  **Then** vehicle.mileage = M.
+
+- **Given** vehicle.mileage is 1000  
+  **When** I submit handover mileage 999  
+  **Then** rejected (E51).
+
+- **Given** Out mileage was 1000  
+  **When** I submit In with 999  
+  **Then** rejected (E51).
+
+- **Given** I only PUT next-travel selection (no handover)  
+  **When** selection saves  
+  **Then** vehicle.mileage is still not updated by that path (A43 unchanged).
+
+## US-60 — Driver open-Out awareness **(Should)**
+
+**As** a signed-in driver  
+**I need** to see that I have an open Out on my vehicle  
+**So that** I know I must Handover In.
+
+**Acceptance**
+
+- **Given** I have an open Out on my active vehicle  
+  **When** I open driver home / start  
+  **Then** I can see that Out is open (hub cue) and I can open Handover to start In.
+
+- **Given** I have no open Out  
+  **When** I open driver home / start with a selection  
+  **Then** I can open Handover and start Out (if eligible).
+
+- **Given** I sign in as a driver  
+  **When** the session lands on driver home / start  
+  **Then** I am **not** taken straight into the Handover Out/In form.
 

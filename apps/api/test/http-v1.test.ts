@@ -7,6 +7,7 @@ import { MemoryStore } from "../src/store.ts";
 import { addDays, utcToday } from "../src/domain.ts";
 import { sha256 } from "../src/crypto.ts";
 import type { InviteMail, Mailer } from "../src/mailer.ts";
+import { MemoryVehicleImageStorage } from "../src/vehicle-image-storage.ts";
 
 const secret = new TextEncoder().encode("test-secret");
 
@@ -55,14 +56,31 @@ async function json(
   return { status: res.statusCode, body };
 }
 
+/** Minimal valid 1×1 GIF89a. */
+const TINY_GIF = Uint8Array.from([
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x21, 0xf9, 0x04,
+  0x01, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02,
+  0x00, 0x3b,
+]);
+
+/** Minimal valid 1×1 PNG. */
+const TINY_PNG = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+  0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00,
+  0x00, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0xfe, 0xd4, 0xef, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+  0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+]);
+
 describe("HTTP /v1 first slice", () => {
   const store = new MemoryStore();
   const mailer = new RecordingMailer();
+  const vehicleImages = new MemoryVehicleImageStorage();
   let app: Awaited<ReturnType<typeof buildApp>>;
   let inject: Inject;
 
   before(async () => {
-    app = await buildApp({ store, jwtSecret: secret, mailer });
+    app = await buildApp({ store, jwtSecret: secret, mailer, vehicleImages });
     inject = app.inject.bind(app);
   });
 
@@ -510,6 +528,10 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(created.status, 201);
     assert.equal(created.body.make, "Ford");
     assert.equal(created.body.model, "Transit");
+    assert.equal(created.body.mileage, null);
+    assert.equal(created.body.mileage_unit, "km");
+    assert.equal(created.body.has_side_images, false);
+    assert.equal(created.body.side_images.FRONT, null);
     const states = Object.fromEntries(created.body.warnings.map((w: { field: string; state: string }) => [w.field, w.state]));
     assert.equal(states.insurance_on, "expired");
     assert.equal(states.inspection_on, "due_soon");
@@ -1120,6 +1142,562 @@ describe("HTTP /v1 first slice", () => {
       payload: { vehicle_id: ro.body.id, odometer: 1 },
     });
     assert.equal(ownerPut.status, 403);
+  });
+
+  it("US-45–50 vehicle mileage optional unit authz and travel isolation", async () => {
+    const owner = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "owner@fleet.example", password: "password1", client: "web" },
+    });
+    const ownerTok = owner.body.access_token as string;
+
+    const created = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: ownerTok,
+      payload: {
+        make: "Dacia",
+        model: "Logan",
+        license_plate: "B-MI-01",
+        country_of_registration: "RO",
+        mileage: 12000.5,
+      },
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.mileage, 12000.5);
+    assert.equal(created.body.mileage_unit, "km");
+
+    const usCar = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: ownerTok,
+      payload: {
+        make: "Ford",
+        model: "F150",
+        license_plate: "TX-MI-01",
+        country_of_registration: "US",
+        mileage: "88",
+      },
+    });
+    assert.equal(usCar.status, 201);
+    assert.equal(usCar.body.mileage, 88);
+    assert.equal(usCar.body.mileage_unit, "mi");
+
+    const bad = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: ownerTok,
+      payload: {
+        make: "Bad",
+        model: "Mile",
+        license_plate: "BAD-MI",
+        mileage: -1,
+      },
+    });
+    assert.equal(bad.status, 400);
+
+    const badDec = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${created.body.id}`,
+      token: ownerTok,
+      payload: { mileage: "12.34" },
+    });
+    assert.equal(badDec.status, 400);
+    assert.equal(
+      (
+        await json(inject, {
+          method: "GET",
+          url: `/v1/vehicles/${created.body.id}`,
+          token: ownerTok,
+        })
+      ).body.mileage,
+      12000.5,
+    );
+
+    const cleared = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${created.body.id}`,
+      token: ownerTok,
+      payload: { mileage: null },
+    });
+    assert.equal(cleared.status, 200);
+    assert.equal(cleared.body.mileage, null);
+    assert.equal(cleared.body.mileage_unit, "km");
+
+    const unitFlip = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${usCar.body.id}`,
+      token: ownerTok,
+      payload: { country_of_registration: "RO", mileage: 88 },
+    });
+    assert.equal(unitFlip.status, 200);
+    assert.equal(unitFlip.body.mileage, 88);
+    assert.equal(unitFlip.body.mileage_unit, "km");
+
+    const driver = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "driver@fleet.example", password: "new-driver", client: "mobile" },
+    });
+    const driverTok = driver.body.access_token as string;
+
+    const driverCreate = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: driverTok,
+      payload: { make: "Nope", model: "X", license_plate: "X", mileage: 1 },
+    });
+    assert.equal(driverCreate.status, 403);
+
+    await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${usCar.body.id}`,
+      token: ownerTok,
+      payload: { mileage: 200 },
+    });
+
+    const travel = await json(inject, {
+      method: "PUT",
+      url: "/v1/driver/travel",
+      token: driverTok,
+      payload: { vehicle_id: usCar.body.id, odometer: 999 },
+    });
+    assert.equal(travel.status, 200);
+    assert.equal(travel.body.odometer, 999);
+
+    const afterTravel = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${usCar.body.id}`,
+      token: ownerTok,
+    });
+    assert.equal(afterTravel.body.mileage, 200);
+
+    const driverList = await json(inject, {
+      method: "GET",
+      url: "/v1/driver/vehicles",
+      token: driverTok,
+    });
+    assert.equal(driverList.status, 200);
+    const listed = driverList.body.items.find((v: { id: string }) => v.id === usCar.body.id);
+    assert.equal(listed.mileage, 200);
+    assert.equal(listed.mileage_unit, "km");
+  });
+
+  it("US-35–39 vehicle side images upload replace clear and authz", async () => {
+    const owner = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "owner@fleet.example", password: "password1", client: "web" },
+    });
+    const token = owner.body.access_token as string;
+
+    const created = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token,
+      payload: { make: "Image", model: "Car", license_plate: "IMG-01" },
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.has_side_images, false);
+    const vehicleId = created.body.id as string;
+
+    const boundary = "----fleetbound";
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="front.png"\r\nContent-Type: image/png\r\n\r\n`,
+      ),
+      Buffer.from(TINY_PNG),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const uploaded = await inject({
+      method: "PUT",
+      url: `/v1/vehicles/${vehicleId}/sides/FRONT`,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: body,
+    });
+    assert.equal(uploaded.statusCode, 200);
+    const uploadedBody = JSON.parse(uploaded.body);
+    assert.equal(uploadedBody.has_side_images, true);
+    assert.ok(uploadedBody.side_images.FRONT.path.includes("/front.png"));
+    assert.ok(String(uploadedBody.side_images.FRONT.url).startsWith("memory://"));
+    assert.equal(uploadedBody.side_images.LEFT, null);
+    const frontPath = uploadedBody.side_images.FRONT.path as string;
+    assert.ok(vehicleImages.objects.has(frontPath), "upload must store object in bucket");
+
+    const badType = await inject({
+      method: "PUT",
+      url: `/v1/vehicles/${vehicleId}/sides/LEFT`,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="x.txt"\r\nContent-Type: text/plain\r\n\r\nnot-an-image\r\n--${boundary}--\r\n`,
+        ),
+      ]),
+    });
+    assert.equal(badType.statusCode, 400);
+    assert.equal(JSON.parse(badType.body).error.code, "validation_error");
+    assert.match(JSON.parse(badType.body).error.message, /image/i);
+
+    const gifBody = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="left.gif"\r\nContent-Type: image/gif\r\n\r\n`,
+      ),
+      Buffer.from(TINY_GIF),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const gifUploaded = await inject({
+      method: "PUT",
+      url: `/v1/vehicles/${vehicleId}/sides/LEFT`,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: gifBody,
+    });
+    assert.equal(gifUploaded.statusCode, 200);
+    const gifJson = JSON.parse(gifUploaded.body);
+    assert.ok(String(gifJson.side_images.LEFT.path).endsWith("/left.gif"));
+    const leftPath = gifJson.side_images.LEFT.path as string;
+    assert.ok(vehicleImages.objects.has(leftPath));
+
+    const clearedLeft = await json(inject, {
+      method: "DELETE",
+      url: `/v1/vehicles/${vehicleId}/sides/LEFT`,
+      token,
+    });
+    assert.equal(clearedLeft.status, 200);
+    assert.equal(clearedLeft.body.side_images.LEFT, null);
+    assert.equal(
+      vehicleImages.objects.has(leftPath),
+      false,
+      "clear must delete the specific object from storage",
+    );
+
+    const cleared = await json(inject, {
+      method: "DELETE",
+      url: `/v1/vehicles/${vehicleId}/sides/FRONT`,
+      token,
+    });
+    assert.equal(cleared.status, 200);
+    assert.equal(cleared.body.has_side_images, false);
+    assert.equal(cleared.body.side_images.FRONT, null);
+    assert.equal(
+      vehicleImages.objects.has(frontPath),
+      false,
+      "clear FRONT must remove FRONT object from storage",
+    );
+
+    const clearedAgain = await json(inject, {
+      method: "DELETE",
+      url: `/v1/vehicles/${vehicleId}/sides/FRONT`,
+      token,
+    });
+    assert.equal(clearedAgain.status, 200);
+
+    const driver = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "driver@fleet.example", password: "new-driver", client: "mobile" },
+    });
+    const driverPut = await inject({
+      method: "PUT",
+      url: `/v1/vehicles/${vehicleId}/sides/FRONT`,
+      headers: {
+        authorization: `Bearer ${driver.body.access_token}`,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: body,
+    });
+    assert.equal(driverPut.statusCode, 403);
+
+    // Re-upload as owner then driver clear must not delete storage
+    const reUpload = await inject({
+      method: "PUT",
+      url: `/v1/vehicles/${vehicleId}/sides/FRONT`,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: body,
+    });
+    assert.equal(reUpload.statusCode, 200);
+    const rePath = JSON.parse(reUpload.body).side_images.FRONT.path as string;
+    assert.ok(vehicleImages.objects.has(rePath));
+    const driverClear = await inject({
+      method: "DELETE",
+      url: `/v1/vehicles/${vehicleId}/sides/FRONT`,
+      headers: { authorization: `Bearer ${driver.body.access_token}` },
+    });
+    assert.equal(driverClear.statusCode, 403);
+    assert.ok(vehicleImages.objects.has(rePath), "forbidden clear must not delete storage object");
+  });
+
+  it("US-51–60 driver handovers out/in, mileage write-through, history authz", async () => {
+    const owner = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "owner@fleet.example", password: "password1", client: "web" },
+    });
+    const ownerToken = owner.body.access_token as string;
+
+    const vehicle = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: ownerToken,
+      payload: {
+        make: "Handover",
+        model: "Van",
+        license_plate: "HO-01",
+        country_of_registration: "RO",
+        mileage: 1000,
+      },
+    });
+    assert.equal(vehicle.status, 201);
+    const vehicleId = vehicle.body.id as string;
+
+    const driverLogin = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "driver@fleet.example", password: "new-driver", client: "mobile" },
+    });
+    const driverToken = driverLogin.body.access_token as string;
+
+    const activeEmpty = await json(inject, {
+      method: "GET",
+      url: "/v1/driver/handovers/active",
+      token: driverToken,
+    });
+    assert.equal(activeEmpty.status, 200);
+    assert.equal(activeEmpty.body.handover, null);
+
+    function handoverMultipart(fields: Record<string, string>, files: Uint8Array[] = []) {
+      const boundary = "----handoverbound";
+      const chunks: Buffer[] = [];
+      for (const [name, value] of Object.entries(fields)) {
+        chunks.push(
+          Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
+          ),
+        );
+      }
+      files.forEach((bytes, i) => {
+        chunks.push(
+          Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="damages"; filename="d${i}.png"\r\nContent-Type: image/png\r\n\r\n`,
+          ),
+        );
+        chunks.push(Buffer.from(bytes));
+        chunks.push(Buffer.from("\r\n"));
+      });
+      chunks.push(Buffer.from(`--${boundary}--\r\n`));
+      return {
+        boundary,
+        body: Buffer.concat(chunks),
+      };
+    }
+
+    // Bind travel to this vehicle (driver may already have travel from earlier tests).
+    const travel = await json(inject, {
+      method: "PUT",
+      url: "/v1/driver/travel",
+      token: driverToken,
+      payload: { vehicle_id: vehicleId, odometer: 1000 },
+    });
+    assert.equal(travel.status, 200);
+    assert.equal(travel.body.vehicle_id, vehicleId);
+
+    // travel must not change vehicle.mileage
+    const afterTravel = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}`,
+      token: ownerToken,
+    });
+    assert.equal(afterTravel.body.mileage, 1000);
+
+    const outLow = handoverMultipart({
+      type: "out",
+      mileage: "999",
+      next_service_days: "30",
+      next_service_distance: "500",
+    });
+    const outLowRes = await inject({
+      method: "POST",
+      url: "/v1/driver/handovers",
+      headers: {
+        authorization: `Bearer ${driverToken}`,
+        "content-type": `multipart/form-data; boundary=${outLow.boundary}`,
+      },
+      payload: outLow.body,
+    });
+    assert.equal(outLowRes.statusCode, 400);
+
+    const outOk = handoverMultipart(
+      {
+        type: "out",
+        mileage: "1005.5",
+        next_service_days: "14",
+        next_service_distance: "250",
+        damages_text: "Scratches",
+      },
+      [TINY_PNG],
+    );
+    const outRes = await inject({
+      method: "POST",
+      url: "/v1/driver/handovers",
+      headers: {
+        authorization: `Bearer ${driverToken}`,
+        "content-type": `multipart/form-data; boundary=${outOk.boundary}`,
+      },
+      payload: outOk.body,
+    });
+    assert.equal(outRes.statusCode, 201);
+    const outBody = JSON.parse(outRes.body);
+    assert.equal(outBody.type, "out");
+    assert.equal(outBody.status, "open");
+    assert.equal(outBody.mileage, 1005.5);
+    assert.equal(outBody.mileage_unit, "km");
+    assert.equal(outBody.damage_image_count, 1);
+    assert.equal(outBody.damages_text, "Scratches");
+    const outId = outBody.id as string;
+    assert.ok(outBody.damage_images[0].path.includes(`/handovers/${outId}/`));
+    assert.ok(vehicleImages.objects.has(outBody.damage_images[0].path));
+
+    const afterOut = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}`,
+      token: ownerToken,
+    });
+    assert.equal(afterOut.body.mileage, 1005.5);
+
+    const active = await json(inject, {
+      method: "GET",
+      url: "/v1/driver/handovers/active",
+      token: driverToken,
+    });
+    assert.equal(active.status, 200);
+    assert.equal(active.body.handover.id, outId);
+    assert.equal(active.body.handover.vehicle_id, vehicleId);
+
+    const secondOut = handoverMultipart({
+      type: "out",
+      mileage: "1010",
+      next_service_days: "10",
+      next_service_distance: "100",
+    });
+    const secondOutRes = await inject({
+      method: "POST",
+      url: "/v1/driver/handovers",
+      headers: {
+        authorization: `Bearer ${driverToken}`,
+        "content-type": `multipart/form-data; boundary=${secondOut.boundary}`,
+      },
+      payload: secondOut.body,
+    });
+    assert.equal(secondOutRes.statusCode, 409);
+    assert.equal(JSON.parse(secondOutRes.body).error.code, "handover_vehicle_open");
+
+    const inLow = handoverMultipart({
+      type: "in",
+      mileage: "1000",
+      next_service_days: "7",
+      next_service_distance: "50",
+    });
+    const inLowRes = await inject({
+      method: "POST",
+      url: "/v1/driver/handovers",
+      headers: {
+        authorization: `Bearer ${driverToken}`,
+        "content-type": `multipart/form-data; boundary=${inLow.boundary}`,
+      },
+      payload: inLow.body,
+    });
+    assert.equal(inLowRes.statusCode, 400);
+
+    const inOk = handoverMultipart({
+      type: "in",
+      mileage: "1020",
+      next_service_days: "21",
+      next_service_distance: "400",
+    });
+    const inRes = await inject({
+      method: "POST",
+      url: "/v1/driver/handovers",
+      headers: {
+        authorization: `Bearer ${driverToken}`,
+        "content-type": `multipart/form-data; boundary=${inOk.boundary}`,
+      },
+      payload: inOk.body,
+    });
+    assert.equal(inRes.statusCode, 201);
+    const inBody = JSON.parse(inRes.body);
+    assert.equal(inBody.type, "in");
+    assert.equal(inBody.status, "closed");
+    assert.equal(inBody.handover_out_id, outId);
+    assert.equal(inBody.mileage, 1020);
+
+    const afterIn = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}`,
+      token: ownerToken,
+    });
+    assert.equal(afterIn.body.mileage, 1020);
+
+    const activeAfter = await json(inject, {
+      method: "GET",
+      url: "/v1/driver/handovers/active",
+      token: driverToken,
+    });
+    assert.equal(activeAfter.body.handover, null);
+
+    const history = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}/handovers`,
+      token: ownerToken,
+    });
+    assert.equal(history.status, 200);
+    assert.ok(history.body.items.length >= 2);
+    assert.equal(history.body.items[0].created_at >= history.body.items[1].created_at, true);
+
+    const detail = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}/handovers/${outId}`,
+      token: ownerToken,
+    });
+    assert.equal(detail.status, 200);
+    assert.equal(detail.body.id, outId);
+    assert.equal(detail.body.damage_images.length, 1);
+    assert.ok(String(detail.body.damage_images[0].url).startsWith("memory://"));
+
+    const driverHistory = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}/handovers`,
+      token: driverToken,
+    });
+    assert.equal(driverHistory.status, 403);
+
+    const ownerCreate = handoverMultipart({
+      type: "out",
+      mileage: "1030",
+      next_service_days: "5",
+      next_service_distance: "10",
+    });
+    const ownerCreateRes = await inject({
+      method: "POST",
+      url: "/v1/driver/handovers",
+      headers: {
+        authorization: `Bearer ${ownerToken}`,
+        "content-type": `multipart/form-data; boundary=${ownerCreate.boundary}`,
+      },
+      payload: ownerCreate.body,
+    });
+    assert.equal(ownerCreateRes.statusCode, 403);
   });
 
 });

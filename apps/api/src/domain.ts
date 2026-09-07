@@ -30,6 +30,10 @@ export type CompanyProfile = {
   address: string;
 };
 
+export type VehicleSide = "FRONT" | "LEFT" | "RIGHT" | "BACK";
+
+export const VEHICLE_SIDES: VehicleSide[] = ["FRONT", "LEFT", "RIGHT", "BACK"];
+
 export type Vehicle = {
   id: string;
   companyId: string;
@@ -37,10 +41,16 @@ export type Vehicle = {
   model: string;
   licensePlate: string;
   countryOfRegistration: string | null;
+  /** Optional current odometer reading on the fleet vehicle (null = unknown). */
+  mileage: number | null;
   insuranceOn: string | null;
   inspectionOn: string | null;
   roadTaxOn: string | null;
   registrationOn: string | null;
+  imageFrontPath: string | null;
+  imageLeftPath: string | null;
+  imageRightPath: string | null;
+  imageBackPath: string | null;
 };
 
 export type OdometerUnit = "mi" | "km";
@@ -53,6 +63,38 @@ export type DriverTravelSelection = {
   odometer: number;
   odometerUnit: OdometerUnit;
   active: boolean;
+  createdAt: number;
+};
+
+export type HandoverType = "out" | "in";
+export type HandoverStatus = "open" | "closed" | "voided";
+
+export type VehicleHandover = {
+  id: string;
+  companyId: string;
+  vehicleId: string;
+  driverId: string | null;
+  type: HandoverType;
+  status: HandoverStatus;
+  handoverOutId: string | null;
+  mileage: number;
+  mileageUnit: OdometerUnit;
+  nextServiceDays: number;
+  nextServiceDistance: number;
+  nextServiceDistanceUnit: OdometerUnit;
+  damagesText: string | null;
+  createdAt: number;
+  closedAt: number | null;
+  voidedAt: number | null;
+};
+
+export type VehicleHandoverImage = {
+  id: string;
+  companyId: string;
+  vehicleId: string;
+  handoverId: string;
+  storagePath: string;
+  sortOrder: number;
   createdAt: number;
 };
 
@@ -181,7 +223,62 @@ export function computeWarnings(vehicle: Vehicle, today = utcToday()): Warning[]
   return warnings;
 }
 
-export function toVehicleJson(vehicle: Vehicle, today = utcToday()) {
+export function vehicleSidePath(vehicle: Vehicle, side: VehicleSide): string | null {
+  switch (side) {
+    case "FRONT":
+      return vehicle.imageFrontPath;
+    case "LEFT":
+      return vehicle.imageLeftPath;
+    case "RIGHT":
+      return vehicle.imageRightPath;
+    case "BACK":
+      return vehicle.imageBackPath;
+  }
+}
+
+export function withVehicleSidePath(
+  vehicle: Vehicle,
+  side: VehicleSide,
+  path: string | null,
+): Vehicle {
+  switch (side) {
+    case "FRONT":
+      return { ...vehicle, imageFrontPath: path };
+    case "LEFT":
+      return { ...vehicle, imageLeftPath: path };
+    case "RIGHT":
+      return { ...vehicle, imageRightPath: path };
+    case "BACK":
+      return { ...vehicle, imageBackPath: path };
+  }
+}
+
+export function hasSideImages(vehicle: Vehicle): boolean {
+  return VEHICLE_SIDES.some((side) => Boolean(vehicleSidePath(vehicle, side)));
+}
+
+export type SideImageJson = { path: string; url: string } | null;
+
+export async function toVehicleJson(
+  vehicle: Vehicle,
+  today = utcToday(),
+  signUrl?: (path: string) => Promise<string>,
+) {
+  const side_images = {
+    FRONT: null as SideImageJson,
+    LEFT: null as SideImageJson,
+    RIGHT: null as SideImageJson,
+    BACK: null as SideImageJson,
+  };
+  for (const side of VEHICLE_SIDES) {
+    const path = vehicleSidePath(vehicle, side);
+    if (!path) continue;
+    if (!signUrl) {
+      side_images[side] = { path, url: "" };
+      continue;
+    }
+    side_images[side] = { path, url: await signUrl(path) };
+  }
   return {
     id: vehicle.id,
     company_id: vehicle.companyId,
@@ -189,10 +286,14 @@ export function toVehicleJson(vehicle: Vehicle, today = utcToday()) {
     model: vehicle.model,
     license_plate: vehicle.licensePlate,
     country_of_registration: vehicle.countryOfRegistration,
+    mileage: vehicle.mileage,
+    mileage_unit: odometerUnitForCountry(vehicle.countryOfRegistration),
     insurance_on: vehicle.insuranceOn,
     inspection_on: vehicle.inspectionOn,
     road_tax_on: vehicle.roadTaxOn,
     registration_on: vehicle.registrationOn,
     warnings: computeWarnings(vehicle, today),
+    has_side_images: hasSideImages(vehicle),
+    side_images,
   };
 }

@@ -2,7 +2,14 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
-import type { DriverTravelSelection, Principal, Vehicle } from "../domain.ts";
+import type {
+  DriverTravelSelection,
+  OdometerUnit,
+  Principal,
+  Vehicle,
+  VehicleHandover,
+  VehicleHandoverImage,
+} from "../domain.ts";
 import type { ChallengeRow, CompanyInsert, RefreshRow, ResetRow, Store } from "../store.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -47,6 +54,13 @@ export function pgDateToIso(value: unknown): string | null {
   return null;
 }
 
+function mapMileage(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
 function mapVehicle(row: pg.QueryResultRow): Vehicle {
   return {
     id: row.id,
@@ -55,10 +69,63 @@ function mapVehicle(row: pg.QueryResultRow): Vehicle {
     model: row.model,
     licensePlate: row.license_plate,
     countryOfRegistration: row.country_of_registration,
+    mileage: mapMileage(row.mileage),
     insuranceOn: pgDateToIso(row.insurance_on),
     inspectionOn: pgDateToIso(row.inspection_on),
     roadTaxOn: pgDateToIso(row.road_tax_on),
     registrationOn: pgDateToIso(row.registration_on),
+    imageFrontPath: row.image_front_path ?? null,
+    imageLeftPath: row.image_left_path ?? null,
+    imageRightPath: row.image_right_path ?? null,
+    imageBackPath: row.image_back_path ?? null,
+  };
+}
+
+function mapTs(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string" || typeof value === "number") {
+    const t = new Date(value).getTime();
+    return Number.isFinite(t) ? t : 0;
+  }
+  return 0;
+}
+
+function mapTsOrNull(value: unknown): number | null {
+  if (value == null) return null;
+  const t = mapTs(value);
+  return t || null;
+}
+
+function mapHandover(row: pg.QueryResultRow): VehicleHandover {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    vehicleId: row.vehicle_id,
+    driverId: row.driver_id ?? null,
+    type: row.type,
+    status: row.status,
+    handoverOutId: row.handover_out_id ?? null,
+    mileage: mapMileage(row.mileage) ?? 0,
+    mileageUnit: row.mileage_unit as OdometerUnit,
+    nextServiceDays: Number(row.next_service_days),
+    nextServiceDistance: mapMileage(row.next_service_distance) ?? 0,
+    nextServiceDistanceUnit: row.next_service_distance_unit as OdometerUnit,
+    damagesText: row.damages_text ?? null,
+    createdAt: mapTs(row.created_at),
+    closedAt: mapTsOrNull(row.closed_at),
+    voidedAt: mapTsOrNull(row.voided_at),
+  };
+}
+
+function mapHandoverImage(row: pg.QueryResultRow): VehicleHandoverImage {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    vehicleId: row.vehicle_id,
+    handoverId: row.handover_id,
+    storagePath: row.storage_path,
+    sortOrder: Number(row.sort_order) || 0,
+    createdAt: mapTs(row.created_at),
   };
 }
 
@@ -324,8 +391,10 @@ export class PostgresStore implements Store {
     await this.q(
       `INSERT INTO vehicles (
         id, company_id, make, model, license_plate, country_of_registration,
-        insurance_on, inspection_on, road_tax_on, registration_on
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        mileage,
+        insurance_on, inspection_on, road_tax_on, registration_on,
+        image_front_path, image_left_path, image_right_path, image_back_path
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [
         v.id,
         v.companyId,
@@ -333,10 +402,15 @@ export class PostgresStore implements Store {
         v.model,
         v.licensePlate,
         v.countryOfRegistration,
+        v.mileage,
         v.insuranceOn,
         v.inspectionOn,
         v.roadTaxOn,
         v.registrationOn,
+        v.imageFrontPath,
+        v.imageLeftPath,
+        v.imageRightPath,
+        v.imageBackPath,
       ],
     );
   }
@@ -344,7 +418,9 @@ export class PostgresStore implements Store {
   async updateVehicle(v: Vehicle): Promise<void> {
     await this.q(
       `UPDATE vehicles SET make=$2, model=$3, license_plate=$4, country_of_registration=$5,
-        insurance_on=$6, inspection_on=$7, road_tax_on=$8, registration_on=$9
+        mileage=$6,
+        insurance_on=$7, inspection_on=$8, road_tax_on=$9, registration_on=$10,
+        image_front_path=$11, image_left_path=$12, image_right_path=$13, image_back_path=$14
        WHERE id=$1`,
       [
         v.id,
@@ -352,10 +428,15 @@ export class PostgresStore implements Store {
         v.model,
         v.licensePlate,
         v.countryOfRegistration,
+        v.mileage,
         v.insuranceOn,
         v.inspectionOn,
         v.roadTaxOn,
         v.registrationOn,
+        v.imageFrontPath,
+        v.imageLeftPath,
+        v.imageRightPath,
+        v.imageBackPath,
       ],
     );
   }
@@ -371,6 +452,154 @@ export class PostgresStore implements Store {
   async listVehicles(companyId: string): Promise<Vehicle[]> {
     const { rows } = await this.q("SELECT * FROM vehicles WHERE company_id=$1", [companyId]);
     return rows.map(mapVehicle);
+  }
+
+  async insertHandover(row: VehicleHandover): Promise<void> {
+    await this.q(
+      `INSERT INTO vehicle_handovers (
+        id, company_id, vehicle_id, driver_id, type, status, handover_out_id,
+        mileage, mileage_unit, next_service_days, next_service_distance,
+        next_service_distance_unit, damages_text, created_at, closed_at, voided_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
+        to_timestamp($14/1000.0),
+        CASE WHEN $15::float8 IS NULL THEN NULL ELSE to_timestamp($15/1000.0) END,
+        CASE WHEN $16::float8 IS NULL THEN NULL ELSE to_timestamp($16/1000.0) END
+      )`,
+      [
+        row.id,
+        row.companyId,
+        row.vehicleId,
+        row.driverId,
+        row.type,
+        row.status,
+        row.handoverOutId,
+        row.mileage,
+        row.mileageUnit,
+        row.nextServiceDays,
+        row.nextServiceDistance,
+        row.nextServiceDistanceUnit,
+        row.damagesText,
+        row.createdAt,
+        row.closedAt,
+        row.voidedAt,
+      ],
+    );
+  }
+
+  async updateHandover(row: VehicleHandover): Promise<void> {
+    await this.q(
+      `UPDATE vehicle_handovers SET
+        driver_id=$2, type=$3, status=$4, handover_out_id=$5,
+        mileage=$6, mileage_unit=$7, next_service_days=$8, next_service_distance=$9,
+        next_service_distance_unit=$10, damages_text=$11,
+        closed_at=CASE WHEN $12::float8 IS NULL THEN NULL ELSE to_timestamp($12/1000.0) END,
+        voided_at=CASE WHEN $13::float8 IS NULL THEN NULL ELSE to_timestamp($13/1000.0) END
+       WHERE id=$1`,
+      [
+        row.id,
+        row.driverId,
+        row.type,
+        row.status,
+        row.handoverOutId,
+        row.mileage,
+        row.mileageUnit,
+        row.nextServiceDays,
+        row.nextServiceDistance,
+        row.nextServiceDistanceUnit,
+        row.damagesText,
+        row.closedAt,
+        row.voidedAt,
+      ],
+    );
+  }
+
+  async findHandover(id: string, companyId: string): Promise<VehicleHandover | undefined> {
+    const { rows } = await this.q(
+      "SELECT * FROM vehicle_handovers WHERE id=$1 AND company_id=$2",
+      [id, companyId],
+    );
+    return rows[0] ? mapHandover(rows[0]) : undefined;
+  }
+
+  async findOpenOutForDriver(driverId: string): Promise<VehicleHandover | undefined> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_handovers
+       WHERE driver_id=$1 AND type='out' AND status='open'
+       LIMIT 1`,
+      [driverId],
+    );
+    return rows[0] ? mapHandover(rows[0]) : undefined;
+  }
+
+  async findOpenOutForVehicle(
+    vehicleId: string,
+    companyId: string,
+  ): Promise<VehicleHandover | undefined> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_handovers
+       WHERE vehicle_id=$1 AND company_id=$2 AND type='out' AND status='open'
+       LIMIT 1`,
+      [vehicleId, companyId],
+    );
+    return rows[0] ? mapHandover(rows[0]) : undefined;
+  }
+
+  async listHandoversForVehicle(
+    vehicleId: string,
+    companyId: string,
+  ): Promise<VehicleHandover[]> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_handovers
+       WHERE vehicle_id=$1 AND company_id=$2
+       ORDER BY created_at DESC`,
+      [vehicleId, companyId],
+    );
+    return rows.map(mapHandover);
+  }
+
+  async insertHandoverImage(row: VehicleHandoverImage): Promise<void> {
+    await this.q(
+      `INSERT INTO vehicle_handover_images (
+        id, company_id, vehicle_id, handover_id, storage_path, sort_order, created_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,to_timestamp($7/1000.0))`,
+      [
+        row.id,
+        row.companyId,
+        row.vehicleId,
+        row.handoverId,
+        row.storagePath,
+        row.sortOrder,
+        row.createdAt,
+      ],
+    );
+  }
+
+  async listHandoverImages(handoverId: string): Promise<VehicleHandoverImage[]> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_handover_images
+       WHERE handover_id=$1
+       ORDER BY sort_order ASC, created_at ASC`,
+      [handoverId],
+    );
+    return rows.map(mapHandoverImage);
+  }
+
+  async countHandoverImages(handoverId: string): Promise<number> {
+    const { rows } = await this.q(
+      "SELECT count(*)::int AS n FROM vehicle_handover_images WHERE handover_id=$1",
+      [handoverId],
+    );
+    return rows[0]?.n ?? 0;
+  }
+
+  async voidOpenOutsForDriver(driverId: string): Promise<void> {
+    await this.q(
+      `UPDATE vehicle_handovers
+       SET status='voided', voided_at=now()
+       WHERE driver_id=$1 AND type='out' AND status='open'`,
+      [driverId],
+    );
   }
 
   async counts(companyId: string): Promise<{ drivers: number; vehicles: number }> {

@@ -57,11 +57,13 @@ export default function EditVehiclePage() {
           initial={vehicle}
           offline={offline}
           submitLabel="Save vehicle"
+          onVehicleChange={setVehicle}
           onSubmit={async (body) => {
             const next = await api.patchVehicle(id, body);
             setVehicle(next);
             notifyVehiclesChanged();
             router.replace("/vehicles");
+            return next;
           }}
         />
       ) : null}

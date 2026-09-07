@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import sensible from "@fastify/sensible";
 import { AppError, errors } from "./errors.ts";
 import { normalizeEmail, type AccessClaims, type Client } from "./domain.ts";
@@ -7,6 +8,12 @@ import { FleetService } from "./fleet-service.ts";
 import { IdentityService } from "./identity-service.ts";
 import type { Store } from "./store.ts";
 import { mailerFromEnv, type Mailer } from "./mailer.ts";
+import {
+  MAX_VEHICLE_IMAGE_BYTES,
+  parseVehicleSide,
+  vehicleImageStorageFromEnvDetailed,
+  type VehicleImageStorage,
+} from "./vehicle-image-storage.ts";
 
 /** Trim+lower body.email before AJV `format: "email"` so padded input is not validation_error. */
 function normalizeBodyEmail(req: FastifyRequest, _reply: FastifyReply, done: (err?: Error) => void) {
@@ -62,6 +69,10 @@ const vehicleWrite = {
     model: { type: "string" },
     license_plate: { type: "string" },
     country_of_registration: { type: ["string", "null"] },
+    // null first so AJV does not coerce null → 0 via number branch
+    mileage: {
+      anyOf: [{ type: "null" }, { type: "string" }, { type: "number" }],
+    },
     insurance_on: { type: ["string", "null"] },
     inspection_on: { type: ["string", "null"] },
     road_tax_on: { type: ["string", "null"] },
@@ -73,6 +84,8 @@ export type AppDeps = {
   store: Store;
   jwtSecret: Uint8Array;
   mailer?: Mailer;
+  /** Inject for tests; otherwise from env (may be null). */
+  vehicleImages?: VehicleImageStorage | null;
 };
 
 declare module "fastify" {
@@ -96,10 +109,21 @@ function bearer(req: FastifyRequest): string {
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const identity = new IdentityService(deps.store, deps.jwtSecret, deps.mailer ?? mailerFromEnv());
-  const fleet = new FleetService(deps.store);
+  let vehicleImages: VehicleImageStorage | null;
+  if (deps.vehicleImages !== undefined) {
+    vehicleImages = deps.vehicleImages;
+  } else {
+    const fromEnv = vehicleImageStorageFromEnvDetailed();
+    vehicleImages = fromEnv.storage;
+    console.log(`@fleet/api vehicle image storage: ${fromEnv.status}`);
+  }
+  const fleet = new FleetService(deps.store, vehicleImages);
 
   await app.register(cors, { origin: true });
   await app.register(sensible);
+  await app.register(multipart, {
+    limits: { fileSize: MAX_VEHICLE_IMAGE_BYTES, files: 10 },
+  });
 
   app.addHook("preValidation", normalizeBodyEmail);
 
@@ -457,6 +481,21 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
   );
 
+  app.put("/v1/vehicles/:id/sides/:side", { preHandler: requireSession }, async (req) => {
+    const { id, side: sideRaw } = req.params as { id: string; side: string };
+    const side = parseVehicleSide(sideRaw);
+    const file = await req.file();
+    if (!file) throw errors.validation("file is required");
+    const buffer = await file.toBuffer();
+    return fleet.putSideImage(req.claims!, id, side, new Uint8Array(buffer));
+  });
+
+  app.delete("/v1/vehicles/:id/sides/:side", { preHandler: requireSession }, async (req) => {
+    const { id, side: sideRaw } = req.params as { id: string; side: string };
+    const side = parseVehicleSide(sideRaw);
+    return fleet.clearSideImage(req.claims!, id, side);
+  });
+
   app.get("/v1/home", { preHandler: requireSession }, async (req) => {
     return fleet.home(req.claims!);
   });
@@ -492,6 +531,47 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
   );
 
+  app.get("/v1/driver/handovers/active", { preHandler: requireSession }, async (req) => {
+    return fleet.getDriverActiveHandover(req.claims!);
+  });
+
+  app.post("/v1/driver/handovers", { preHandler: requireSession }, async (req, reply) => {
+    const fields: Record<string, string> = {};
+    const damageFiles: Uint8Array[] = [];
+    const parts = req.parts();
+    for await (const part of parts) {
+      if (part.type === "file") {
+        const name = part.fieldname;
+        if (name !== "damages" && name !== "damages[]") {
+          throw errors.validation("Unexpected file field.");
+        }
+        const buffer = await part.toBuffer();
+        damageFiles.push(new Uint8Array(buffer));
+      } else {
+        fields[part.fieldname] = String(part.value ?? "");
+      }
+    }
+    const created = await fleet.createDriverHandover(req.claims!, {
+      type: fields.type,
+      mileage: fields.mileage,
+      next_service_days: fields.next_service_days,
+      next_service_distance: fields.next_service_distance,
+      damages_text: fields.damages_text,
+      damageFiles,
+    });
+    return reply.code(201).send(created);
+  });
+
+  app.get("/v1/vehicles/:id/handovers", { preHandler: requireSession }, async (req) => {
+    const { id } = req.params as { id: string };
+    return fleet.listVehicleHandovers(req.claims!, id);
+  });
+
+  app.get("/v1/vehicles/:id/handovers/:handoverId", { preHandler: requireSession }, async (req) => {
+    const { id, handoverId } = req.params as { id: string; handoverId: string };
+    return fleet.getVehicleHandover(req.claims!, id, handoverId);
+  });
+
   return app;
 }
 
@@ -500,6 +580,7 @@ type VehicleWriteBody = {
   model?: string;
   license_plate?: string;
   country_of_registration?: string | null;
+  mileage?: number | string | null;
   insurance_on?: string | null;
   inspection_on?: string | null;
   road_tax_on?: string | null;

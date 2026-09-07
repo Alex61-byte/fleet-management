@@ -54,3 +54,29 @@ test("new driver is email-only invite", () => {
   assert.doesNotMatch(neu, /Temporary password/);
   assert.match(neu, /Send invitation/);
 });
+
+test("owner vehicles and drivers stacks open list not dynamic id", () => {
+  const ownerLayout = readFileSync(join(root, "app/(owner)/_layout.tsx"), "utf8");
+  const vehiclesLayout = readFileSync(join(root, "app/(owner)/vehicles/_layout.tsx"), "utf8");
+  const driversLayout = readFileSync(join(root, "app/(owner)/drivers/_layout.tsx"), "utf8");
+  assert.match(vehiclesLayout, /initialRouteName:\s*"index"/);
+  assert.match(vehiclesLayout, /initialRouteName="index"/);
+  assert.match(vehiclesLayout, /name="index"/);
+  assert.match(driversLayout, /initialRouteName:\s*"index"/);
+  assert.match(driversLayout, /initialRouteName="index"/);
+  assert.match(ownerLayout, /router\.navigate\("\/\(owner\)\/vehicles"\)/);
+  assert.match(ownerLayout, /router\.navigate\("\/\(owner\)\/drivers"\)/);
+});
+
+test("US-28 vehicles urgency tints stay on vehicles item only", () => {
+  const ownerLayout = readFileSync(join(root, "app/(owner)/_layout.tsx"), "utf8");
+  // Global defaults stay brand/secondary — not urgency white.
+  assert.match(ownerLayout, /tabBarActiveTintColor:\s*TAB_ACTIVE/);
+  assert.match(ownerLayout, /tabBarInactiveTintColor:\s*TAB_INACTIVE/);
+  // Must not reassign bar-wide tints on the Vehicles screen (paints every tab).
+  assert.doesNotMatch(ownerLayout, /tabBarActiveTintColor:\s*vehiclesTint/);
+  assert.doesNotMatch(ownerLayout, /tabBarInactiveTintColor:\s*NAV_URGENCY_FG/);
+  assert.match(ownerLayout, /vehiclesUrgent[\s\S]*NAV_URGENCY_FG/);
+  assert.match(ownerLayout, /tabBarItemStyle:\s*vehiclesUrgent/);
+  assert.match(ownerLayout, /BottomTabBar applies the \*focused\* route/);
+});

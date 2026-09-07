@@ -1,4 +1,10 @@
-import { warningA11y, vehicleLabel, type Vehicle } from "@fleet/sdk";
+import {
+  formatVehicleMileage,
+  odometerUnitLabel,
+  warningA11y,
+  vehicleLabel,
+  type Vehicle,
+} from "@fleet/sdk";
 import { Link, Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -58,10 +64,22 @@ export default function VehiclesList() {
           <Link key={v.id} href={`/(owner)/vehicles/${v.id}`} asChild>
             <Pressable
               className="bg-surface-raised border border-border rounded-md p-2 min-h-hit gap-1"
-              accessibilityLabel={warningA11y(`${vehicleLabel(v)}, ${v.license_plate}`, v.warnings)}
+              accessibilityLabel={warningA11y(
+                `${vehicleLabel(v)}, ${v.license_plate}${v.has_side_images ? ", has photos" : ""}`,
+                v.warnings,
+              )}
             >
-              <Text className="font-medium text-label text-text-primary">{vehicleLabel(v)}</Text>
+              <Text className="font-medium text-label text-text-primary">
+                {vehicleLabel(v)}
+                {v.has_side_images === true ? " · Photos" : ""}
+              </Text>
               <Text className="text-caption text-text-secondary">{v.license_plate}</Text>
+              {v.mileage != null ? (
+                <Text className="text-caption text-text-secondary">
+                  {formatVehicleMileage(v.mileage, v.mileage_unit)} ·{" "}
+                  {odometerUnitLabel(v.mileage_unit ?? "km")}
+                </Text>
+              ) : null}
               <ExpiryBadges warnings={v.warnings} />
             </Pressable>
           </Link>

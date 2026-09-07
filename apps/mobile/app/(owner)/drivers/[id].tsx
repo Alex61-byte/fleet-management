@@ -1,7 +1,8 @@
 import { FleetApiError, mapAuthError, type Driver } from "@fleet/sdk";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
+import { ConfirmDeleteDialog } from "../../../components/confirm-delete-dialog";
 import { Banner, DangerButton, Field, PrimaryButton, SecondaryButton, TextInput } from "../../../components/ui";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
@@ -213,47 +214,20 @@ export default function EditDriver() {
         </View>
       ) : null}
 
-      <Modal
-        visible={confirmDelete}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        title="Delete driver?"
+        body={`${driver?.email ?? "This driver"} will be removed from your company. They cannot sign in. This cannot be undone.`}
+        caption="To add them later, create a new driver."
+        confirmLabel="Delete permanently"
+        confirmBusyLabel="Deleting…"
+        busy={deleting}
+        disabledConfirm={offline}
+        onCancel={() => {
           if (!deleting) setConfirmDelete(false);
         }}
-      >
-        <Pressable
-          className="flex-1 bg-surface-overlay justify-end p-3"
-          disabled={deleting}
-          onPress={() => {
-            if (!deleting) setConfirmDelete(false);
-          }}
-        >
-          <Pressable
-            className="bg-surface-raised border border-border rounded-lg p-3 gap-2 shadow-overlay"
-            onPress={(e) => e.stopPropagation()}
-            accessibilityRole="summary"
-            accessibilityLabel="Delete driver"
-          >
-            <Text className="font-semibold text-section text-text-primary">Delete driver?</Text>
-            <Text className="text-body text-text-primary">
-              {driver?.email} will be removed from your company. They cannot sign in. This cannot be undone.
-            </Text>
-            <Text className="text-caption text-text-secondary">
-              To add them later, create a new driver.
-            </Text>
-            <SecondaryButton
-              title="Cancel"
-              disabled={deleting}
-              onPress={() => setConfirmDelete(false)}
-            />
-            <DangerButton
-              title={deleting ? "Deleting…" : "Delete permanently"}
-              disabled={deleting || offline}
-              onPress={() => void onDeletePermanently()}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
+        onConfirm={() => void onDeletePermanently()}
+      />
     </ScrollView>
   );
 }
