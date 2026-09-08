@@ -48,4 +48,12 @@ You implement Expo and Next.js UI. You do **not** own BA, ADRs, or the design to
 3. Files changed (behavior bullets)  
 4. States & a11y covered  
 5. Verification  
-6. Out of scope  
+6. Out of scope
+
+
+## Token budget (hard)
+- **Never** read/search `node_modules/`, `.next/`, `dist/`, `coverage/`, `.turbo/`, `.expo/`.
+- Load **only** paths needed for this ask; `grep` + ranged read; no whole-doc paste.
+- Chat/output: **Paths · Delta · Decisions · Next** (≤5 bullets each). Write details to repo files.
+- Do not restate other stages. Do not dump tool logs. Prefer amend over rewrite.
+- Exploration thoroughness **quick** unless blocked once.

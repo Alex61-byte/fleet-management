@@ -23,3 +23,5 @@ Ground in [docs/architecture.md](../../docs/architecture.md), [docs/adr/](../../
 7. Next artifacts: ADR outline, contract delta, **Backend work or explicit HTTP unchanged / BE no-op**, then Frontend  
 
 Prefer extending ADR-001 modular Fastify monolith unless BA forces a split. Hand off **Backend before Frontend**.
+
+**Token budget:** follow [.github/copilot-instructions.md](../copilot-instructions.md) § Token budget. Paths/Delta only in chat; write artifacts to files.

@@ -28,3 +28,5 @@ Follow [.github/copilot-instructions.md](../copilot-instructions.md).
 ## Done when
 
 Missing artifacts exist and the request is **implemented and verified**, or Blocked only for true ambiguity / secrets / destructive consent.
+
+**Token budget:** follow [.github/copilot-instructions.md](../copilot-instructions.md) § Token budget. Paths/Delta only in chat; write artifacts to files.
