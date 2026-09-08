@@ -3,7 +3,7 @@
 import type { Driver } from "@fleet/sdk";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AppShell, ErrorRetry } from "../../components/app-shell";
+import { AppShell, Denied, ErrorRetry } from "../../components/app-shell";
 import { PrimaryLink, Skeleton } from "../../components/ui";
 import { themeClasses } from "../../../../design/tailwind.theme";
 import { api } from "../../lib/api";
@@ -35,8 +35,19 @@ export default function DriversPage() {
   }
 
   useEffect(() => {
-    if (ready && me && me.role !== "driver") void load();
+    if (ready && me && me.role !== "driver" && me.account_kind !== "individual") void load();
   }, [ready, me]);
+
+  if (me?.account_kind === "individual") {
+    return (
+      <AppShell title="Drivers">
+        <Denied
+          title="Not available"
+          body="Driver management is only available on company accounts."
+        />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell

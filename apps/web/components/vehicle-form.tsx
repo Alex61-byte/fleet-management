@@ -2,31 +2,59 @@
 
 import {
   FleetApiError,
+  VEHICLE_CATALOG_OTHER,
+  daysUntilUtc,
   odometerUnitForCountry,
   odometerUnitLabel,
+  utcToday,
+  vehicleCatalogMakes,
+  vehicleCatalogModelsForMake,
+  vehicleMakeSelectValue,
+  vehicleModelSelectValue,
   WARNING_FIELD_LABEL,
+  type BuiltInWarningField,
   type Vehicle,
   type VehicleSide,
   type VehicleWrite,
-  type WarningField,
+  type WarningState,
 } from "@fleet/sdk";
-import { FormEvent, useCallback, useId, useRef, useState } from "react";
+import { FormEvent, useCallback, useId, useMemo, useRef, useState } from "react";
 import { ConfirmDeleteDialog, TrashIcon } from "./confirm-delete-dialog";
 import { VehicleHandoversTab } from "./vehicle-handovers-tab";
 import { VehicleSideImageViewer } from "./vehicle-side-image-viewer";
-import { Field, PrimaryButton, SecondaryButton, TextInput } from "./ui";
+import { Field, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "./ui";
 import { themeClasses } from "../../../design/tailwind.theme";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth-context";
 import { prepareVehicleSideImageForUpload } from "../lib/prepare-side-image";
 
-const DATE_FIELDS: WarningField[] = [
+const DATE_FIELDS: BuiltInWarningField[] = [
   "insurance_on",
   "inspection_on",
   "road_tax_on",
   "registration_on",
 ];
 
+const CUSTOM_EXPIRATION_MAX = 10;
+const CUSTOM_LABEL_MAX = 80;
+const DATE_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 type VehicleFormTab = "details" | "images" | "handovers";
+
+type CustomExpirationDraft = {
+  /** Server id when known; omitted on write for new rows. */
+  id?: string;
+  /** Stable React key (server id or client temp). Never sent as id unless server-owned. */
+  key: string;
+  label: string;
+  expires_on: string;
+  serverOwned: boolean;
+};
+
+type CustomExpirationFieldErrors = {
+  label?: string;
+  expires_on?: string;
+};
 
 /** Local constants — avoid relying on SDK runtime exports in the client bundle. */
 const VEHICLE_SIDES: VehicleSide[] = ["FRONT", "LEFT", "RIGHT", "BACK"];
@@ -57,12 +85,95 @@ function normalizeVehicle(v: Vehicle): Vehicle {
   };
   return {
     ...v,
+    custom_expirations: v.custom_expirations ?? [],
     side_images,
     has_side_images:
       typeof v.has_side_images === "boolean"
         ? v.has_side_images
         : VEHICLE_SIDES.some((side) => Boolean(side_images[side])),
   };
+}
+
+function draftsFromVehicle(v: Vehicle | undefined): CustomExpirationDraft[] {
+  return (v?.custom_expirations ?? []).map((row) => ({
+    id: row.id,
+    key: row.id,
+    label: row.label,
+    expires_on: dateInputValue(row.expires_on),
+    serverOwned: true,
+  }));
+}
+
+function newCustomDraft(): CustomExpirationDraft {
+  const key =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? `tmp-${crypto.randomUUID()}`
+      : `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return { key, label: "", expires_on: "", serverOwned: false };
+}
+
+/** A1 preview for draft dates (same 30-day window as server warnings). */
+function a1StateForDate(expiresOn: string, todayIso = utcToday()): WarningState | null {
+  const value = dateInputValue(expiresOn);
+  if (!DATE_ISO_RE.test(value)) return null;
+  const days = daysUntilUtc(value, todayIso);
+  if (days < 0) return "expired";
+  if (days <= 30) return "due_soon";
+  return null;
+}
+
+function validateCustomExpirations(
+  drafts: CustomExpirationDraft[],
+): Record<string, CustomExpirationFieldErrors> {
+  const errors: Record<string, CustomExpirationFieldErrors> = {};
+  const seen = new Map<string, string>();
+
+  for (const row of drafts) {
+    const rowErrors: CustomExpirationFieldErrors = {};
+    const trimmed = row.label.trim();
+
+    if (!trimmed) {
+      rowErrors.label = "Enter a label (1–80 characters).";
+    } else if (trimmed.length > CUSTOM_LABEL_MAX) {
+      rowErrors.label = "Label must be 80 characters or fewer.";
+    } else {
+      const key = trimmed.toLowerCase();
+      const prior = seen.get(key);
+      if (prior) {
+        rowErrors.label = "Label must be unique on this vehicle.";
+        const priorErrors = errors[prior] ?? {};
+        if (!priorErrors.label) {
+          errors[prior] = { ...priorErrors, label: "Label must be unique on this vehicle." };
+        }
+      } else {
+        seen.set(key, row.key);
+      }
+    }
+
+    const date = dateInputValue(row.expires_on);
+    if (!date || !DATE_ISO_RE.test(date)) {
+      rowErrors.expires_on = "Choose an expiration date.";
+    }
+
+    if (rowErrors.label || rowErrors.expires_on) {
+      errors[row.key] = { ...errors[row.key], ...rowErrors };
+    }
+  }
+
+  return errors;
+}
+
+function customExpirationsWritePayload(
+  drafts: CustomExpirationDraft[],
+): NonNullable<VehicleWrite["custom_expirations"]> {
+  return drafts.map((row) => {
+    const item: { id?: string; label: string; expires_on: string } = {
+      label: row.label.trim(),
+      expires_on: dateInputValue(row.expires_on),
+    };
+    if (row.serverOwned && row.id) item.id = row.id;
+    return item;
+  });
 }
 
 export function VehicleForm({
@@ -78,19 +189,35 @@ export function VehicleForm({
   onSubmit: (body: VehicleWrite) => Promise<Vehicle | void>;
   onVehicleChange?: (vehicle: Vehicle) => void;
 }) {
+  const { me } = useAuth();
+  const companyTenant = me?.account_kind !== "individual";
   const [make, setMake] = useState(initial?.make ?? "");
   const [model, setModel] = useState(initial?.model ?? "");
+  const [makeSelect, setMakeSelect] = useState(() => vehicleMakeSelectValue(initial?.make));
+  const [modelSelect, setModelSelect] = useState(() =>
+    vehicleModelSelectValue(initial?.make, initial?.model),
+  );
   const [plate, setPlate] = useState(initial?.license_plate ?? "");
   const [country, setCountry] = useState(initial?.country_of_registration ?? "");
   const [mileage, setMileage] = useState(
     initial?.mileage != null && Number.isFinite(initial.mileage) ? String(initial.mileage) : "",
   );
-  const [dates, setDates] = useState<Record<WarningField, string>>({
+  const catalogMakes = useMemo(() => vehicleCatalogMakes(), []);
+  const catalogModels = useMemo(
+    () => (makeSelect && makeSelect !== VEHICLE_CATALOG_OTHER ? vehicleCatalogModelsForMake(makeSelect) : []),
+    [makeSelect],
+  );
+  const [dates, setDates] = useState<Record<BuiltInWarningField, string>>({
     insurance_on: dateInputValue(initial?.insurance_on),
     inspection_on: dateInputValue(initial?.inspection_on),
     road_tax_on: dateInputValue(initial?.road_tax_on),
     registration_on: dateInputValue(initial?.registration_on),
   });
+  const [customExpirations, setCustomExpirations] = useState<CustomExpirationDraft[]>(() =>
+    draftsFromVehicle(initial),
+  );
+  const [customErrors, setCustomErrors] = useState<Record<string, CustomExpirationFieldErrors>>({});
+  const [removeCustomKey, setRemoveCustomKey] = useState<string | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | undefined>(
     initial ? normalizeVehicle(initial) : undefined,
   );
@@ -104,6 +231,8 @@ export function VehicleForm({
   const fileRefs = useRef<Partial<Record<VehicleSide, HTMLInputElement | null>>>({});
   const clearTriggerRefs = useRef<Partial<Record<VehicleSide, HTMLButtonElement | null>>>({});
   const viewTriggerRefs = useRef<Partial<Record<VehicleSide, HTMLButtonElement | null>>>({});
+  const customRemoveTriggerRefs = useRef<Partial<Record<string, HTMLButtonElement | null>>>({});
+  const customLabelInputRefs = useRef<Partial<Record<string, HTMLInputElement | null>>>({});
   const detailsTabId = useId();
   const imagesTabId = useId();
   const handoversTabId = useId();
@@ -111,14 +240,77 @@ export function VehicleForm({
   const imagesPanelId = useId();
   const handoversPanelId = useId();
 
+  const removeCustomTarget = useMemo(
+    () => customExpirations.find((row) => row.key === removeCustomKey) ?? null,
+    [customExpirations, removeCustomKey],
+  );
+
   function applyVehicle(next: Vehicle) {
     const normalized = normalizeVehicle(next);
     setVehicle(normalized);
+    setCustomExpirations(draftsFromVehicle(normalized));
+    setCustomErrors({});
     onVehicleChange?.(normalized);
+  }
+
+  function addCustomExpiration() {
+    if (customExpirations.length >= CUSTOM_EXPIRATION_MAX || offline || busy) return;
+    const draft = newCustomDraft();
+    setCustomExpirations((rows) => [...rows, draft]);
+    queueMicrotask(() => customLabelInputRefs.current[draft.key]?.focus());
+  }
+
+  function updateCustomExpiration(
+    key: string,
+    patch: Partial<Pick<CustomExpirationDraft, "label" | "expires_on">>,
+  ) {
+    setCustomExpirations((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    setCustomErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      const rowErr = { ...next[key] };
+      if (patch.label !== undefined) delete rowErr.label;
+      if (patch.expires_on !== undefined) delete rowErr.expires_on;
+      if (!rowErr.label && !rowErr.expires_on) delete next[key];
+      else next[key] = rowErr;
+      return next;
+    });
+  }
+
+  function openRemoveCustom(key: string) {
+    setRemoveCustomKey(key);
+  }
+
+  function closeRemoveCustom() {
+    const key = removeCustomKey;
+    setRemoveCustomKey(null);
+    if (key) {
+      queueMicrotask(() => customRemoveTriggerRefs.current[key]?.focus());
+    }
+  }
+
+  function confirmRemoveCustom() {
+    const key = removeCustomKey;
+    if (!key) return;
+    setCustomExpirations((rows) => rows.filter((row) => row.key !== key));
+    setCustomErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setRemoveCustomKey(null);
   }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    const fieldErrors = validateCustomExpirations(customExpirations);
+    if (Object.keys(fieldErrors).length > 0) {
+      setCustomErrors(fieldErrors);
+      setTab("details");
+      return;
+    }
+    setCustomErrors({});
     setBusy(true);
     try {
       const next = await onSubmit({
@@ -131,6 +323,7 @@ export function VehicleForm({
         inspection_on: dates.inspection_on || null,
         road_tax_on: dates.road_tax_on || null,
         registration_on: dates.registration_on || null,
+        custom_expirations: customExpirationsWritePayload(customExpirations),
       });
       if (next) applyVehicle(next);
     } finally {
@@ -238,21 +431,23 @@ export function VehicleForm({
         >
           Details
         </button>
-        <button
-          id={imagesTabId}
-          type="button"
-          role="tab"
-          aria-selected={tab === "images"}
-          aria-controls={imagesPanelId}
-          tabIndex={tab === "images" ? 0 : -1}
-          className={
-            tab === "images" ? themeClasses.vehicleFormTabSelected : themeClasses.vehicleFormTab
-          }
-          onClick={() => setTab("images")}
-        >
-          Images
-        </button>
-        {vehicle?.id ? (
+        {companyTenant ? (
+          <button
+            id={imagesTabId}
+            type="button"
+            role="tab"
+            aria-selected={tab === "images"}
+            aria-controls={imagesPanelId}
+            tabIndex={tab === "images" ? 0 : -1}
+            className={
+              tab === "images" ? themeClasses.vehicleFormTabSelected : themeClasses.vehicleFormTab
+            }
+            onClick={() => setTab("images")}
+          >
+            Images
+          </button>
+        ) : null}
+        {companyTenant && vehicle?.id ? (
           <button
             id={handoversTabId}
             type="button"
@@ -280,11 +475,91 @@ export function VehicleForm({
           className={`${themeClasses.vehicleFormTabPanel} ${themeClasses.vehicleFormDetails}`}
         >
           <Field label="Make">
-            <TextInput value={make} onChange={(e) => setMake(e.target.value)} required disabled={busy} />
+            <SelectInput
+              value={makeSelect}
+              required
+              disabled={busy}
+              aria-label="Make"
+              onChange={(e) => {
+                const next = e.target.value;
+                setMakeSelect(next);
+                if (!next) {
+                  setMake("");
+                  setModel("");
+                  setModelSelect("");
+                  return;
+                }
+                if (next === VEHICLE_CATALOG_OTHER) {
+                  setMake("");
+                  setModel("");
+                  setModelSelect(VEHICLE_CATALOG_OTHER);
+                  return;
+                }
+                setMake(next);
+                setModel("");
+                setModelSelect("");
+              }}
+            >
+              <option value="">Select make</option>
+              {catalogMakes.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+              <option value={VEHICLE_CATALOG_OTHER}>{VEHICLE_CATALOG_OTHER}</option>
+            </SelectInput>
           </Field>
+          {makeSelect === VEHICLE_CATALOG_OTHER ? (
+            <Field label="Make (custom)">
+              <TextInput
+                value={make}
+                onChange={(e) => setMake(e.target.value)}
+                required
+                disabled={busy}
+                aria-label="Custom make"
+              />
+            </Field>
+          ) : null}
           <Field label="Model">
-            <TextInput value={model} onChange={(e) => setModel(e.target.value)} required disabled={busy} />
+            <SelectInput
+              value={modelSelect}
+              required
+              disabled={busy || !makeSelect}
+              aria-label="Model"
+              onChange={(e) => {
+                const next = e.target.value;
+                setModelSelect(next);
+                if (!next) {
+                  setModel("");
+                  return;
+                }
+                if (next === VEHICLE_CATALOG_OTHER) {
+                  setModel("");
+                  return;
+                }
+                setModel(next);
+              }}
+            >
+              <option value="">{makeSelect ? "Select model" : "Select make first"}</option>
+              {catalogModels.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+              {makeSelect ? <option value={VEHICLE_CATALOG_OTHER}>{VEHICLE_CATALOG_OTHER}</option> : null}
+            </SelectInput>
           </Field>
+          {modelSelect === VEHICLE_CATALOG_OTHER ? (
+            <Field label="Model (custom)">
+              <TextInput
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                required
+                disabled={busy}
+                aria-label="Custom model"
+              />
+            </Field>
+          ) : null}
           <Field label="License plate">
             <TextInput value={plate} onChange={(e) => setPlate(e.target.value)} required disabled={busy} />
           </Field>
@@ -329,10 +604,101 @@ export function VehicleForm({
               </Field>
             );
           })}
+          <div className={themeClasses.vehicleCustomExpirations}>
+            <h3 className={themeClasses.sectionTitle}>Custom expirations</h3>
+            {customExpirations.length === 0 ? (
+              <p className={themeClasses.caption}>No custom expirations yet.</p>
+            ) : (
+              <div className={themeClasses.vehicleCustomExpirationList}>
+                {customExpirations.map((row, index) => {
+                  const rowErrors = customErrors[row.key] ?? {};
+                  const labelTrim = row.label.trim();
+                  const badgeLabel = labelTrim || "Expires on";
+                  const serverWarning =
+                    row.serverOwned && row.id
+                      ? vehicle?.warnings.find((w) => w.field === `custom:${row.id}`)
+                      : undefined;
+                  const previewState =
+                    serverWarning?.state ?? a1StateForDate(row.expires_on) ?? null;
+                  const removeName = labelTrim
+                    ? `Remove ${labelTrim} expiration`
+                    : "Remove custom expiration";
+                  return (
+                    <div key={row.key} className={themeClasses.vehicleCustomExpirationRow}>
+                      <div className="flex flex-row items-center justify-between gap-1">
+                        <span className={themeClasses.caption}>Expiration {index + 1}</span>
+                        <button
+                          ref={(el) => {
+                            customRemoveTriggerRefs.current[row.key] = el;
+                          }}
+                          type="button"
+                          className={`${themeClasses.buttonIcon} text-danger hover:bg-hover focus-visible:shadow-ring disabled:text-disabled`}
+                          disabled={busy || offline || removeCustomKey !== null}
+                          aria-label={removeName}
+                          onClick={() => openRemoveCustom(row.key)}
+                        >
+                          <TrashIcon className="block h-nav-icon w-nav-icon shrink-0" />
+                        </button>
+                      </div>
+                      <Field label="Label" error={rowErrors.label}>
+                        <TextInput
+                          ref={(el) => {
+                            customLabelInputRefs.current[row.key] = el;
+                          }}
+                          value={row.label}
+                          onChange={(e) => updateCustomExpiration(row.key, { label: e.target.value })}
+                          disabled={busy}
+                          error={Boolean(rowErrors.label)}
+                          placeholder="e.g. Fire extinguisher"
+                          aria-label={`Custom expiration ${index + 1} label`}
+                          maxLength={CUSTOM_LABEL_MAX + 20}
+                        />
+                      </Field>
+                      <Field label="Expires on" error={rowErrors.expires_on}>
+                        <TextInput
+                          type="date"
+                          value={row.expires_on}
+                          onChange={(e) =>
+                            updateCustomExpiration(row.key, { expires_on: e.target.value })
+                          }
+                          disabled={busy}
+                          error={Boolean(rowErrors.expires_on)}
+                          aria-label={`Custom expiration ${index + 1} date`}
+                        />
+                        {previewState ? (
+                          <span
+                            className={
+                              previewState === "expired"
+                                ? themeClasses.badgeExpired
+                                : themeClasses.badgeWarning
+                            }
+                          >
+                            {badgeLabel} · {previewState === "expired" ? "Expired" : "Due soon"}
+                          </span>
+                        ) : null}
+                      </Field>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <SecondaryButton
+              type="button"
+              disabled={
+                busy || offline || customExpirations.length >= CUSTOM_EXPIRATION_MAX
+              }
+              onClick={addCustomExpiration}
+            >
+              Add expiration
+            </SecondaryButton>
+            {customExpirations.length >= CUSTOM_EXPIRATION_MAX ? (
+              <p className={themeClasses.caption}>Maximum of 10 custom expirations.</p>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
-      {tab === "images" ? (
+      {companyTenant && tab === "images" ? (
         <div
           id={imagesPanelId}
           role="tabpanel"
@@ -392,6 +758,22 @@ export function VehicleForm({
                         </div>
                       )}
                       <div className={themeClasses.vehicleSideActions}>
+
+      <ConfirmDeleteDialog
+        open={removeCustomKey !== null}
+        title={
+          removeCustomTarget?.label.trim()
+            ? `Remove ${removeCustomTarget.label.trim()}?`
+            : "Remove custom expiration?"
+        }
+        body="This removes the custom expiration from the vehicle."
+        caption="You can add it again later."
+        confirmLabel="Remove"
+        confirmBusyLabel="Removing…"
+        disabledConfirm={offline}
+        onCancel={closeRemoveCustom}
+        onConfirm={confirmRemoveCustom}
+      />
                         <input
                           ref={(el) => {
                             fileRefs.current[side] = el;
@@ -443,7 +825,7 @@ export function VehicleForm({
         </div>
       ) : null}
 
-      {tab === "handovers" && vehicle?.id ? (
+      {companyTenant && tab === "handovers" && vehicle?.id ? (
         <div
           id={handoversPanelId}
           role="tabpanel"

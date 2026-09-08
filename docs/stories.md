@@ -4,15 +4,18 @@ INVEST stories with Given/When/Then. One outcome each. Rules: [business-rules.md
 
 ## US-01 — Register company and first Owner
 
+
+**Account kind:** **Company** only (after US-77 chooses Company).
+
 **As** a person starting a fleet company  
 **I need** to create an account with email, password, company registration number, VAT number, and address  
 **So that** my company exists with required legal/address details and I am the Owner.
 
 **Acceptance**
 
-- **Given** I am not signed in and that email is not already a login identity  
+- **Given** I chose **Company** (or equivalent Company sign-up entry) and I am not signed in and that email is not already a login identity  
   **When** I submit email, password (≥ 8), company registration number, VAT number, and address  
-  **Then** a company is created with those company fields, I am the Owner of that company, and I can sign in.
+  **Then** a company is created with those company fields (`account_kind = company`), I am the Owner of that company, and I can sign in.
 
 - **Given** address lookup (free OSM/Nominatim-style) is available  
   **When** I use lookup and select a result (or type address manually)  
@@ -559,7 +562,7 @@ Spec **states** (empty, loading, error, success, warning, denied), **density**, 
 | Password reset | US-03 | Request reset; set new password (Owner/Admin only) |
 | Owner/Admin home (post-login) | US-02 | Entry to drivers and fleet; not driver UI |
 | Invite accept / set password | US-09 | Token from link; email match; create password; gate before minimal home; unknown email cannot continue |
-| Driver home / start (minimal) | US-10 | Identity + hub to Next travel / Handover + sign-out; **no** auto-open handover form; **no** Owner side nav / fleet / driver admin |
+| Driver home / start (minimal) | US-10, US-66 | Identity + hub to Next travel / Handover / Daily usage + sign-out; **no** auto-open task forms; **no** Owner side nav / fleet / driver admin |
 | Enable/disable TOTP | US-04, US-05 | Off → on (authenticator); on → off |
 | Create Admin | US-06 | Owner only; deny Admin |
 | Driver list | US-07, US-08, US-09a, US-16, US-27 | Company drivers; empty state; pending invite status |
@@ -582,7 +585,8 @@ Spec **states** (empty, loading, error, success, warning, denied), **density**, 
 | Create Admin | Owner | US-06 |
 | Driver list / create / edit | Owner/Admin | US-07, US-08, US-09a, US-16, US-27 |
 | Vehicle list / create / edit + expiry warning | Owner/Admin | US-11–13 |
-| Driver home / start | Driver, after invite accept | US-10 — calm start hub; travel & handover are opt-in screens; **no** Owner/Admin navigation (web + mobile) |
+| Driver home / start | Driver, after invite accept | US-10, US-66 — calm start hub; travel, handover & daily usage are opt-in screens; **no** Owner/Admin navigation (web + mobile) |
+| Daily usage | Driver | US-61–US-67 — create + own list; gated on next-travel; offline block |
 | Denied Owner/Admin areas | Driver | US-14 / E8 (not blanket web denial) |
 | Unauthenticated | None | US-15 — no fleet |
 
@@ -1101,5 +1105,597 @@ When page specs exist, next specialist is **Senior Software Architect**.
 
 - **Given** I sign in as a driver  
   **When** the session lands on driver home / start  
+
+## US-61 — Create Daily usage **(Must)**
+
+**As** a signed-in driver  
+**I need** to log Daily usage for my active next-travel vehicle  
+**So that** start/end places, distances, and times for that use are recorded.
+
+**Acceptance**
+
+- **Given** I have an active next-travel vehicle  
+  **When** I submit Date, Start place, Start distance, Start time, End place, End distance, End time — all valid  
+  **Then** a Daily usage row is stored for **me** and that **vehicle**, and I can see it in my list.
+
+- **Given** the form is opened fresh  
+  **When** I view Date  
+  **Then** it defaults to **today (local)** and I may change it to another calendar date.
+
+- **Given** save succeeds  
+  **When** I inspect fleet vehicle mileage  
+  **Then** `vehicle.mileage` is **unchanged** by this save (A62).
+
+- **Given** I already saved one entry for today  
+  **When** I submit another valid entry the same date  
+  **Then** both exist (A64).
+
+## US-62 — Daily usage field validation **(Must)**
+
+**As** a signed-in driver  
+**I need** invalid Daily usage rejected  
+**So that** incomplete or inconsistent logs are not stored.
+
+**Acceptance**
+
+- **Given** any required field is missing  
+  **When** I submit  
+  **Then** no row is created (E61).
+
+- **Given** start/end distance negative, non-numeric, or &gt;1 decimal  
+  **When** I submit  
+  **Then** rejected (E62).
+
+- **Given** end_distance &lt; start_distance  
+  **When** I submit  
+  **Then** rejected (E62).
+
+- **Given** vehicle.mileage is set and start_distance &lt; vehicle.mileage  
+  **When** I submit  
+  **Then** rejected (E62).
+
+- **Given** end_time &lt; start_time on the usage date  
+  **When** I submit  
+  **Then** rejected (E63).
+
+- **Given** active vehicle country is miles vs kilometres jurisdiction  
+  **When** I enter distances  
+  **Then** labels/stored unit follow A34 (no unit picker).
+
+## US-63 — List own Daily usage **(Must)**
+
+**As** a signed-in driver  
+**I need** to see my own Daily usage entries  
+**So that** I can confirm what I logged.
+
+**Acceptance**
+
+- **Given** I have one or more Daily usage rows  
+  **When** I open Daily usage list  
+  **Then** I see **my** entries (vehicle identity/plate, date, places, distances+unit, times), newest first.
+
+- **Given** I have no entries  
+  **When** I open the list  
+  **Then** I see empty state (and can still open create if next-travel active).
+
+- **Given** another driver in my company has entries  
+  **When** I list  
+  **Then** I do **not** see theirs (E64).
+
+## US-64 — Daily usage gated on next-travel **(Must)**
+
+**As** a signed-in driver  
+**I need** Daily usage create blocked without next-travel  
+**So that** logs always bind to a selected company vehicle.
+
+**Acceptance**
+
+- **Given** I have **no** active next-travel  
+  **When** I open Daily usage create  
+  **Then** the form is not available; I get guidance/CTA to **Next travel**; no row can be created (E59).
+
+- **Given** I set next-travel then open Daily usage  
+  **When** the screen loads  
+  **Then** bound vehicle (make/model/plate) is shown read-only and create is available.
+
+## US-65 — Daily usage authz and tenancy **(Must)**
+
+**As** the product  
+**I need** role and company checks on Daily usage  
+**So that** only the driver of record in-tenancy can create/list own rows.
+
+**Acceptance**
+
+- **Given** Owner/Admin or unsigned-in  
+  **When** they attempt driver Daily usage create/list  
+  **Then** denied; no row (E60/E64).
+
+- **Given** a cross-company vehicle id  
+  **When** create is attempted  
+  **Then** not found / no change (E66).
+
+- **Given** I am a driver  
+  **When** I try edit/delete a saved Daily usage  
+  **Then** not offered / rejected (E65).
+
+## US-66 — Daily usage on driver hub (web + mobile) **(Must)**
+
+**As** a signed-in driver  
+**I need** Daily usage from the driver home hub on web and mobile  
+**So that** usage logging matches other driver tasks and does not open on login.
+
+**Acceptance**
+
+- **Given** I land on driver home after sign-in  
+  **When** the start hub loads  
+  **Then** I am **not** auto-opened into Daily usage form; I can open it from the hub.
+
+- **Given** I use **mobile** or **web** driver shell  
+  **When** I complete create/list  
+  **Then** both surfaces support the same outcomes (US-61–US-65).
+
+- **Given** next-travel is active  
+  **When** I view the hub  
+  **Then** Daily usage is reachable (**Should:** calm ready cue).
+
+## US-67 — Daily usage offline **(Must)**
+
+**As** a signed-in driver  
+**I need** offline behavior consistent with other driver forms  
+**So that** I do not think a usage row saved when it did not.
+
+**Acceptance**
+
+- **Given** the client is offline  
+  **When** I am on Daily usage create  
+  **Then** I see an offline warning and **Submit** is disabled (E67).
   **Then** I am **not** taken straight into the Handover Out/In form.
+
+
+
+## US-68 — Global Header on Owner/Admin pages **(Must)**
+
+**As** an Owner or Admin  
+**I need** a shared Global Header on every Owner/Admin page  
+**So that** product identity and notifications stay in one consistent place.
+
+**Acceptance**
+
+- **Given** I am signed in as Owner or Admin on **web**  
+  **When** I open any Owner/Admin page (Home, Drivers, Vehicles, Admins if Owner, Security, vehicle create/edit/detail/handovers)  
+  **Then** I see the same Global Header region on each page.
+
+- **Given** I am signed in as Owner or Admin on **mobile**  
+  **When** I use Owner/Admin screens  
+  **Then** the Global Header affordances (Fleet icon + notification control) are present on those screens’ chrome.
+
+- **Given** side nav (web) or tabs (mobile) already exist  
+  **When** Global Header is added  
+  **Then** primary navigation destinations and role gating are **unchanged** (Admin still no Admins create; Driver still E8).
+
+## US-69 — Fleet icon in Global Header **(Must)**
+
+**As** an Owner or Admin  
+**I need** the Fleet icon in the Global Header  
+**So that** I always see product identity in the shared chrome.
+
+**Acceptance**
+
+- **Given** I am on an Owner/Admin authenticated page  
+  **When** the Global Header renders  
+  **Then** the **Fleet** mark/icon is visible in the header.
+
+- **Given** the mark is shown  
+  **When** assistive tech reads the header identity  
+  **Then** the product is presented as **Fleet** (mark decorative or named per Design; no invented product name).
+
+## US-70 — Notification icon button **(Must)**
+
+**As** an Owner or Admin  
+**I need** a notification icon button in the Global Header  
+**So that** I can open operational alerts without leaving the page context.
+
+**Acceptance**
+
+- **Given** I am signed in as Owner or Admin  
+  **When** I view the Global Header  
+  **Then** a notification **icon button** is available (hit target meets existing min hit guidance via Design).
+
+- **Given** the button is shown  
+  **When** it is exposed to assistive tech  
+  **Then** it has an accessible name indicating notifications (and unread state if US-74 applies).
+
+## US-71 — Open and close notification menu **(Must)**
+
+**As** an Owner or Admin  
+**I need** the notification button to open a notification menu  
+**So that** I can review alerts in place.
+
+**Acceptance**
+
+- **Given** the menu is closed  
+  **When** I activate the notification icon button  
+  **Then** the notification menu opens.
+
+- **Given** the menu is open  
+  **When** I activate the button again, dismiss, or choose close (per Design)  
+  **Then** the menu closes.
+
+- **Given** the menu is open  
+  **When** I navigate to another Owner/Admin page  
+  **Then** menu does not stay open in a broken state (closes or rebinds cleanly).
+
+## US-72 — MVP menu content: compliance alerts **(Must)**
+
+**As** an Owner or Admin  
+**I need** the menu to list company vehicles with insurance, inspection, or road tax due soon or expired  
+**So that** I can see compliance risk without opening every vehicle first.
+
+**Acceptance**
+
+- **Given** my company has a vehicle with insurance, inspection, or road tax **within 30 days** or **past**  
+  **When** I open the notification menu  
+  **Then** I see an item for that **vehicle + section** (identity + which date + soon vs expired/overdue).
+
+- **Given** only `registration_on` is near/past and compliance sections are fine  
+  **When** I open the menu  
+  **Then** registration alone does **not** create an item (A13).
+
+- **Given** multiple qualifying sections on one vehicle  
+  **When** I open the menu  
+  **Then** each qualifying section can appear as its own item (rule 107).
+
+- **Given** more than 50 qualifying items  
+  **When** I open the menu  
+  **Then** at most 50 are listed (rule 114).
+
+## US-73 — Empty, loading, error **(Must)**
+
+**As** an Owner or Admin  
+**I need** clear menu states  
+**So that** I do not confuse “no alerts” with failure.
+
+**Acceptance**
+
+- **Given** no company vehicle section meets rule 106  
+  **When** I open the menu  
+  **Then** I see an **empty** state (not an error) (E70).
+
+- **Given** notification data is loading  
+  **When** I open the menu  
+  **Then** I see a loading state.
+
+- **Given** loading fails  
+  **When** the menu would show items  
+  **Then** I see an **error** state and no fabricated rows (E69).
+
+## US-74 — Unread cue on icon **(Should)**
+
+**As** an Owner or Admin  
+**I need** a cue on the notification icon when MVP items exist  
+**So that** I know to open the menu.
+
+**Acceptance**
+
+- **Given** ≥1 MVP item exists  
+  **When** I view the header  
+  **Then** the icon shows a count or dot **and** the accessible name reflects that notifications exist (not color-only).
+
+- **Given** zero MVP items  
+  **When** I view the header  
+  **Then** there is no unread urgency cue on the icon.
+
+## US-75 — Navigate from notification item **(Should)**
+
+**As** an Owner or Admin  
+**I need** to open the related vehicle from a notification item  
+**So that** I can act on the compliance date.
+
+**Acceptance**
+
+- **Given** the menu shows a compliance item for vehicle V  
+  **When** I activate that item  
+  **Then** I go to V’s Owner/Admin vehicle experience (detail or edit—Design picks one consistent target).
+
+- **Given** V is missing or not in my company  
+  **When** I activate the item  
+  **Then** I get the normal not-found/denied path (E72); no cross-company leak.
+
+## US-76 — Header and menu authz **(Must)**
+
+**As** the product  
+**I need** Global Header notifications only for Owner/Admin of their company  
+**So that** drivers and other tenants never see this chrome or data.
+
+**Acceptance**
+
+- **Given** I am a **driver** (web or mobile)  
+  **When** I use the app  
+  **Then** I do **not** see Owner/Admin Global Header notification chrome (E68); driver shell unchanged.
+
+- **Given** I am not signed in  
+  **When** I use public or auth pages  
+  **Then** Global Header notification chrome is not shown.
+
+- **Given** I am Owner/Admin of company A  
+  **When** notification items load  
+  **Then** only company A vehicles appear (E56-style isolation).
+
+## Design Specialist handoff — Global Header (US-68–US-76)
+
+Spec Global Header for Owner/Admin **web + mobile**: Fleet icon, notification icon button, menu (open/close), empty/loading/error, optional unread cue, optional item → vehicle navigation.
+Reuse `design/` tokens + `_patterns.md` chrome. **No** driver/public/auth chrome.
+Do not invent push, preferences, or extra event types beyond compliance MVP.
+
+## US-77 — Choose account kind at sign-up **(Must)**
+
+**As** a person creating an account  
+**I need** to choose **Company** or **Individual**  
+**So that** I take the correct registration path.
+
+**Acceptance**
+
+- **Given** I am not signed in and open create-account  
+  **When** I view account creation  
+  **Then** I can choose **Company** or **Individual** before completing registration.
+
+- **Given** I choose **Company**  
+  **When** I continue  
+  **Then** I am on Company sign-up (US-01) with legal/address fields required.
+
+- **Given** I choose **Individual**  
+  **When** I continue  
+  **Then** I am on Individual sign-up (US-78) without company legal fields.
+
+## US-78 — Register Individual and first Owner **(Must)**
+
+**As** a person wanting a personal account  
+**I need** to register with email and password only  
+**So that** I get a personal workspace as Owner without forming a company.
+
+**Acceptance**
+
+- **Given** I chose Individual, am not signed in, email is free  
+  **When** I submit email and password (≥ 8)  
+  **Then** an `account_kind = individual` tenant is created, I am its Owner, and I can sign in (A83, A90).
+
+- **Given** email is already a login identity  
+  **When** I submit Individual sign-up  
+  **Then** no tenant is created (E74).
+
+- **Given** password < 8 or email missing  
+  **When** I submit  
+  **Then** no tenant is created (E73).
+
+- **Given** I complete Individual sign-up  
+  **When** I land signed in  
+  **Then** I do **not** get Drivers or Admins management (US-82).
+
+## US-79 — Individual Owner sign-in (web and mobile) **(Must)**
+
+**As** an Individual Owner  
+**I need** to sign in with email and password on web and mobile  
+**So that** I can manage my personal vehicles.
+
+**Acceptance**
+
+- **Given** I am Individual Owner, valid password, TOTP off  
+  **When** I sign in on web or mobile  
+  **Then** I am signed in as Individual Owner (management shell per A86)—not invited-driver home, not Company Drivers admin.
+
+- **Given** wrong email/password  
+  **When** I attempt sign-in  
+  **Then** I am not signed in (E2).
+
+## US-80 — Individual password reset and optional TOTP **(Must)**
+
+**As** an Individual Owner  
+**I need** password reset and optional authenticator MFA  
+**So that** my personal account matches Owner auth expectations.
+
+**Acceptance**
+
+- **Given** I am Individual Owner and not signed in  
+  **When** I complete password reset with valid new password  
+  **Then** I can sign in with the new password only.
+
+- **Given** I am signed in as Individual Owner  
+  **When** I enable or disable TOTP  
+  **Then** MFA rules match Owner/Admin TOTP (rules 7–8); drivers still have no MFA.
+
+## US-81 — Individual manages own vehicles (compliance-lite) **(Must)**
+
+**As** an Individual Owner  
+**I need** to create and edit my vehicles and compliance dates  
+**So that** I can track my personal vehicles without a company org.
+
+**Acceptance**
+
+- **Given** I am signed in as Individual Owner  
+  **When** I create a vehicle with required vehicle fields for this product  
+  **Then** the vehicle belongs to **my individual tenant** only.
+
+- **Given** I have vehicles with insurance/inspection/road tax in warning window or past  
+  **When** I view list/detail  
+  **Then** I see the same class of expiry warnings as company fleet (rule 19), for **my** vehicles only.
+
+- **Given** I am Individual Owner  
+  **When** I set optional mileage per existing vehicle rules  
+  **Then** mileage works on **my** vehicles; units still follow country (A34).
+
+- **Given** I am Individual Owner on create/edit vehicle  
+  **When** I view the vehicle form  
+  **Then** I see **Details** only—**no** Images or Handovers tabs (A86, E80).
+
+- **Given** I am Individual Owner  
+  **When** I call vehicle side-image or handover-history APIs  
+  **Then** the API denies with **403** `forbidden` (E80).
+
+- **Given** another tenant’s vehicle id  
+  **When** I try to read or change it  
+  **Then** not found/forbidden (E78).
+
+## US-82 — Individual cannot manage drivers or Admins **(Must)**
+
+**As** the product  
+**I need** to block driver and Admin management for Individual accounts  
+**So that** only Companies run multi-driver orgs.
+
+**Acceptance**
+
+- **Given** I am Individual Owner  
+  **When** I try to create/invite/list-admin drivers or create an Admin  
+  **Then** the action is denied; no driver/Admin created (E75, E76, E77).
+
+- **Given** I am Individual Owner  
+  **When** I use app navigation  
+  **Then** Drivers and Admins management entry points are not available (Design may hide; API still denies).
+
+- **Given** I am Individual Owner  
+  **When** I open a vehicle  
+  **Then** Images and Handovers are not available (E80).
+
+## US-83 — Company driver invite remains Company-only **(Must)**
+
+**As** a Company Owner or Admin  
+**I need** driver invite/management to keep working only for my company  
+**So that** fleet driver onboarding is unchanged.
+
+**Acceptance**
+
+- **Given** I am Company Owner or Admin  
+  **When** I invite a driver by email (US-07)  
+  **Then** behavior matches existing Company rules (invite, Resend, accept).
+
+- **Given** I am Individual Owner  
+  **When** I attempt the same  
+  **Then** no driver is created (E75).
+
+## US-84 — Existing accounts map to Company **(Must)**
+
+**As** an existing customer  
+**I need** my organization to remain a Company account  
+**So that** I am not forced through Individual signup or lose drivers.
+
+**Acceptance**
+
+- **Given** a tenant/principal existed before this slice  
+  **When** account kind is read  
+  **Then** it is **company** (A88).
+
+- **Given** I am an existing Company Owner/Admin/Driver  
+  **When** I sign in  
+  **Then** my prior capabilities remain available subject to existing rules.
+
+## US-85 — Landing entry for Company and Individual **(Should)**
+
+**As** an unsigned-in visitor on web landing  
+**I need** a clear path to create a **Company** or **Individual** account  
+**So that** I pick the right signup without confusion.
+
+**Acceptance**
+
+- **Given** I am on public landing unsigned-in  
+  **When** I view header/create actions  
+  **Then** I can start **Company** create and **Individual** create (combined chooser or two actions—Design).
+
+- **Given** I am on landing  
+  **When** I use Sign in  
+  **Then** sign-in remains available for all existing identities (unchanged).
+
+## Design Specialist handoff — Account kinds (US-77–US-85, US-01 clarify)
+
+Spec: account-kind choice; Individual sign-up; Company sign-up via choice; landing CTAs; Individual Owner shell **without** Drivers/Admins; deny states. Reuse auth canvas + tokens. No new product name. Architect owns tenancy field shape after design.
+
+## US-86 — Add custom expiration on vehicle **(Must)**
+
+**As** an Owner or Admin (Company or Individual)  
+**I need** to add labeled custom expiration dates on a vehicle  
+**So that** I track non-built-in compliance items on the fleet record.
+
+**Acceptance**
+
+- **Given** I am signed in as Owner/Admin on vehicle create or edit Details  
+  **When** I add a custom expiration with label (1–80) and `expires_on` and save  
+  **Then** the vehicle stores that row with a stable id and returns it on reads.
+
+- **Given** I already have 10 custom expirations  
+  **When** I try to add another  
+  **Then** the write is rejected (cap 10).
+
+- **Given** I am a driver or unsigned-in  
+  **When** I try to write custom expirations  
+  **Then** no change (403/401).
+
+## US-87 — Edit custom expiration **(Must)**
+
+**As** an Owner or Admin  
+**I need** to change a custom expiration label or date  
+**So that** the record stays current.
+
+**Acceptance**
+
+- **Given** a vehicle in my tenant has custom rows  
+  **When** I PATCH with a full `custom_expirations` list keeping ids and updated fields  
+  **Then** stored rows match the new list.
+
+- **Given** duplicate labels (case-insensitive after trim) or invalid label/date  
+  **When** I save  
+  **Then** 400 `validation_error` and no partial bad list stored.
+
+## US-88 — Remove / clear custom expirations **(Must)**
+
+**As** an Owner or Admin  
+**I need** to remove custom expiration rows  
+**So that** outdated items leave the vehicle record.
+
+**Acceptance**
+
+- **Given** a vehicle has custom rows  
+  **When** I PATCH `custom_expirations: []`  
+  **Then** subsequent reads show an empty list.
+
+- **Given** a vehicle has custom rows  
+  **When** I PATCH omitting `custom_expirations`  
+  **Then** existing rows are unchanged.
+
+- **Given** UI remove of one row  
+  **When** I save the remaining full list  
+  **Then** only remaining rows are stored (full replace).
+
+## US-89 — Custom expiration warnings, list, nav **(Must / Should)**
+
+**As** an Owner or Admin  
+**I need** custom dates to warn like insurance/inspection/road tax  
+**So that** I act before those items lapse.
+
+**Acceptance**
+
+- **Given** a custom `expires_on` is within 30 days or past (UTC)  
+  **When** I read the vehicle  
+  **Then** `warnings` includes `{ field: "custom:<id>", state: "due_soon"|"expired" }`.
+
+- **Given** only `registration_on` is near/past and customs are fine  
+  **When** I read the vehicle  
+  **Then** registration still does not warn.
+
+- **Given** custom dates only are urgent (Should)  
+  **When** clients compute Vehicles nav urgency  
+  **Then** custom `expires_on` may participate in red/orange worst-wins with built-in sections.
+
+## US-90 — Custom expirations authz and tenancy **(Must)**
+
+**As** the product  
+**I need** custom expirations scoped like other vehicle fields  
+**So that** tenancy stays safe.
+
+**Acceptance**
+
+- **Given** another company’s vehicle id  
+  **When** I try to read or write custom expirations  
+  **Then** not_found / no leak.
+
+- **Given** Individual Owner  
+  **When** I manage custom expirations on Details  
+  **Then** allowed (same as other Details fields); Images/Handovers still denied.
 

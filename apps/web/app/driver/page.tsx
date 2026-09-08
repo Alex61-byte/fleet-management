@@ -127,6 +127,16 @@ export default function DriverHomePage() {
             }
             badge={activeOut ? "Out open" : travel ? "Ready" : null}
           />
+          <DriverHubLink
+            href="/driver/daily-usage"
+            title="Daily usage"
+            description={
+              travel
+                ? "Log date, places, distances, and times for today’s use."
+                : "Select next travel first, then log daily usage."
+            }
+            badge={travel ? "Ready" : null}
+          />
         </nav>
       )}
 

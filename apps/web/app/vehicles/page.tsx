@@ -65,6 +65,7 @@ export default function VehiclesPage() {
                 aria-label={warningA11y(
                   `${vehicleLabel(v)}, ${v.license_plate}${v.has_side_images ? ", has photos" : ""}`,
                   v.warnings,
+                  v.custom_expirations,
                 )}
               >
                 <span className={`${themeClasses.label} inline-flex flex-wrap items-center gap-1`}>
@@ -80,7 +81,7 @@ export default function VehiclesPage() {
                     {odometerUnitLabel(v.mileage_unit ?? "km")}
                   </span>
                 ) : null}
-                <ExpiryBadges warnings={v.warnings} />
+                <ExpiryBadges warnings={v.warnings} customExpirations={v.custom_expirations} />
               </Link>
             </li>
           ))}

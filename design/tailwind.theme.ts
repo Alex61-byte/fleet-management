@@ -101,6 +101,8 @@ export const fleetTheme = {
     "mark-public": "20px",
     "mark-public-width": "40px",
     "nav-icon": "20px",
+    "notif-menu": "480px",
+    "notif-badge-min": "18px",
     "hero-map": "320px",
     "vehicle-side-slot": "176px",
     "vehicle-side-grid-max": "400px",
@@ -232,6 +234,36 @@ export const themeClasses = {
   content: "flex-1 min-w-0 bg-canvas",
   contentPadCompact: "px-content-gutter-compact py-3",
   contentPadComfortable: "px-content-gutter-comfortable py-2",
+  /**
+   * US-68–US-76 Owner/Admin Global Header — sticky main-column strip.
+   * Product lockup lives here (not sidebar). Notification bell + menu.
+   */
+  globalHeader:
+    "sticky top-0 z-20 h-app-bar w-full bg-surface-raised border-b border-divider px-content-gutter-compact flex flex-row items-center justify-between gap-2 shrink-0",
+  globalHeaderLockup: "flex flex-row items-center gap-1.5 min-h-hit min-w-0",
+  globalHeaderProduct:
+    "text-title font-semibold text-text-primary tracking-tight",
+  globalHeaderActions: "flex flex-row items-center gap-1 shrink-0",
+  /** Sidebar top after US-69: role only — no mark/wordmark */
+  sidebarRole:
+    "h-app-bar px-2 flex flex-row items-center text-caption text-nav-fg-muted",
+  notifButton: "relative text-text-primary",
+  notifBadge:
+    "absolute -top-0.5 -right-0.5 min-h-notif-badge-min min-w-notif-badge-min px-0.5 rounded-full bg-danger text-text-inverse text-caption font-semibold font-tabular tabular-nums leading-none flex items-center justify-center",
+  notifMenuPopover:
+    "z-30 w-notif-menu max-w-[min(480px,calc(100vw-2rem))] bg-surface-raised border border-border rounded-lg shadow-overlay overflow-hidden flex flex-col",
+  notifMenuSheet:
+    "w-full bg-surface-raised border border-border rounded-t-lg shadow-overlay overflow-hidden flex flex-col",
+  notifMenuHeader:
+    "h-app-bar px-2 flex flex-row items-center justify-between gap-1 border-b border-divider shrink-0",
+  notifMenuTitle: "font-sans text-label font-semibold text-text-primary",
+  notifMenuBody: "flex-1 min-h-0 overflow-y-auto flex flex-col",
+  notifMenuFooter:
+    "px-2 py-1.5 border-t border-divider shrink-0",
+  notifMenuItem:
+    "min-h-table-row w-full px-3 py-2 flex flex-col items-start gap-0.5 text-left border-b border-divider bg-surface-raised",
+  notifMenuItemHover: "bg-hover",
+  notifMenuItemFocus: "shadow-ring",
   pageHeader:
     "min-h-page-header flex flex-row items-start justify-between gap-2 pb-2 border-b border-divider",
   pageTitle: "font-sans text-page font-semibold text-text-primary tracking-tight",
@@ -296,6 +328,8 @@ export const themeClasses = {
   buttonFocus: "shadow-ring",
   input:
     "min-h-hit px-1.5 rounded-md bg-surface-raised border border-border text-body text-text-primary",
+  /** Web native <select>: hide UA arrow; reserve end padding for custom chevron at right-0.5 (4px). */
+  selectInput: "appearance-none pr-2.5",
   inputHover: "bg-surface-sunken border-border",
   inputFocus: "border-focus shadow-ring",
   inputError: "border-danger",
@@ -331,6 +365,10 @@ export const themeClasses = {
     "min-h-hit px-2 font-sans text-label font-semibold text-text-primary border-b-2 border-brand -mb-px rounded-t-md",
   vehicleFormTabPanel: "flex flex-col gap-2 pt-2",
   vehicleFormDetails: "flex flex-col gap-2 max-w-[400px]",
+  /** US-86–US-90 custom expirations on Details (after built-in dates) */
+  vehicleCustomExpirations: "flex flex-col gap-2",
+  vehicleCustomExpirationList: "flex flex-col gap-2",
+  vehicleCustomExpirationRow: "flex flex-col gap-2 w-full",
   /** US-35–US-39 + US-41–US-44 vehicle side appearance — Owner/Admin create/edit only */
   vehicleSideSection: "flex flex-col gap-2",
   vehicleSideGrid:

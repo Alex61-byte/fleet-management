@@ -28,9 +28,15 @@ export default function OwnerHome() {
     void load();
   }, []);
 
+  const individual = me?.account_kind === "individual";
+
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-2 gap-2">
-      <Text className="font-semibold text-title text-text-primary">Fleet</Text>
+      <Text className="font-semibold text-title text-text-primary">Home</Text>
+      {individual ? (
+        <Text className="text-caption text-text-secondary">Owner · personal vehicles</Text>
+      ) : null}
+      <PrimaryLink href="/(owner)/vehicles/new" title="Add vehicle" />
       {offline ? <Banner tone="warning">You are offline.</Banner> : null}
       {loading ? (
         <>
@@ -45,15 +51,17 @@ export default function OwnerHome() {
         </>
       ) : home ? (
         <>
-          <Link href="/(owner)/drivers" asChild>
-            <Pressable
-              className="bg-surface-raised border border-border rounded-md shadow-sm p-2 min-h-hit"
-              accessibilityLabel={`Drivers, ${home.driver_count}`}
-            >
-              <Text className="text-caption text-text-secondary">Drivers</Text>
-              <Text className="text-display font-semibold text-text-primary">{home.driver_count}</Text>
-            </Pressable>
-          </Link>
+          {!individual ? (
+            <Link href="/(owner)/drivers" asChild>
+              <Pressable
+                className="bg-surface-raised border border-border rounded-md shadow-sm p-2 min-h-hit"
+                accessibilityLabel={`Drivers, ${home.driver_count}`}
+              >
+                <Text className="text-caption text-text-secondary">Drivers</Text>
+                <Text className="text-display font-semibold text-text-primary">{home.driver_count}</Text>
+              </Pressable>
+            </Link>
+          ) : null}
           <Link href="/(owner)/vehicles" asChild>
             <Pressable
               className="bg-surface-raised border border-border rounded-md p-2 min-h-hit"
@@ -63,7 +71,7 @@ export default function OwnerHome() {
               <Text className="text-display font-semibold text-text-primary">{home.vehicle_count}</Text>
             </Pressable>
           </Link>
-          {me?.role === "owner" ? (
+          {!individual && me?.role === "owner" ? (
             <Link href="/(owner)/more/admins" asChild>
               <Pressable className="bg-surface-raised border border-border rounded-md p-2 min-h-hit">
                 <Text className="font-semibold text-title text-text-primary">Admins</Text>
@@ -73,10 +81,7 @@ export default function OwnerHome() {
           ) : null}
           <Text className="font-semibold text-title text-text-primary">Due soon or expired</Text>
           {home.expiring_vehicles.length === 0 ? (
-            <>
-              <Text className="text-body text-text-primary">No vehicles due soon.</Text>
-              <PrimaryLink href="/(owner)/vehicles/new" title="Add vehicle" />
-            </>
+            <Text className="text-body text-text-primary">No vehicles due soon.</Text>
           ) : (
             home.expiring_vehicles.map((v) => (
               <Link key={v.id} href={`/(owner)/vehicles/${v.id}`} asChild>
@@ -91,7 +96,7 @@ export default function OwnerHome() {
               </Link>
             ))
           )}
-          {home.driver_count === 0 ? (
+          {!individual && home.driver_count === 0 ? (
             <PrimaryLink href="/(owner)/drivers/new" title="Add driver" />
           ) : null}
         </>

@@ -9,7 +9,7 @@ import { useAuth } from "../../../lib/auth";
 
 export default function EditDriver() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { offline } = useAuth();
+  const { offline, me } = useAuth();
   const router = useRouter();
   const [driver, setDriver] = useState<Driver | null>(null);
   const [email, setEmail] = useState("");
@@ -24,6 +24,10 @@ export default function EditDriver() {
   const [resendMsg, setResendMsg] = useState("");
 
   useEffect(() => {
+    if (me?.account_kind === "individual") {
+      setDenied(true);
+      return;
+    }
     void (async () => {
       try {
         const d = await api.getDriver(String(id));
@@ -34,7 +38,19 @@ export default function EditDriver() {
         else setError("Could not load driver.");
       }
     })();
-  }, [id]);
+  }, [id, me?.account_kind]);
+
+  if (me?.account_kind === "individual") {
+    return (
+      <View className="flex-1 bg-surface p-2 gap-2">
+        <Stack.Screen options={{ title: "Drivers" }} />
+        <Text className="font-semibold text-title text-text-primary">Not available</Text>
+        <Text className="text-body text-text-secondary">
+          Driver management is only available on company accounts.
+        </Text>
+      </View>
+    );
+  }
 
   async function resendInvite() {
     if (!driver) return;

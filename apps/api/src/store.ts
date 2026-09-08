@@ -1,4 +1,6 @@
 import type {
+  AccountKind,
+  DriverDailyUsage,
   DriverTravelSelection,
   Principal,
   Role,
@@ -32,6 +34,7 @@ export type ResetRow = {
 
 export type CompanyInsert = {
   id: string;
+  accountKind: AccountKind;
   registrationNumber: string;
   vatNumber: string;
   address: string;
@@ -40,6 +43,7 @@ export type CompanyInsert = {
 export interface Store {
   withTransaction<T>(fn: (s: Store) => Promise<T>): Promise<T>;
   insertCompany(company: CompanyInsert): Promise<void>;
+  findCompany(id: string): Promise<CompanyInsert | undefined>;
   insertPrincipal(p: Principal): Promise<void>;
   findPrincipalByEmail(email: string): Promise<Principal | undefined>;
   findPrincipalById(id: string): Promise<Principal | undefined>;
@@ -79,6 +83,9 @@ export interface Store {
   listHandoverImages(handoverId: string): Promise<VehicleHandoverImage[]>;
   countHandoverImages(handoverId: string): Promise<number>;
   voidOpenOutsForDriver(driverId: string): Promise<void>;
+  insertDailyUsage(row: DriverDailyUsage): Promise<void>;
+  listDailyUsageForDriver(driverId: string, companyId: string): Promise<DriverDailyUsage[]>;
+  deleteDailyUsageForDriver(driverId: string): Promise<void>;
 }
 
 export class MemoryStore implements Store {
@@ -92,6 +99,7 @@ export class MemoryStore implements Store {
   driverTravel = new Map<string, DriverTravelSelection>();
   handovers = new Map<string, VehicleHandover>();
   handoverImages = new Map<string, VehicleHandoverImage>();
+  dailyUsages = new Map<string, DriverDailyUsage>();
 
   async withTransaction<T>(fn: (s: Store) => Promise<T>): Promise<T> {
     return fn(this);
@@ -99,6 +107,11 @@ export class MemoryStore implements Store {
 
   async insertCompany(company: CompanyInsert): Promise<void> {
     this.companies.set(company.id, { ...company });
+  }
+
+  async findCompany(id: string): Promise<CompanyInsert | undefined> {
+    const row = this.companies.get(id);
+    return row ? { ...row } : undefined;
   }
 
   async insertPrincipal(p: Principal): Promise<void> {
@@ -220,21 +233,35 @@ export class MemoryStore implements Store {
   }
 
   async insertVehicle(v: Vehicle): Promise<void> {
-    this.vehicles.set(v.id, { ...v });
+    this.vehicles.set(v.id, {
+      ...v,
+      customExpirations: v.customExpirations.map((row) => ({ ...row })),
+    });
   }
 
   async updateVehicle(v: Vehicle): Promise<void> {
-    this.vehicles.set(v.id, { ...v });
+    this.vehicles.set(v.id, {
+      ...v,
+      customExpirations: v.customExpirations.map((row) => ({ ...row })),
+    });
   }
 
   async findVehicle(id: string, companyId: string): Promise<Vehicle | undefined> {
     const v = this.vehicles.get(id);
     if (!v || v.companyId !== companyId) return undefined;
-    return { ...v };
+    return {
+      ...v,
+      customExpirations: v.customExpirations.map((row) => ({ ...row })),
+    };
   }
 
   async listVehicles(companyId: string): Promise<Vehicle[]> {
-    return [...this.vehicles.values()].filter((v) => v.companyId === companyId);
+    return [...this.vehicles.values()]
+      .filter((v) => v.companyId === companyId)
+      .map((v) => ({
+        ...v,
+        customExpirations: v.customExpirations.map((row) => ({ ...row })),
+      }));
   }
 
   async counts(companyId: string): Promise<{ drivers: number; vehicles: number }> {
@@ -361,6 +388,26 @@ export class MemoryStore implements Store {
         h.status = "voided";
         h.voidedAt = now;
       }
+    }
+  }
+
+  async insertDailyUsage(row: DriverDailyUsage): Promise<void> {
+    this.dailyUsages.set(row.id, { ...row });
+  }
+
+  async listDailyUsageForDriver(
+    driverId: string,
+    companyId: string,
+  ): Promise<DriverDailyUsage[]> {
+    return [...this.dailyUsages.values()]
+      .filter((u) => u.driverId === driverId && u.companyId === companyId)
+      .map((u) => ({ ...u }))
+      .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+  }
+
+  async deleteDailyUsageForDriver(driverId: string): Promise<void> {
+    for (const [id, row] of this.dailyUsages) {
+      if (row.driverId === driverId) this.dailyUsages.delete(id);
     }
   }
 }

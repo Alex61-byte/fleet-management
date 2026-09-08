@@ -1,14 +1,14 @@
 # Product mark — Fleet registration plate
 
 **Scope:** visual identity only. Copy stays **Fleet** / **Fleet operations**.  
-**Sizes:** `brandMark` 24×24 (sidebar, mobile app bar); `brandMarkAuth` 32×32 (auth); `brandMarkPublic` 40×20 (public landing header only).  
+**Sizes:** `brandMark` 24×24 (OA Global Header, mobile app bars); `brandMarkAuth` 32×32 (auth); `brandMarkPublic` 40×20 (public landing header only). **OA web sidebar does not show the mark** after US-69 — [global-header.md](global-header.md).  
 **Implementation:** SVG (web) / `react-native-svg` (mobile). Do not stack spans.
 
 Two **assets**, not two products:
 
 | Variant | Where | Shield |
 | --- | --- | --- |
-| **Shielded** (canonical) | Auth card, web sidebar, mobile app bar | Navy `mark-fill` + `mark-glyph` keyline. **Unchanged.** |
+| **Shielded** (canonical) | Auth card, OA Global Header, mobile app bars (OA + driver) | Navy `mark-fill` + `mark-glyph` keyline. **Unchanged geometry.** |
 | **Public header** (US-19) | [landing.md](landing.md) header only | **No** navy shield, **no** 22×22 keyline. Licence plate only. |
 
 ## Name and intent
@@ -22,8 +22,9 @@ Personality: disciplined, operational, trustworthy B2B ops. Not marketing, not c
 | Surface | Density / size | Contrast |
 | --- | --- | --- |
 | Auth card (`surface-raised`) | Comfortable lockup, mark 32 | Navy `mark-fill` shield on the card. Keyline is `mark-glyph` (white); on a light card it is a hairline rim, not a second identity. |
-| Web sidebar (`sidebar` = navy.900 light / navy.950 dark) | Compact, mark 24 | Navy-on-navy would fail. **Do not invert fill.** The 1px `mark-glyph` keyline is the contrasting frame (white ring on the rail). Collapsed sidebar: mark only, tooltip “Fleet”. |
-| Mobile app bar (`surface-raised`) | Comfortable, mark 24 | Same **shielded** asset as auth. |
+| OA Global Header (`surface-raised`) | Compact, mark 24 | Primary OA product lockup (US-69). Shield on raised strip like auth. |
+| Web sidebar | — | **No mark** (role-only strip). Do not keep dual lockup. |
+| Mobile app bar (`surface-raised`) | Comfortable, mark 24 | Same **shielded** asset as auth / Global Header. |
 | Public landing header (`surface-raised`) | Compact, unshielded plate 40×20 | **No navy shield.** Plate enamel `mark-plate-face` + navy `mark-fill` ink/edge. See public-header variant below. |
 
 Light and dark use the same semantic fills. Reduce-motion: static. Decorative mark: `aria-hidden="true"`. Accessible name is the wordmark **Fleet**.
@@ -105,7 +106,7 @@ Mobile: `Svg` `viewBox="0 0 24 24"` with `Rect` / `Path` / `Circle` matching the
 
 ## Lockup (shielded — unchanged)
 
-Horizontal: mark + 12px gap + stack (wordmark **Fleet**; caption **Fleet operations** on auth only via `authCaptionLockup`). Sidebar omits “Fleet operations”; `sidebarMeta` is role. Auth uses `brandMarkAuth`. Sidebar and mobile app bar use `brandMark`.
+Horizontal: mark + 12px gap + stack (wordmark **Fleet**; caption **Fleet operations** on auth only via `authCaptionLockup`). OA sidebar has **no** lockup (`sidebarMeta` = role only). Auth uses `brandMarkAuth`. OA Global Header and mobile app bars use `brandMark`.
 
 Public header lockup: `brandMarkPublic` + `publicWordmark` **Fleet** only (no “Fleet operations” in the header). Caption may appear in the landing **body**. Accessible name **Fleet**; mark `aria-hidden`.
 

@@ -60,4 +60,10 @@ export const errors = {
       "handover_wrong_driver",
       "Only the driver who took the vehicle out can hand it back in.",
     ),
+  dailyUsageNoActiveTravel: () =>
+    new AppError(
+      409,
+      "daily_usage_no_active_travel",
+      "Select a vehicle for next travel before logging daily usage.",
+    ),
 };

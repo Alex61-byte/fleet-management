@@ -1,6 +1,7 @@
 # Public landing (web)
 
-**Stories:** US-17, US-18, US-19, US-20, US-21, US-22, **US-23, US-24, US-25, US-26**  
+**Stories:** US-17, US-18, US-19, US-20, US-21, US-22, **US-23, US-24, US-25, US-26**, **US-85** (Should — dual create entry)  
+**Rules:** 117–120 (account kinds); grandfather existing = company is data (US-84), not landing UI  
 **Surface:** Web compact only. **No** mobile marketing landing.  
 **Purpose:** Unsigned-in identity + entry. Not a marketing site. Not Owner/Admin home. No vehicle records, driver admin, or due-soon.  
 **Chrome:** [Public landing chrome](_patterns.md) — **not** auth canvas, **not** authenticated shell.
@@ -14,7 +15,7 @@ Route (`/` vs `/landing`) is Architect. This spec is the unsigned-in web entry o
 | Density | Web compact. Header height `h-app-bar` (56px). Body gutter `contentPadCompact` (`px-content-gutter-compact`). |
 | Personality | Ops console entry (Workday / ServiceNow / Linear ops). One raised-plane language. **This page only:** a hero region + one description panel + a **static** street-map **image**. Still no neon, gradient overlay, glassmorphism, testimonials, pricing, KPI tiles, tables, or feature grid. |
 | Identity | Product **Fleet** (sentence case). Caption **Fleet operations** lives in the **hero copy**, not in the header, not as a second identity block. Do not shout `FLEET`. Do not invent slogans. |
-| Actions | **Sign in** (`buttonSecondary`) then **Create company** (`buttonPrimary`) — **header only**. Do not duplicate a hero CTA pair (US-23). |
+| Actions | **Header only** (US-23 — no hero CTA pair). **Sign in** (`buttonSecondary`) then **one** create primary. **US-85:** create must reach **both** Company and Individual. **Design decision:** single header primary **Create account** → [account-kind.md](account-kind.md) (chooser). Do **not** put two primary creates in the header (crowding + dual-primary). Optional later: split **Create company** / **Create individual** as secondary+primary only if Architect forbids a chooser route — prefer chooser. |
 
 User request **overrides** prior “no hero / no illustrations” **for this landing page only**. First-slice “maps out of visual scope” still means **ops tracking UI**. The static landing image is in scope here; live GPS / slippy maps are not.
 
@@ -30,7 +31,7 @@ flowchart TB
     lockup[publicLockup brandMarkPublic + Fleet]
     actions[publicHeaderActions]
     signin[buttonSecondary Sign in]
-    create[buttonPrimary Create company]
+    create[buttonPrimary Create account]
     lockup --- actions
     actions --> signin
     actions --> create
@@ -65,7 +66,7 @@ flowchart TB
 | Page | `pagePublic` — `bg-canvas`, full viewport. No sidebar. No Owner nav. |
 | Header | `publicHeader`: sticky `top-0`, `h-app-bar` (56px), full width. `bg-surface-raised` + `border-b border-divider` + 2px top `border-t-brand-bar border-t-brand-accent` (same accent language as `authCard` / `sidebar` — not a third bar). Stay visible while on this page (US-18). Reduce-motion: **no** hide-on-scroll. **Unchanged** from US-17–22. |
 | Header left | `publicLockup`: unshielded plate `brandMarkPublic` (`aria-hidden`) + `publicWordmark` **Fleet**. Accessible name of the lockup is **Fleet**. Not a link to a marketing home; this page **is** the public entry. |
-| Header right | `publicHeaderActions`: **Sign in** then **Create company**. Secondary then primary. Both `min-h-hit` (44px). No Vehicles / Drivers / due-soon. Header CTAs stay header-only (rules 30–37). |
+| Header right | `publicHeaderActions`: **Sign in** then **Create account**. Secondary then primary. Both `min-h-hit` (44px). **Create account** opens kind chooser (US-77/US-85) — not Company form only. No Vehicles / Drivers / due-soon. Header CTAs stay header-only (rules 30–37). |
 | Body | `publicBody` `bg-canvas`. Compact gutter. Stack: optional offline banner → **hero** → **one** description `panel`. Not a full-bleed ops table canvas. Not a max-960 marketing column of features. **No records** (US-26). |
 | Hero | `publicHero` — **one** region (US-23). Existing identity **Fleet** / **Fleet operations** **moves into the hero**. Do **not** keep a duplicate identity block **and** a hero with the same words. No second CTA row. |
 | Hero copy | `publicHeroCopy`. Headline **Fleet** (`publicHeroTitle`, **h1**). Supporting line **Fleet operations** (`publicHeroCaption` — existing caption, not a new slogan). |
@@ -103,7 +104,7 @@ flowchart TB
 | Country band | `brand-accent` | `brandMarkAccent` |
 | Public mark size | `mark-public` × `mark-public-width` | `brandMarkPublic` |
 | Sign in | secondary button | `buttonSecondary` `buttonSecondaryHover` `buttonFocus` |
-| Create company | primary button | `buttonPrimary` `buttonPrimaryHover` `buttonFocus` |
+| Create account | primary button | `buttonPrimary` `buttonPrimaryHover` `buttonFocus` |
 | Hero title | `text-primary` | `publicHeroTitle` |
 | Hero caption | `text-secondary` | `publicHeroCaption` |
 | Map frame | `surface-raised` + `border` | `publicHeroMap` |
@@ -152,7 +153,7 @@ Decorative / public-entry visual. **Not** live GPS. **Not** an interactive map p
 | Screen | Fleet |
 | Header lockup | Fleet (mark `aria-hidden="true"`) |
 | Sign in | Sign in |
-| Create company | Create company |
+| Create account | Create account |
 | Hero heading | Fleet (h1) |
 | Map image | Static street map |
 | Map credit | Map data © OpenStreetMap (if shown) |
@@ -174,12 +175,12 @@ Decorative / public-entry visual. **Not** live GPS. **Not** an interactive map p
 - Hero h1: **Fleet**
 - Hero supporting line: **Fleet operations**
 - Description h2: **What Fleet is for**
-- Description body (first-slice facts only — not slogans): **Create a company. The first person is the Owner. Owners and Admins manage drivers and vehicles for that company. Drivers use mobile. Vehicles keep license plate, insurance, inspection, country of registration, and road tax dates. Fleet warns when those dates are due soon or expired.**
+- Description body (first-slice facts only — not slogans): **Create a company or a personal account. A company Owner is first; Owners and Admins manage drivers and vehicles for that company. An individual Owner manages their own vehicles only. Drivers are invited by companies. Vehicles keep license plate, insurance, inspection, country of registration, and road tax dates. Fleet warns when those dates are due soon or expired.**
 - Map alt: **Static street map**
 - Map credit (Should, OSM-derived): **Map data © OpenStreetMap**
 - Do **not** mention live tracking, maps as a product, dispatch, trips, or geofence.
 - Do not add feature, pricing, or slogan lines.
-- Header actions: **Sign in** → existing [sign-in.md](sign-in.md) (US-20 / US-02). **Create company** → existing [sign-up.md](sign-up.md) (US-21 / US-01).
+- Header actions: **Sign in** → [sign-in.md](sign-in.md) (US-20 / US-02). **Create account** → [account-kind.md](account-kind.md) (US-85 / US-77); then Company → [sign-up.md](sign-up.md) (US-01) or Individual → [individual-sign-up.md](individual-sign-up.md) (US-78).
 
 ## Forbidden on this page
 

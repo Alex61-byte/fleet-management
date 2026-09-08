@@ -1,10 +1,11 @@
 # Drivers (list, create, edit)
 
-**Stories:** US-07, US-08, US-09a (Should), US-16 (Should), US-27 (Must)  
-**Density:** Web compact **table**; mobile comfortable **rows**. Owner/Admin.  
+**Stories:** US-07, US-08, US-09a (Should), US-16 (Should), US-27 (Must); **US-83** Company-only; **US-82** Individual denied  
+**Rules:** 122, A85; E75, E77  
+**Density:** Web compact **table**; mobile comfortable **rows**. **Company** Owner/Admin only.  
 **Purpose:** Company driver profiles. **Create with email only** (invite via Resend — **no** temporary password). Edit profile. **Should:** resend invite while pending (US-09a); disable/enable login without delete (US-16). **Must:** hard-delete after confirm (US-27).  
-**Chrome:** Authenticated shell. Sidebar **Drivers** selected. No search (not in BA).  
-**Parity (A16):** Same list / create / edit / disable / resend / hard-delete flows on web and Owner/Admin mobile. Confirm sheet chrome differs by platform; copy, hierarchy, and states match.
+**Chrome:** Authenticated **Company** management shell. Sidebar / tab **Drivers** selected. No search (not in BA). **Individual Owner:** no nav entry; deep link → [denied.md](denied.md) E77 — do not render roster.  
+**Parity (A16):** Same list / create / edit / disable / resend / hard-delete flows on web and Company Owner/Admin mobile. Confirm sheet chrome differs by platform; copy, hierarchy, and states match.
 
 ## List — web
 

@@ -4,10 +4,10 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 
 ## Rules
 
-1. **Company creation:** Completing sign-up with **email**, **password**, **company registration number**, **VAT number**, and **address** creates one **company** (with those company fields stored) and one **Owner** who can sign in with that email and password **(A29)**.
-2. **Roles this slice:** Only **Owner** and **Admin** (company users) and **Driver** (driver profile). No dispatcher, no mechanic.
-3. **Who creates whom:** Sign-up creates the first Owner. **Owner** creates additional **Admins**. **Owner and Admin** create and manage **drivers** (invite) and **fleet**.
-4. **Surfaces:** Owner/Admin may use **web** and **mobile**. **Drivers** may use **web and mobile** for **invite accept / set password**, subsequent login, and **minimal driver home** (including **next-travel vehicle selection + odometer**). Drivers still do **not** use Owner/Admin management UI (fleet create/edit, driver admin, Admins, TOTP settings).
+1. **Company creation (Company path):** Completing **Company** sign-up with **email**, **password**, **company registration number**, **VAT number**, and **address** creates one **company** tenant (`account_kind = company`, with those company fields stored) and one **Owner** who can sign in with that email and password **(A29)**. See also **117–120** for account kinds and Individual create.
+2. **Roles this slice:** **Owner** and **Admin** (company users), **Driver** (company driver profile), and **Individual Owner** (Owner on `account_kind = individual`). Admin and Driver **only** on Company tenants. No dispatcher, no mechanic.
+3. **Who creates whom:** **Company** sign-up creates first Company Owner. **Individual** sign-up creates sole Individual Owner. **Company Owner** creates Admins. **Company Owner and Admin** create/manage drivers and company fleet. **Individual Owner** manages **own** vehicles only—**not** drivers or Admins **(A84–A86)**.
+4. **Surfaces:** Owner/Admin may use **web** and **mobile**. **Drivers** may use **web and mobile** for **invite accept / set password**, subsequent login, and **minimal driver home** (including **next-travel vehicle selection + odometer**, **Handover Out/In**, and **Daily usage**). Drivers still do **not** use Owner/Admin management UI (fleet create/edit, driver admin, Admins, TOTP settings).
 5. **One mobile product:** Same mobile app; after login the experience is **driver** or **Owner/Admin** by role. Not two store listings.
 6. **Login identity uniqueness:** Each login email is unique across login identities **(A6)**.
 7. **Owner/Admin MFA:** TOTP via authenticator app is **optional** per Owner/Admin user. No SMS. Drivers have **no MFA** in this slice.
@@ -20,9 +20,9 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 14. **Unknown email cannot continue:** A person whose email is **not** a pending invited driver with a valid accept path **must not** complete invite accept or password setup on **web or mobile** **(A25)**. Normal sign-in with unknown email still fails (E2).
 15. **Disable driver login:** Owner/Admin **should** be able to disable a driver’s ability to sign in **without deleting** the driver profile **(Should, A7)**. Disable is **not** hard delete **(25–26)**. Pending invite does not bypass disable: disabled driver cannot accept or sign in.
 16. **Last Owner:** An Owner **cannot** be removed/deleted if they are the last Owner for that company **(A5)**.
-17. **Vehicle record:** A vehicle belongs to the company. Fields in this slice: **make** and **model** (Admin-entered free text, not a catalog), **license plate**, optional **mileage** (current odometer reading; rules **64–71**), **insurance** date(s), **inspection** date(s) the Admin says are needed, **country of registration**, **road tax** date(s). Country is a **value the Admin enters**, not a catalog of laws **(A12)**. Make and model are both required on create.
+17. **Vehicle record:** A vehicle belongs to the company. Fields in this slice: **make** and **model** (required free-text strings on the API; clients may offer a static pick list with **Other** free text — not a server catalog), **license plate**, optional **mileage** (current odometer reading; rules **64–71**), **insurance** date(s), **inspection** date(s) the Admin says are needed, **country of registration**, **road tax** date(s). Country is a **value the Admin enters**, not a catalog of laws **(A12)**. Make and model are both required on create.
 18. **Compliance storage:** The product stores the dates the Admin enters. **No** built-in legal catalog. **No** compliance **document** file upload (insurance/inspection/tax/registration) **(A2)**. **Vehicle side appearance images** are separate and governed by rules **52–60** **(A35–A40)**.
-19. **Expiry warning:** If **insurance, inspection, or road tax** date is **within 30 days** of today or **already past**, the product **warns** on that vehicle/date **(A1)**. **`registration_on` is not warned** (optional stored date only; not compliance expiry).
+19. **Expiry warning:** If **insurance, inspection, or road tax** date — or a **custom expiration** `expires_on` — is **within 30 days** of today or **already past**, the product **warns** on that vehicle/date **(A1, A95)**. **`registration_on` is not warned** (optional stored date only; not compliance expiry). Custom warning field key: `custom:<id>` ([ADR-019](adr/ADR-019-vehicle-custom-expirations.md)).
 20. **Unauthorized — driver:** A signed-in **driver** cannot open Owner/Admin screens (company user management, creating Admins, fleet setup/edit, driver-profile administration).
 21. **Unauthorized — not signed in:** A person who is not signed in cannot open fleet records or driver administration. (Invite accept is a dedicated unauthenticated-or-pre-auth flow; it does not grant fleet/admin access.)
 22. **Company isolation:** Owner/Admin only see and change **their company’s** drivers and vehicles **(A8)**.
@@ -33,11 +33,11 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 27. **Irreversible:** Hard delete **cannot** be undone in this slice. No restore of the same profile **(A17)**. Re-adding the person means **create driver** again **(US-07)** (new invite).
 28. **Sessions after delete:** After hard delete, that person **cannot** remain signed in as that driver and **cannot** complete a new sign-in as that deleted identity.
 29. **Email after delete:** When the driver identity is removed, that **email is no longer a login identity** and **may** be used on a later create (driver/Admin/Owner per existing uniqueness **A6**), subject to normal create rules.
-30. **No vehicle cascade on driver delete:** Hard delete does **not** create, change, or delete vehicle records. Active next-travel selections for that driver are cleared. Delete does not cascade fleet master data **(A19)**.
+30. **No vehicle cascade on driver delete:** Hard delete does **not** create, change, or delete vehicle records. Active next-travel selections for that driver are cleared. That driver’s **Daily usage** rows are **removed**. Delete does not cascade fleet master data **(A19, A69)**.
 31. **Who may delete:** **Owner and Admin** may hard-delete drivers in their company. Drivers and unsigned-in users may not. Cross-company delete has no effect **(A8, 22)**.
 32. **Disabled then delete:** A driver with login already disabled **may** still be hard-deleted.
 33. **Edit vehicle prepopulate:** Opening **edit** for a company vehicle shows current stored make, model, license plate, country of registration, mileage (empty if null), and each section date (empty control only if that date is null) **(A21)**. **Create** does not prepopulate from another vehicle.
-34. **Vehicles nav urgency:** On Owner/Admin **web side nav** and **mobile tab bar**, the **Vehicles** item uses fleet-wide worst-wins over non-null **`insurance_on`, `inspection_on`, `road_tax_on`** only (not `registration_on`), UTC calendar `daysUntil` per ADR-004 **(A20, A22)**:
+34. **Vehicles nav urgency:** On Owner/Admin **web side nav** and **mobile tab bar**, the **Vehicles** item uses fleet-wide worst-wins over non-null **`insurance_on`, `inspection_on`, `road_tax_on`** and **Should (US-89)** each custom `expires_on` (not `registration_on`), UTC calendar `daysUntil` per ADR-004 / ADR-019 **(A20, A22, A97)**:
     - **Red** if any section has **`daysUntil &lt; 7`** (0–6 days left or overdue).
     - **Orange** if no red condition and any section has **`daysUntil = 7`**.
     - **None** otherwise (all null, or all `daysUntil &gt; 7`).
@@ -72,7 +72,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 
 | ID | Situation | Expected business outcome |
 | --- | --- | --- |
-| E1 | Sign-up email already used | Company/Owner is **not** created; person is told they cannot use that email. |
+| E1 | Sign-up email already used | Company **or Individual** Owner is **not** created; person is told they cannot use that email. |
 | E2 | Sign-in with wrong email/password | Access denied; not signed in. |
 | E3 | Owner/Admin TOTP enabled, code missing or wrong | Sign-in not completed. |
 | E4 | *(Retired)* Driver uses temp password after change. **Superseded** by invite model (no temp password). |
@@ -178,4 +178,167 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | E56 | Cross-company vehicle/handover id | Not found / no change. |
 | E57 | Edit/delete past handover | Not offered; rejected if attempted. |
 | E58 | Storage failure on damage image during create | Fail closed; no handover with missing/broken image refs for the submitted set. |
+
+87. **Daily usage (Must):** A **Daily usage** record is a driver-authored log of vehicle use for a **calendar day** against the driver’s **active next-travel** vehicle **(A57)**.
+88. **Eligibility (Must):** Only a signed-in **driver** with usable password and an **active next-travel** selection may **create** Daily usage. Vehicle = that selection’s vehicle, same company **(A58, 41–46)**. No next-travel → no create **(E59)**. Owner/Admin/unsigned-in cannot create **(E60)**.
+89. **Required fields (Must):** **usage_date**, **start_place**, **start_distance**, **start_time**, **end_place**, **end_distance**, **end_time**. All required. Missing/invalid → reject; no partial row **(A59, E61)**.
+90. **Units (Must):** Start/end distance unit from vehicle **country of registration** (rules **43 / A34**). No client unit choice. Store **value + unit** at write **(A60)**.
+91. **Distance values (Must):** Start and end distance ≥ 0, max **1** decimal. **end_distance ≥ start_distance**. If `vehicle.mileage` is set, **start_distance ≥ vehicle.mileage** **(A61, E62)**. Daily usage **must not** update `vehicle.mileage` **(A62, 69 extended)**.
+92. **Date and times (Must):** `usage_date` is a **local calendar date** (default **today** local on new form). `start_time` / `end_time` are **local wall-clock** times on that date; **end_time ≥ start_time** **(A63, E63)**. Product does not require a timezone control this slice.
+93. **Multiplicity (Must):** **Multiple** Daily usage rows per driver per date are **allowed** **(A64)**.
+94. **Who reads (Must):** Driver may **list own** Daily usage only (newest first). **No** Owner/Admin Daily usage history UI this slice **(A65, E64)**. Drivers do not see other drivers’ entries.
+95. **Immutability (Must):** No edit or delete of Daily usage after successful create this slice **(A66, E65)**.
+96. **Company isolation (Must):** Create/list scoped to caller’s company and principal **(A8, E66)**.
+97. **Surfaces (Must):** Driver Daily usage on **web and mobile** minimal driver experience; entry from driver **home hub** (opt-in task screen; not auto-opened on login) **(A67)**.
+98. **Offline (Must):** When the client is offline, Daily usage **submit is not available** (warn; primary disabled)—same standing pattern as driver handover forms **(A68, E67)**.
+99. **Hard delete driver (Must):** Hard-deleting a driver **removes** that driver’s Daily usage records **(A69)**.
+100. **Not handover (Must):** Daily usage does **not** create/close Out/In and does **not** require an open Out **(A57)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E59 | No active next-travel | Cannot create; no row |
+| E60 | Owner/Admin/unsigned-in create | Denied; no row |
+| E61 | Missing/invalid required fields | Rejected; no partial row |
+| E62 | Distance invalid, end &lt; start, or start below vehicle.mileage floor | Rejected |
+| E63 | end_time &lt; start_time same usage_date | Rejected |
+| E64 | Owner/Admin or other driver reads this driver’s usage APIs/UI | Denied / empty not-found as implemented |
+| E65 | Edit/delete existing Daily usage | Not offered; rejected if attempted |
+| E66 | Cross-company vehicle/ids | Not found / no change |
+| E67 | Offline submit attempt | No create; client blocks submit |
+
+| ID | Assumption |
+| --- | --- |
+| A57 | Daily usage = day-use **log**, distinct from handover custody and from next-travel selection row |
+| A58 | Create allowed only with **active next-travel**; vehicle frozen from that selection at save |
+| A59 | Seven fields all **required**; no optional subset this slice |
+| A60 | Distance unit = A34 from vehicle country; store value + unit |
+| A61 | Monotonic distances: end ≥ start; start ≥ vehicle.mileage when set; ≥0 max 1 decimal |
+| A62 | Daily usage **never** writes `vehicle.mileage` (handover remains the write-through path) |
+| A63 | Date = local calendar; times = local `HH:mm`; end ≥ start same date; default date = today local |
+| A64 | Multiple entries per day allowed |
+| A65 | Driver own create/list only; Owner reporting **out** |
+| A66 | No edit/delete this slice |
+| A67 | Web + mobile driver hub task screen; no auto-open on login |
+| A68 | Offline consistent with handover forms |
+| A69 | Driver hard-delete removes that driver’s Daily usage rows |
+
+
+
+## Global Header and notifications (Owner/Admin)
+
+101. **Global Header audience (Must):** Authenticated **Owner** and **Admin** only, on **Owner/Admin** web and mobile surfaces. **Not** on driver shell, public landing, or unauthenticated auth flows **(A70)**.
+102. **Global Header presence (Must):** Every in-scope Owner/Admin page shows the **same** Global Header region (shared chrome), not a one-off per page **(A71)**.
+103. **Fleet icon (Must):** Global Header includes the **Fleet** product mark/icon (same product identity language as existing lockup). Decorative vs named control is Design; product name remains **Fleet** **(A72)**.
+104. **Notification control (Must):** Global Header includes a **notification icon button** that is always visible in that chrome (enabled when signed in as Owner/Admin) **(A73)**.
+105. **Notification menu (Must):** Activating the button **opens** the notification menu; activating again, outside dismiss, or explicit close **closes** it. Only one menu instance **(A73)**.
+106. **MVP notification sources (Must):** Menu items in this slice are derived from **existing company vehicle compliance dates** only: **insurance_on**, **inspection_on**, **road_tax_on** when **within 30 days** of today or **already past** (same window as rule **19** / **A1**). **`registration_on` is not** a notification source **(A13, A74)**.
+107. **Item grain (Must):** One menu item per **vehicle + section** that meets rule 106 (e.g. plate/make-model + section + status soon/expired). No fabricated items for vehicles with all-null or all outside window **(A75)**.
+108. **Ordering (Should):** Show **expired / overdue** before **within-window soon**; then by soonest date; stable tie-break allowed **(A76)**.
+109. **Tenancy (Must):** Items only for vehicles in the caller’s **company**. Cross-company data never appears **(22, A8, A77)**.
+110. **Authz (Must):** Drivers, other roles, and unsigned-in users do not receive Owner/Admin Global Header or its notification APIs/UI **(20, 21, E8, E9, E68)**.
+111. **Read-only menu (Must):** Menu does **not** edit vehicle dates or other records. **Should:** choosing an item **navigates** to that vehicle in Owner/Admin UI **(A78)**.
+112. **Relationship to US-28 (Must):** Global Header notifications **complement** Vehicles nav urgency; they do **not** remove or redefine orange/red nav rules **(34)**.
+113. **Unread affordance (Should):** If any MVP item exists, icon **may** show a non-color-only cue (count or dot + accessible name). Absence of items → no urgency cue on the icon **(A79)**.
+114. **Caps (Must):** Menu lists at most **50** items this slice; if more qualify, show top 50 by rule 108 and do not imply the rest are none **(A80)**.
+115. **No push (Won't):** No OS push, email, or SMS for these items in this slice **(A81)**.
+116. **Empty/loading/error (Must):** No qualifying items → empty state (not an error). Load failure → error state; prior empty not faked as success **(E69, E70)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E68 | Driver / unsigned-in seeks OA Global Header or notification menu | Not shown / denied; driver chrome unchanged |
+| E69 | Notification list fails to load | Error in menu; no fake compliance rows |
+| E70 | Zero vehicles in window | Empty state; icon without unread cue |
+| E71 | User opens menu offline (if client knows) | Error or unavailable; no silent stale success required beyond existing app patterns |
+| E72 | Navigate to vehicle that was deleted | Normal not-found/denied vehicle path; menu can refresh on next open |
+
+| ID | Assumption |
+| --- | --- |
+| A70 | Non-driver UI = Owner/Admin web + Owner/Admin mobile only |
+| A71 | One shared header chrome component/region for all OA authenticated pages |
+| A72 | “Fleet Icon” = existing Fleet mark language (not a new product logo system) |
+| A73 | Notification entry is icon button + menu; not a full notifications page this slice |
+| A74 | MVP feed = compliance rule 19 only; no new domain events required for MVP |
+| A75 | Item = vehicle + section pair in warning/expired state |
+| A76 | Urgency-first sort is Should |
+| A77 | Strict company isolation |
+| A78 | Navigation from item is Should; deep-link target = that vehicle’s OA view |
+| A79 | Badge/dot is Should; a11y name must reflect presence |
+| A80 | Soft cap 50 items |
+| A81 | Delivery channels beyond in-app menu are out |
+
+## Account kinds — Company vs Individual
+
+117. **Account kinds (Must):** Every tenant has exactly one **account kind**: **`company`** or **`individual`**, set at sign-up and **immutable** this slice **(A82, A89)**.
+118. **Who may self-register (Must):** An unsigned-in person may create **either** a Company account **or** an Individual account. Drivers still **cannot** self-register; they are invited by Company Owner/Admin only **(10, A85)**.
+119. **Company create (Must):** Choosing **Company** and completing sign-up with email, password (≥ 8), registration number, VAT, and address creates one **company** tenant (`account_kind = company`) with those legal/address fields and one **Owner** **(1, 49–51, A29)**. Missing legal fields → no tenant **(E33)**.
+120. **Individual create (Must):** Choosing **Individual** and completing sign-up with **email** and **password** (≥ 8) only creates one **individual** tenant (`account_kind = individual`) and one **Owner** for that workspace. **Must not** require registration number, VAT, or company address **(A83, E73)**.
+121. **Email uniqueness (Must):** Login email remains unique across **all** identities (Company Owner/Admin/Driver and Individual Owner) **(A6, E1, E74)**.
+122. **Driver invite Company-only (Must):** Only **Owner** or **Admin** of a **`company`** tenant may create, edit, resend-invite, disable, or hard-delete **drivers**. Individual Owners, drivers, and unsigned-in users cannot **(3, 10, 25, 31, A85, E75)**.
+123. **No Admins on Individual (Must):** Individual Owner **cannot** create Admins. Admin create remains **Company Owner only** **(23, A10, A84, E76)**.
+124. **Individual feature subset (Must):** Individual Owner **may** on web and mobile: sign in; stay signed in per session rules; password reset; optional TOTP; create/edit **vehicles in their tenant** with compliance dates, warnings (19, 34), and optional mileage (64–71) on the **Details** surface only. **Must not** get vehicle **Images** (side appearance) or **Handovers** history; Drivers admin; Admins management; or driver next-travel / handover create / Daily usage driver shells **(A86, E77, E80)**.
+125. **Company feature set unchanged (Must):** Company Owner/Admin retain existing driver + fleet + handover history + Global Header behaviors for **their company**.
+126. **Tenant isolation (Must):** Principals only read/write drivers, vehicles, and related records in **their own** tenant. Cross-tenant access fails closed **(22, A8, A87, E78)**.
+127. **Existing tenants (Must):** Tenants and principals that existed before this slice are **`account_kind = company`**. No re-registration required **(A88, US-84)**.
+128. **Surfaces (Must):** Individual Owner uses the **management** experience limited by 124 (vehicles/settings/auth), **not** the invited-driver minimal home. Company drivers unchanged (4, 5).
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E73 | Individual sign-up missing email/password or password &lt; 8 | No individual tenant/Owner created |
+| E74 | Individual or Company sign-up email already a login identity | No new tenant/Owner **(E1 extended)** |
+| E75 | Individual Owner (or driver/unsigned-in) attempts driver create/invite/admin | Rejected; no driver created/changed |
+| E76 | Individual Owner attempts create Admin | Rejected; no Admin created |
+| E77 | Individual Owner opens Company-only Drivers/Admins (or equivalent) | Denied; stay in Individual-allowed experience |
+| E80 | Individual Owner uses vehicle side-image or handover-history APIs/UI | **403** / omit Images & Handovers tabs; vehicle details remain |
+| E78 | Any principal accesses another tenant’s vehicles/drivers | Not found / forbidden; no leak |
+| E79 | Request to change account kind after create | Rejected / not offered this slice **(A89)** |
+
+| ID | Assumption |
+| --- | --- |
+| A82 | Two account kinds: **company** \| **individual** at sign-up |
+| A83 | Individual profile = email + password only this slice |
+| A84 | One Owner on Individual tenant; no Admin create |
+| A85 | Drivers only on Company tenants |
+| A86 | Individual subset = auth + own vehicle **details**/compliance-lite (no Images/Handovers tabs or APIs); not driver-ops shells |
+| A87 | Isolation by tenant for both kinds |
+| A88 | Legacy data = company kind |
+| A89 | Kind immutable this slice |
+| A90 | Self-registered principal role label **Owner**; capabilities from kind + role |
+
+## Vehicle custom expirations (US-86–US-90)
+
+129. **Custom expirations (Must):** A company or individual vehicle may store up to **10** optional **custom expiration** rows on the vehicle record: each has stable **`id`**, **`label`**, and **`expires_on`** (calendar date) **(A91)**.
+130. **Who manages:** **Owner and Admin** of a **company** tenant and **Individual Owner** may create/edit/clear custom expirations on vehicle Details (web + management mobile). **Drivers** and unsigned-in users may not **(20, 21, A92)**.
+131. **Label rules:** Label required; trim; length **1–80**; **unique per vehicle** case-insensitive after trim **(A93)**.
+132. **Date rules:** Each row requires **`expires_on`** as `YYYY-MM-DD`. Empty/partial rows are not stored **(A93)**.
+133. **Cap:** At most **10** rows per vehicle. Attempts above cap rejected **(A91)**.
+134. **Optional section:** Vehicle save with **zero** custom rows is allowed (empty list) **(A91)**.
+135. **Full replace on write:** When the client sends `custom_expirations`, the server **replaces** the whole list. Omitting the field on PATCH leaves existing rows unchanged. Sending `[]` clears all **(A94)**.
+136. **Ids:** Server assigns UUID when create omits `id` (or null). Client may keep ids on edit so rows stay stable **(A94)**.
+137. **Warnings (A1):** Each custom `expires_on` participates in the **same** 30-day / past expiry warning window as insurance, inspection, and road tax. Warning field key is **`custom:<id>`**. **`registration_on` still never warns** **(19, A1, A13, A95)**.
+138. **Expired/soon save allowed:** Saving with custom dates expired or inside the window is allowed; warnings still show **(24, A11)**.
+139. **List badges (Should):** Owner/Admin vehicle list **may** show chips for custom rows in warning/expired state using the **label** **(A96)**.
+140. **Nav urgency (Should):** Vehicles nav/tab worst-wins **may** include each custom `expires_on` with the same red/orange bands as built-in section dates; still **not** registration **(34, A20, A22, A97)**.
+141. **Notifications (Could):** Global Header menu **may** include custom rows (grain = vehicle + custom label) using the same 30-day window; not required to ship Details CRUD **(A98)**.
+142. **Tenancy:** Custom expirations only for vehicles in the caller’s tenant **(22, A8)**.
+143. **No cascade from drivers/images/handovers:** Custom expirations are vehicle master data only this slice **(A99)**.
+144. **Confirm before remove (UI):** Removing a row in the client requires confirmation before the next vehicle save drops it from the full-replace payload **(61, A41)** — server does not offer a separate delete route.
+145. **No separate resource routes:** No `/custom-expirations` sub-collection this slice **(A94)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E81 | custom_expirations not an array, >10, bad/duplicate id, empty/too-long/duplicate label, or bad/missing expires_on | **400** `validation_error`; vehicle not written with that payload |
+| E82 | Driver / unsigned-in writes custom expirations | **403** / **401**; unchanged |
+| E83 | Other-tenant vehicle | **404**; unchanged |
+
+| ID | Assumption |
+| --- | --- |
+| A91 | Max 10 optional labeled date rows embedded on vehicle |
+| A92 | Same vehicle write authz as other Details fields (incl. Individual) |
+| A93 | Label 1–80 unique CI; date required YYYY-MM-DD per row |
+| A94 | Embed + full-replace write; server-minted UUID |
+| A95 | A1 warnings via `custom:<uuid>`; registration excluded |
+| A96 | List chips Should |
+| A97 | Nav urgency Should includes custom dates |
+| A98 | Notification menu Could |
+| A99 | No new image/handover/driver coupling |
 

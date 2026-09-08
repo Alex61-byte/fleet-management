@@ -1,7 +1,7 @@
 import { FleetApiError, type DriverTravel } from "@fleet/sdk";
 import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { DriverHandoverPanel } from "../../components/driver-handover-panel";
 import { Banner, PrimaryButton, SecondaryButton } from "../../components/ui";
@@ -31,31 +31,45 @@ export default function DriverHandoverScreen() {
   const loading = travel === undefined;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface p-2 gap-2">
-      <Text className="font-semibold text-title text-text-primary" accessibilityRole="header">
-        Handover
-      </Text>
-      <SecondaryButton title="Back to Home" onPress={() => router.replace("/(driver)")} />
-      {offline ? <Banner tone="warning">You are offline.</Banner> : null}
-
-      {loadError ? (
-        <View className="bg-surface-raised rounded-lg p-2 gap-2 border border-divider">
-          <Banner tone="danger">{loadError}</Banner>
-          <SecondaryButton title="Retry" onPress={() => void load()} />
-        </View>
-      ) : loading ? (
-        <Text className="text-caption text-text-secondary">Loading…</Text>
-      ) : !travel ? (
-        <View className="bg-surface-raised rounded-lg p-2 gap-2 border border-divider" accessibilityLabel="Handover">
-          <Text className="font-semibold text-body text-text-primary">Vehicle handover</Text>
-          <Text className="text-body text-text-primary">
-            Select a vehicle for next travel before you can complete a handover.
+    <SafeAreaView className="flex-1 bg-surface">
+      <KeyboardAvoidingView
+        className="flex-1 bg-surface"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="p-2 gap-2"
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text className="font-semibold text-title text-text-primary" accessibilityRole="header">
+            Handover
           </Text>
-          <PrimaryButton title="Go to Next travel" onPress={() => router.push("/(driver)/travel")} />
-        </View>
-      ) : (
-        <DriverHandoverPanel travel={travel} offline={offline} onHandoverSaved={() => void load()} />
-      )}
+          <SecondaryButton title="Back to Home" onPress={() => router.replace("/(driver)")} />
+          {offline ? <Banner tone="warning">You are offline.</Banner> : null}
+
+          {loadError ? (
+            <View className="bg-surface-raised rounded-lg p-2 gap-2 border border-divider">
+              <Banner tone="danger">{loadError}</Banner>
+              <SecondaryButton title="Retry" onPress={() => void load()} />
+            </View>
+          ) : loading ? (
+            <Text className="text-caption text-text-secondary">Loading…</Text>
+          ) : !travel ? (
+            <View
+              className="bg-surface-raised rounded-lg p-2 gap-2 border border-divider"
+              accessibilityLabel="Handover"
+            >
+              <Text className="font-semibold text-body text-text-primary">Vehicle handover</Text>
+              <Text className="text-body text-text-primary">
+                Select a vehicle for next travel before you can complete a handover.
+              </Text>
+              <PrimaryButton title="Go to Next travel" onPress={() => router.push("/(driver)/travel")} />
+            </View>
+          ) : (
+            <DriverHandoverPanel travel={travel} offline={offline} onHandoverSaved={() => void load()} />
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

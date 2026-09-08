@@ -1,7 +1,7 @@
 import { View, type ColorValue } from "react-native";
 import Svg, { Circle, Path, type NumberProp } from "react-native-svg";
 
-export type NavIconName = "home" | "users" | "truck" | "shield" | "user-cog" | "more";
+export type NavIconName = "home" | "users" | "truck" | "shield" | "user-cog" | "more" | "bell";
 
 /** Design token spacing.nav-icon — numeric for RN tabBar (class/% SVG collapses). */
 export const NAV_ICON_SIZE = 22;
@@ -91,6 +91,19 @@ function MoreGlyph({ color }: GlyphProps) {
   );
 }
 
+function BellGlyph({ color }: GlyphProps) {
+  const s = stroke(color);
+  return (
+    <>
+      <Path
+        {...s}
+        d="M6.5 17.5h11M8 17.5V11a4 4 0 0 1 8 0v6.5M10.25 17.5a1.75 1.75 0 0 0 3.5 0"
+      />
+      <Path {...s} d="M12 4.5v1.25" />
+    </>
+  );
+}
+
 const glyphs: Record<NavIconName, (props: GlyphProps) => React.ReactNode> = {
   home: HomeGlyph,
   users: UsersGlyph,
@@ -98,6 +111,7 @@ const glyphs: Record<NavIconName, (props: GlyphProps) => React.ReactNode> = {
   shield: ShieldGlyph,
   "user-cog": UserCogGlyph,
   more: MoreGlyph,
+  bell: BellGlyph,
 };
 
 /** Decorative Owner/Admin tab glyph — tint via parent tabBar color. */

@@ -161,6 +161,9 @@ export default function SignUpScreen() {
             </View>
           ) : null}
           <PrimaryButton title="Create company" onPress={() => void submit()} busy={busy} disabled={!canSubmit} />
+          <Link href="/account-kind" className="text-brand text-label font-medium min-h-hit">
+            Back to account type
+          </Link>
           <Link href="/sign-in" className="text-brand text-label font-medium min-h-hit">
             Already have an account? Sign in
           </Link>

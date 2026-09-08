@@ -1,11 +1,20 @@
 export type Role = "owner" | "admin" | "driver";
 export type Client = "web" | "mobile";
+export type AccountKind = "company" | "individual";
 export type WarningState = "expired" | "due_soon";
-export type WarningField =
+export type BuiltInWarningField =
   | "insurance_on"
   | "inspection_on"
   | "road_tax_on"
   | "registration_on";
+/** Server warnings use built-ins or `custom:<uuid>` (ADR-019). */
+export type WarningField = BuiltInWarningField | `custom:${string}`;
+
+export type VehicleCustomExpiration = {
+  id: string;
+  label: string;
+  expiresOn: string;
+};
 
 export type Principal = {
   id: string;
@@ -25,6 +34,7 @@ export type Principal = {
 
 export type CompanyProfile = {
   id: string;
+  accountKind: AccountKind;
   registrationNumber: string;
   vatNumber: string;
   address: string;
@@ -47,6 +57,8 @@ export type Vehicle = {
   inspectionOn: string | null;
   roadTaxOn: string | null;
   registrationOn: string | null;
+  /** Optional labeled expirations (max 10); empty array when none (ADR-019). */
+  customExpirations: VehicleCustomExpiration[];
   imageFrontPath: string | null;
   imageLeftPath: string | null;
   imageRightPath: string | null;
@@ -95,6 +107,22 @@ export type VehicleHandoverImage = {
   handoverId: string;
   storagePath: string;
   sortOrder: number;
+  createdAt: number;
+};
+
+export type DriverDailyUsage = {
+  id: string;
+  companyId: string;
+  driverId: string;
+  vehicleId: string;
+  usageDate: string;
+  startPlace: string;
+  endPlace: string;
+  startDistance: number;
+  endDistance: number;
+  distanceUnit: OdometerUnit;
+  startTime: string;
+  endTime: string;
   createdAt: number;
 };
 
@@ -157,6 +185,8 @@ export type AccessClaims = {
   company_id: string;
   role: Role;
   must_change_password: boolean;
+  /** Present on newly issued tokens; may be missing on legacy tokens — gates load DB. */
+  account_kind?: AccountKind;
   token_use: "access";
 };
 
@@ -165,29 +195,31 @@ export type PublicPrincipal = {
   email: string;
   role: Role;
   company_id: string;
+  account_kind: AccountKind;
 };
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export function toPublicPrincipal(p: Principal): PublicPrincipal {
+export function toPublicPrincipal(p: Principal, accountKind: AccountKind): PublicPrincipal {
   return {
     id: p.id,
     email: p.email,
     role: p.role,
     company_id: p.companyId,
+    account_kind: accountKind,
   };
 }
 
-/** Compliance dates that drive expiry warnings / home expiring (not registration_on). */
-const DATE_FIELDS: WarningField[] = [
+/** Built-in compliance dates that drive expiry warnings / home expiring (not registration_on). */
+const DATE_FIELDS: BuiltInWarningField[] = [
   "insurance_on",
   "inspection_on",
   "road_tax_on",
 ];
 
-function dateOf(vehicle: Vehicle, field: WarningField): string | null {
+function dateOf(vehicle: Vehicle, field: BuiltInWarningField): string | null {
   switch (field) {
     case "insurance_on":
       return vehicle.insuranceOn;
@@ -198,6 +230,14 @@ function dateOf(vehicle: Vehicle, field: WarningField): string | null {
     case "registration_on":
       return vehicle.registrationOn;
   }
+}
+
+export function customWarningField(id: string): `custom:${string}` {
+  return `custom:${id}`;
+}
+
+export function isCustomWarningField(field: string): field is `custom:${string}` {
+  return field.startsWith("custom:");
 }
 
 export function utcToday(now = new Date()): string {
@@ -217,6 +257,13 @@ export function computeWarnings(vehicle: Vehicle, today = utcToday()): Warning[]
   for (const field of DATE_FIELDS) {
     const value = dateOf(vehicle, field);
     if (!value) continue;
+    if (value < today) warnings.push({ field, state: "expired" });
+    else if (value <= horizon) warnings.push({ field, state: "due_soon" });
+  }
+  for (const row of vehicle.customExpirations) {
+    const value = row.expiresOn;
+    if (!value) continue;
+    const field = customWarningField(row.id);
     if (value < today) warnings.push({ field, state: "expired" });
     else if (value <= horizon) warnings.push({ field, state: "due_soon" });
   }
@@ -292,6 +339,11 @@ export async function toVehicleJson(
     inspection_on: vehicle.inspectionOn,
     road_tax_on: vehicle.roadTaxOn,
     registration_on: vehicle.registrationOn,
+    custom_expirations: vehicle.customExpirations.map((row) => ({
+      id: row.id,
+      label: row.label,
+      expires_on: row.expiresOn,
+    })),
     warnings: computeWarnings(vehicle, today),
     has_side_images: hasSideImages(vehicle),
     side_images,

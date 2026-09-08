@@ -4,14 +4,17 @@ import { vehiclesNavA11yLabel, type VehiclesNavUrgency } from "@fleet/sdk";
 import { themeClasses } from "../../../design/tailwind.theme";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "../lib/auth-context";
+import { useComplianceNotifications } from "../lib/compliance-notifications";
 import { useVehiclesNavUrgency } from "../lib/vehicles-nav-urgency";
 import { NavIcon, navIconForHref } from "./nav-icons";
-import { Banner, OfflineBanner, PrimaryButton } from "./ui";
+import { NotificationControl } from "./notification-menu";
+import { Banner, BrandMark, OfflineBanner, PrimaryButton } from "./ui";
 
 function vehiclesNavClass(urgency: VehiclesNavUrgency, active: boolean): string {
-  const base = "min-h-hit px-2 mx-1 rounded-md text-label font-medium flex flex-row items-center gap-1.5 focus-visible:shadow-ring";
+  const base =
+    "min-h-hit px-2 mx-1 rounded-md text-label font-medium flex flex-row items-center gap-1.5 focus-visible:shadow-ring";
   if (urgency === "critical") {
     return `${base} ${themeClasses.navItemUrgencyCritical} hover:bg-nav-urgency-critical-hover hover:text-nav-urgency-fg ${
       active ? themeClasses.navItemUrgencySelected : ""
@@ -22,7 +25,6 @@ function vehiclesNavClass(urgency: VehiclesNavUrgency, active: boolean): string 
       active ? themeClasses.navItemUrgencySelected : ""
     }`;
   }
-  // Split inactive vs selected so text-nav-fg never fights selected white text.
   if (active) {
     return `${base} ${themeClasses.navItemSelected}`;
   }
@@ -43,11 +45,18 @@ export function AppShell({
   const router = useRouter();
   const ownerAdmin = Boolean(me && me.role !== "driver");
   const vehiclesUrgency = useVehiclesNavUrgency(ownerAdmin);
+  const notifications = useComplianceNotifications(ownerAdmin, offline);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // US-15 / US-29: unauthenticated or session ended → sign-in (banner lives there).
   useEffect(() => {
     if (ready && !me) router.replace("/sign-in");
   }, [ready, me, router]);
+
+  // Close notification menu on route change (US-71).
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [path]);
 
   if (!ready || !me) {
     return (
@@ -77,18 +86,20 @@ export function AppShell({
     );
   }
 
+  const individual = me.account_kind === "individual";
   const items = [
     { href: "/home", label: "Home" },
-    { href: "/drivers", label: "Drivers" },
+    ...(!individual ? [{ href: "/drivers", label: "Drivers" }] : []),
     { href: "/vehicles", label: "Vehicles" },
     { href: "/security", label: "Security" },
-    ...(me.role === "owner" ? [{ href: "/admins", label: "Admins" }] : []),
+    ...(!individual && me.role === "owner" ? [{ href: "/admins", label: "Admins" }] : []),
   ];
+  const roleLabel = individual ? "Individual" : me.role === "owner" ? "Owner" : "Admin";
 
   return (
     <div className={`${themeClasses.shell} min-h-screen`}>
       <nav className={`${themeClasses.sidebar} p-2 gap-0.5`} aria-label="Main">
-        <p className={`${themeClasses.sidebarMeta} px-2 py-1`}>Fleet</p>
+        <p className={themeClasses.sidebarRole}>{roleLabel}</p>
         {items.map((item) => {
           const active = path === item.href || path.startsWith(`${item.href}/`);
           const isVehicles = item.href === "/vehicles";
@@ -119,11 +130,30 @@ export function AppShell({
           Sign out
         </button>
       </nav>
-      <div className={`${themeClasses.content} flex flex-col`}>
-        <header className="h-[48px] bg-surface-raised border-b border-divider px-3 flex items-center justify-between">
-          <h1 className={themeClasses.pageTitle}>{title}</h1>
-          {action}
+      <div className={`${themeClasses.content} flex flex-col min-h-screen`}>
+        <header className={themeClasses.globalHeader}>
+          <div className={themeClasses.globalHeaderLockup}>
+            <BrandMark variant="nav" />
+            <span className={themeClasses.globalHeaderProduct}>Fleet</span>
+          </div>
+          <div className={themeClasses.globalHeaderActions}>
+            <NotificationControl
+              count={notifications.count}
+              loading={notifications.loading}
+              error={notifications.error}
+              offline={notifications.offline || offline}
+              items={notifications.items}
+              truncated={notifications.truncated}
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              onRetry={() => void notifications.refresh()}
+            />
+          </div>
         </header>
+        <div className={`${themeClasses.pageHeader} px-content-gutter-compact pt-2`}>
+          <h1 className={themeClasses.pageTitle}>{title}</h1>
+          {action ? <div className={themeClasses.pageHeaderActions}>{action}</div> : null}
+        </div>
         <main className={`${themeClasses.contentPadCompact} w-full flex flex-col gap-2`}>
           <OfflineBanner offline={offline} />
           {children}
@@ -135,18 +165,16 @@ export function AppShell({
 
 export function Denied({ title, body }: { title: string; body: string }) {
   const { me } = useAuth();
-  const backHref =
-    me?.role === "driver"
-      ? "/driver"
-      : me
-        ? "/home"
-        : "/";
+  const backHref = me?.role === "driver" ? "/driver" : me ? "/home" : "/";
   const backLabel = me?.role === "driver" ? "Back to home" : "Back";
   return (
     <div className="flex flex-col gap-2 max-w-[400px]">
       <h2 className={themeClasses.title}>{title}</h2>
       <p className={`${themeClasses.body} text-text-secondary`}>{body}</p>
-      <Link href={backHref} className={`${themeClasses.buttonSecondary} inline-flex items-center justify-center`}>
+      <Link
+        href={backHref}
+        className={`${themeClasses.buttonSecondary} inline-flex items-center justify-center`}
+      >
         {backLabel}
       </Link>
     </div>

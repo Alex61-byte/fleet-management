@@ -6,9 +6,14 @@ import {
   signAccessToken,
   verifyPassword,
 } from "./crypto.ts";
-import type { Principal } from "./domain.ts";
+import type { AccountKind, Principal } from "./domain.ts";
 import { toPublicPrincipal } from "./domain.ts";
 import type { Store } from "./store.ts";
+
+async function accountKindFor(store: Store, companyId: string): Promise<AccountKind> {
+  const company = await store.findCompany(companyId);
+  return company?.accountKind === "individual" ? "individual" : "company";
+}
 
 /** Absolute refresh-family lifetime (US-29 / ADR-002). */
 export const REFRESH_FAMILY_TTL_MS = 14 * 24 * 60 * 60 * 1000;
@@ -23,11 +28,13 @@ export async function issueTokens(
   jwtSecret: Uint8Array,
   principal: Principal,
 ): Promise<TokenPair> {
+  const account_kind = await accountKindFor(store, principal.companyId);
   const access_token = await signAccessToken(jwtSecret, {
     sub: principal.id,
     company_id: principal.companyId,
     role: principal.role,
     must_change_password: principal.mustChangePassword,
+    account_kind,
   });
   const refresh_token = randomToken();
   const now = Date.now();
@@ -53,11 +60,13 @@ export async function rotateRefresh(
   expiresAt: number,
 ): Promise<TokenPair> {
   await store.revokeRefresh(oldHash);
+  const account_kind = await accountKindFor(store, principal.companyId);
   const access_token = await signAccessToken(jwtSecret, {
     sub: principal.id,
     company_id: principal.companyId,
     role: principal.role,
     must_change_password: principal.mustChangePassword,
+    account_kind,
   });
   const refresh_token = randomToken();
   await store.insertRefresh({
@@ -76,10 +85,11 @@ export async function authenticatedPayload(
   jwtSecret: Uint8Array,
   principal: Principal,
 ) {
+  const account_kind = await accountKindFor(store, principal.companyId);
   const tokens = await issueTokens(store, jwtSecret, principal);
   return {
     status: "authenticated" as const,
-    principal: toPublicPrincipal(principal),
+    principal: toPublicPrincipal(principal, account_kind),
     ...tokens,
     must_change_password: principal.mustChangePassword,
   };

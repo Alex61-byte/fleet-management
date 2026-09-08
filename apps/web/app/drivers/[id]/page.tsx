@@ -20,7 +20,7 @@ import { useAuth } from "../../../lib/auth-context";
 
 export default function EditDriverPage() {
   const { id } = useParams<{ id: string }>();
-  const { offline } = useAuth();
+  const { offline, me } = useAuth();
   const router = useRouter();
   const [driver, setDriver] = useState<Driver | null>(null);
   const [email, setEmail] = useState("");
@@ -53,8 +53,23 @@ export default function EditDriverPage() {
   }
 
   useEffect(() => {
+    if (me?.account_kind === "individual") {
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [id]);
+  }, [id, me?.account_kind]);
+
+  if (me?.account_kind === "individual") {
+    return (
+      <AppShell title="Drivers">
+        <Denied
+          title="Not available"
+          body="Driver management is only available on company accounts."
+        />
+      </AppShell>
+    );
+  }
 
   async function onSave(e: FormEvent) {
     e.preventDefault();

@@ -6,6 +6,7 @@ import {
   type Vehicle,
 } from "@fleet/sdk";
 import { Link, Stack } from "expo-router";
+import { OwnerHeaderNotifications } from "../../../components/owner-header-notifications";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Banner, ExpiryBadges, PrimaryButton, PrimaryLink } from "../../../components/ui";
@@ -40,9 +41,13 @@ export default function VehiclesList() {
         options={{
           title: "Vehicles",
           headerRight: () => (
-            <Link href="/(owner)/vehicles/new" className="text-brand text-label font-semibold">
-              Add vehicle
-            </Link>
+            <OwnerHeaderNotifications
+              trailing={
+                <Link href="/(owner)/vehicles/new" className="text-brand text-label font-semibold">
+                  Add vehicle
+                </Link>
+              }
+            />
           ),
         }}
       />
@@ -67,6 +72,7 @@ export default function VehiclesList() {
               accessibilityLabel={warningA11y(
                 `${vehicleLabel(v)}, ${v.license_plate}${v.has_side_images ? ", has photos" : ""}`,
                 v.warnings,
+                v.custom_expirations,
               )}
             >
               <Text className="font-medium text-label text-text-primary">
@@ -80,7 +86,7 @@ export default function VehiclesList() {
                   {odometerUnitLabel(v.mileage_unit ?? "km")}
                 </Text>
               ) : null}
-              <ExpiryBadges warnings={v.warnings} />
+              <ExpiryBadges warnings={v.warnings} customExpirations={v.custom_expirations} />
             </Pressable>
           </Link>
         ))

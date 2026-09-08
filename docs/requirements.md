@@ -11,6 +11,8 @@ A company that runs vehicles and drivers has no shared place to:
 - Invite drivers by email (no Admin-set temporary password); drivers receive an invitation via **Resend**, create their own password, then sign in on **web and mobile**.
 - Keep vehicle records (make/model, plate, optional current mileage/odometer reading, insurance, inspection dates, country of registration, road tax) and see when those dates are about to expire.
 - Record **vehicle handovers** (**Out** when taking / **In** when returning) with mileage, next-service days/distance, optional damage notes and photos; let Owner/Admin review handover history on the vehicle.
+- Let drivers log **Daily usage** (date, start/end place, start/end distance, start/end time) against their **active next-travel** vehicle.
+- Let **Individuals** self-register a **personal** account (not a company) and manage **their own vehicles** with compliance dates—without inviting drivers or running a multi-driver org.
 
 **What success looks like**
 
@@ -29,21 +31,45 @@ A company that runs vehicles and drivers has no shared place to:
 - Drivers never see Owner/Admin screens; people who are not signed in cannot open fleet or driver records.
 - A signed-in **driver** can **select a company vehicle for their next travel** and record the current **odometer** reading. Odometer unit is **miles or kilometres** based on the vehicle’s **country of registration** (not a free choice by the driver).
 - With an active next-travel vehicle, a driver can complete **Handover Out** and **Handover In** (required mileage, next service days, next service distance; optional damages text/images). Successful handover **updates vehicle current mileage**.
-- Owner/Admin vehicle UI has a **third tab Handovers** (history + detail, read-only). **Drivers do not** see that tab.
+- With an active next-travel vehicle, a driver can log **Daily usage** (required: date, start place, start distance, start time, end place, end distance, end time). Multiple entries per day allowed. **Does not** update vehicle mileage. Driver lists **own** entries only.
+- Owner/Admin vehicle UI has a **third tab Handovers** (history + detail, read-only). **Drivers do not** see that tab. **No** Owner/Admin Daily usage reporting this slice.
+- An unsigned-in person can choose **Company** or **Individual** account creation.
+- **Company** path still creates an organization with registration number, VAT, address, and first **Owner**.
+- **Individual** path creates a **personal workspace** owned by that user (Owner of an individual-kind tenant) with email/password only—**no** company legal entity fields.
+- **Only Company** Owner/Admin may invite and manage **drivers**. Individuals cannot.
+- Individuals may create/edit **their own vehicles** and see compliance warnings (same date fields/window as company fleet, scoped to their workspace).
+- All tenants created before this slice remain **Company**.
+
 
 ## 2. Actors & stakeholders
 
 | Actor | Who they are | What they do in this slice |
 | --- | --- | --- |
-| **Company** | The fleet organization created at sign-up | Owns drivers, vehicles, and company users. Holds registration number, VAT, and address. Not a person who logs in. |
-| **Owner** | First user at company sign-up | Signs up the company (legal + address fields); signs in web + mobile; reset password; optional TOTP; creates Admins; invites/manages drivers (including hard-delete) and fleet; **read-only vehicle handover history**. Last Owner cannot be removed (A5). |
-| **Admin** | Created by an Owner | Same operational work as Owner for drivers (invite, including hard-delete) and fleet; **read-only vehicle handover history**; signs in web + mobile; reset password; optional TOTP. Does not create the company. Does not create other Admins (A10). |
-| **Driver** | Profile invited by Owner/Admin | Receives invite email (Resend); accepts invite with token + own password on **web and mobile**; later signs in with email + self-set password; **minimal driver home** including **select vehicle for next travel + odometer** and **Handover Out/In** on the selected vehicle; no MFA; no Owner/Admin fleet admin screens or Handovers history tab. Cannot start accept if email/invite is not valid in the system. |
+| **Company (org tenant)** | Fleet organization with `account_kind = company`, created via **Company** sign-up | Owns drivers, vehicles, and company users. Holds registration number, VAT, and address. Not a login principal. |
+| **Individual workspace (personal tenant)** | Personal tenant with `account_kind = individual`, created via **Individual** sign-up | Owns only that individual’s vehicles and sole Owner user. **No** company legal fields required. **No** drivers roster. |
+| **Owner** | First user at **Company** or **Individual** sign-up | **Company Owner:** legal signup; Admins; drivers; fleet—as today; **read-only vehicle handover history**. Last Owner cannot be removed (A5). **Individual Owner:** personal signup; own vehicles only; **no** Admins; **no** driver invite/manage. Both: web + mobile sign-in, reset password, optional TOTP. |
+| **Admin** | Created by a **Company** Owner only | Same operational work as Company Owner for drivers (invite, including hard-delete) and fleet; **read-only vehicle handover history**; signs in web + mobile; reset password; optional TOTP. Does not create the company. Does not create other Admins (A10). **Admin exists only on Company tenants this slice.** |
+| **Driver** | Profile invited by **Company** Owner/Admin | Receives invite email (Resend); accepts invite with token + own password on **web and mobile**; later signs in with email + self-set password; **minimal driver home** including **select vehicle for next travel + odometer**, **Handover Out/In**, and **Daily usage** on the selected vehicle; no MFA; no Owner/Admin fleet admin screens or Handovers history tab. Cannot start accept if email/invite is not valid in the system. **Drivers exist only on Company tenants this slice.** |
 | **Invitee (not in system)** | Person with no pending driver invite / unknown email | Must **not** be able to continue invite accept or password setup on web or mobile. |
 
 **Not in this slice:** dispatcher, mechanic.
 
 ## 3. As-is vs to-be
+
+**As-is:** Only company sign-up (always org + legal fields + Owner). No Individual self-registration.
+
+**To-be — account kind choice and Individual start**
+
+```mermaid
+flowchart TD
+  A[Person starts create account] --> B{Account kind?}
+  B -->|Company| C[Email password reg VAT address]
+  C --> D[Company tenant + first Owner]
+  D --> E[Owner/Admin home: drivers and fleet]
+  B -->|Individual| F[Email password only]
+  F --> G[Individual tenant + sole Owner]
+  G --> H[Individual home: own vehicles only — no Drivers/Admins]
+```
 
 **As-is:** Product used Admin-set **temporary password** create-driver (legacy US-07) and company sign-up with email/password only. That temp-password path is **retired** for new drivers in this slice.
 
@@ -111,12 +137,18 @@ flowchart TD
 
 ### In scope
 
-Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin users, driver **invite via Resend**, driver **self-set password** on accept (web + mobile), subsequent driver login, minimal home, hard delete of driver profiles, vehicle records with compliance dates, optional **current vehicle mileage**, and expiry warnings, optional vehicle side appearance images (FRONT/LEFT/RIGHT/BACK) via Supabase Storage references, driver **Handover Out/In** (mileage, next service days/distance, optional damages text + images), Owner/Admin **Handovers** history tab on vehicle (read-only).
+Account-kind split at signup (**Company** | **Individual**); Individual self-register + personal workspace; Individual own-vehicle management (compliance-lite); Company-only driver invite/admin; grandfather existing tenants as Company. Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin users, driver **invite via Resend**, driver **self-set password** on accept (web + mobile), subsequent driver login, minimal home, hard delete of driver profiles, vehicle records with compliance dates, optional **current vehicle mileage**, and expiry warnings, optional vehicle side appearance images (FRONT/LEFT/RIGHT/BACK) via Supabase Storage references, driver **Handover Out/In** (mileage, next service days/distance, optional damages text + images), Owner/Admin **Handovers** history tab on vehicle (read-only), driver **Daily usage** create + own list (gated on active next-travel).
 
 ### Out of scope
 
-- Dispatch, live tracking, geofence, multi-stop trip planning. **Exception:** structured **Handover Out/In** (US-51+) is in scope (not full dispatch)
+- Individual inviting or managing drivers; Admins on Individual workspaces
+- Converting Individual ↔ Company; multi-Owner Individual workspaces
+- Individual-as-driver operational shell (next-travel / handover / daily usage) in lieu of Owner vehicle admin
+- Individual KYC, tax IDs, or required display name
+- Billing/plans; marketing CMS
+- Dispatch, live tracking, geofence, multi-stop trip planning. **Exception:** structured **Handover Out/In** (US-51+) and **Daily usage** day logs (US-61+) are in scope (not full dispatch)
 - Edit/delete historical handovers; Owner/Admin-created handovers; driver access to Owner Handovers admin tab
+- Owner/Admin Daily usage reporting/export; edit/delete of Daily usage; GPS auto-fill of places; photos on Daily usage; auto write-through of Daily usage distances to `vehicle.mileage`
 - Dispatcher or mechanic roles
 - Two separate mobile store listings / two apps
 - Driver fleet / Owner-Admin management UI (drivers still get auth + minimal home only on web)
@@ -138,6 +170,19 @@ Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin user
 
 | Priority | Item |
 | --- | --- |
+| **Must** | Signup entry offers **Company** vs **Individual** account kind |
+| **Must** | Company signup unchanged (email, password ≥8, reg, VAT, address) → company tenant + Owner |
+| **Must** | Individual signup: email + password ≥8 only (no reg/VAT/company address) → personal tenant + Owner |
+| **Must** | Email uniqueness across all login identities (A6) |
+| **Must** | Only **Company** Owner/Admin create/invite/manage/hard-delete drivers |
+| **Must** | Individual **cannot** invite drivers, open Drivers admin, or create Admins |
+| **Must** | Individual Owner: own vehicles CRUD, compliance dates/warnings, optional mileage, side images, Vehicles nav urgency on **own** fleet |
+| **Must** | Individual Owner: sign-in web+mobile, password reset, optional TOTP (same as Owner auth) |
+| **Must** | Existing companies/users treated as **Company**; no forced re-signup |
+| **Must** | Authz/tenancy on API; clients do not invent rules |
+| **Should** | Landing/copy distinguishes Create company vs Create personal account |
+| **Should** | Clear empty/deny when Individual hits driver-only surfaces |
+| **Won't** | Individual invites drivers; Individual→Company convert; dual membership; Individual-as-Driver hybrid; paid maps; CMS |
 | **Must** | Company sign-up creates company + first Owner with email, password, **company registration number**, **VAT number**, and **address** |
 | **Must** | Address entry supports **assistive free lookup** (OpenStreetMap / Nominatim-style); store formatted address text (lat/lon optional) |
 | **Must** | Owner/Admin sign-in on web and mobile |
@@ -166,6 +211,13 @@ Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin user
 | **Must** | Owner/Admin third vehicle tab **Handovers**: history + detail read-only (web + mobile) |
 | **Must** | Drivers cannot see Handovers history tab / company handover admin |
 | **Should** | Driver home shows open Out / start In cue when applicable |
+| **Must** | Driver **Daily usage** create when active next-travel exists (web + mobile) |
+| **Must** | Daily usage required fields: date, start place, start distance, start time, end place, end distance, end time |
+| **Must** | Distance unit from country (A34); end ≥ start; start ≥ vehicle.mileage when set; end time ≥ start time same date |
+| **Must** | Multiple Daily usage entries per day allowed; driver lists **own** only; no edit/delete this slice |
+| **Must** | Daily usage does **not** update `vehicle.mileage` |
+| **Must** | Offline: Daily usage submit disabled with warning |
+| **Should** | Driver home hub cue for Daily usage when next-travel active |
 | **Must** | Store compliance dates and warn on expiry |
 | **Must** | Edit vehicle form prepopulated from stored vehicle (web + mobile); create stays blank |
 | **Must** | Vehicles web side nav + mobile Owner/Admin tab urgency: orange at daysUntil = 7, red when daysUntil &lt; 7 or overdue (worst-wins, company only) |
@@ -245,6 +297,16 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 | A55 | Owner and Admin only see Handovers history tab + detail; Drivers cannot. History **read-only** this slice. |
 | A56 | Handover damage images are **not** vehicle side appearance images and **not** compliance documents. |
 
+| A82 | Two account kinds at signup: **company** and **individual**. Kind is chosen before or as part of sign-up and stored on the tenant. |
+| A83 | **Individual** sign-up requires **email** + **password** (≥ 8) only. Registration number, VAT, and company address are **not** collected or required. |
+| A84 | Individual tenant has exactly one **Owner** at creation (the registrant). **No** Admin create on Individual tenants this slice. |
+| A85 | **Drivers** (invite, roster, hard-delete, disable) are **Company-only**. Individuals have no drivers list and cannot call driver-admin outcomes. |
+| A86 | Individual **feature subset (Must):** auth (sign-in, reset, optional TOTP), **own vehicles** create/edit with compliance dates, expiry warnings, optional mileage, side images, Vehicles nav urgency on own vehicles. **Not** in Individual subset: Drivers admin, Admins, driver next-travel/handover/daily-usage shells. |
+| A87 | Tenancy isolation still applies: principals only see data in **their** tenant (company or individual workspace) **(extends A8)**. |
+| A88 | All tenants and Owner/Admin/Driver data existing before this slice are **account_kind = company**. No user action required. |
+| A89 | Account kind is **immutable** after creation in this slice (no self-serve convert). |
+| A90 | Product language: **Company** = org account; **Individual** = personal account; login role for both self-registered principals remains **Owner** with capabilities gated by account kind. |
+
 ### Open questions (not invented)
 
 1. May an Admin invite/create other Admins, or only Owner? (Stories assume Owner only.)
@@ -262,7 +324,11 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 13. Disable driver: who may re-enable (Owner only vs Admin too)? Stories assume Owner or Admin.
 14. Can a driver email be the same person as an Owner/Admin email? (A6 says unique—confirm.)
 15. Exact max lengths / format validation for registration number and VAT beyond non-empty required strings? (Left to sensible implementation limits; no jurisdiction-specific checksum invented.)
+16. ~~Company vs Individual accounts?~~ **Resolved:** two kinds; defaults in A82–A90 / rules 117–128.
+17. Individual driver invite? **No** this slice (A85).
+18. Individual operational driver logs? **Out** (A86).
+
 
 ## 6. Next specialist
 
-**Design Specialist** — tokens and page specs for Owner/Admin **Vehicles create/edit** four-side image slots (empty/filled/replace/clear, upload error) and optional list presence cue (**Should**). Web + mobile. Do not start architecture or application code until design is done for this slice.
+**Design Specialist** — account-kind choice; Individual sign-up; Company sign-up entry from choice; landing CTA/copy for both kinds; Individual Owner shell without Drivers/Admins. Web + mobile as applicable. Then Architect → BE → FE.

@@ -1,4 +1,5 @@
 import { Stack } from "expo-router";
+import { OwnerHeaderNotifications } from "../../../components/owner-header-notifications";
 
 /** Prefer list over dynamic `[id]` when the Vehicles tab mounts. */
 export const unstable_settings = {
@@ -12,6 +13,7 @@ export default function VehiclesStack() {
       screenOptions={{
         headerStyle: { backgroundColor: "#ffffff" },
         headerTitleStyle: { color: "#0c1219" },
+        headerRight: () => <OwnerHeaderNotifications />,
       }}
     >
       <Stack.Screen name="index" options={{ title: "Vehicles" }} />

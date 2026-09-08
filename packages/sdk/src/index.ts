@@ -1,11 +1,20 @@
 export type Role = "owner" | "admin" | "driver";
 export type Client = "web" | "mobile";
+export type AccountKind = "company" | "individual";
 export type WarningState = "expired" | "due_soon";
-export type WarningField =
+export type BuiltInWarningField =
   | "insurance_on"
   | "inspection_on"
   | "road_tax_on"
   | "registration_on";
+/** API warnings: built-ins or `custom:<uuid>` (ADR-019). */
+export type WarningField = BuiltInWarningField | `custom:${string}`;
+
+export type VehicleCustomExpiration = {
+  id: string;
+  label: string;
+  expires_on: string;
+};
 
 export type ApiErrorBody = { error: { code: string; message: string } };
 
@@ -25,6 +34,7 @@ export type Principal = {
   email: string;
   role: Role;
   company_id: string;
+  account_kind: AccountKind;
 };
 
 export type Me = Principal & {
@@ -57,17 +67,53 @@ export type Driver = {
 
 export type Warning = { field: WarningField; state: WarningState };
 
-export const WARNING_FIELD_LABEL: Record<WarningField, string> = {
+const BUILTIN_WARNING_FIELD_LABEL: Record<BuiltInWarningField, string> = {
   insurance_on: "Insurance",
   inspection_on: "Inspection",
   road_tax_on: "Road tax",
   registration_on: "Registration",
 };
 
-export function warningA11y(plateOrCar: string, warnings: Warning[]): string {
+/** Built-in labels only; use `warningFieldLabel` for `custom:<id>`. */
+export const WARNING_FIELD_LABEL: Record<BuiltInWarningField, string> =
+  BUILTIN_WARNING_FIELD_LABEL;
+
+export function isCustomWarningField(field: string): field is `custom:${string}` {
+  return field.startsWith("custom:");
+}
+
+export function customExpirationIdFromWarningField(field: string): string | null {
+  if (!isCustomWarningField(field)) return null;
+  return field.slice("custom:".length) || null;
+}
+
+/** Resolve display label for a warning field (custom uses vehicle rows when provided). */
+export function warningFieldLabel(
+  field: string,
+  customExpirations?: Iterable<Pick<VehicleCustomExpiration, "id" | "label">>,
+): string {
+  if (field in BUILTIN_WARNING_FIELD_LABEL) {
+    return BUILTIN_WARNING_FIELD_LABEL[field as BuiltInWarningField];
+  }
+  const id = customExpirationIdFromWarningField(field);
+  if (id && customExpirations) {
+    for (const row of customExpirations) {
+      if (row.id === id) return row.label;
+    }
+  }
+  return id ? "Custom" : field;
+}
+
+export function warningA11y(
+  plateOrCar: string,
+  warnings: Warning[],
+  customExpirations?: Iterable<Pick<VehicleCustomExpiration, "id" | "label">>,
+): string {
   const parts = warnings.map(
     (w) =>
-      `${WARNING_FIELD_LABEL[w.field].toLowerCase()} ${w.state === "expired" ? "expired" : "due soon"}`,
+      `${warningFieldLabel(w.field, customExpirations).toLowerCase()} ${
+        w.state === "expired" ? "expired" : "due soon"
+      }`,
   );
   return parts.length ? `${plateOrCar}, ${parts.join(", ")}` : plateOrCar;
 }
@@ -75,8 +121,8 @@ export function warningA11y(plateOrCar: string, warnings: Warning[]): string {
 /** US-28 Vehicles nav/tab chrome — not list/detail `warnings` (30-day). */
 export type VehiclesNavUrgency = "none" | "warning" | "critical";
 
-/** Section dates for US-28 nav urgency + expiry (registration_on excluded). */
-export const VEHICLE_SECTION_FIELDS: WarningField[] = [
+/** Built-in section dates for US-28 nav urgency (registration_on excluded). */
+export const VEHICLE_SECTION_FIELDS: BuiltInWarningField[] = [
   "insurance_on",
   "inspection_on",
   "road_tax_on",
@@ -96,12 +142,20 @@ export function daysUntilUtc(dateIso: string, todayIso = utcToday()): number {
   return Math.round((dateMs - todayMs) / 86_400_000);
 }
 
-type VehicleSectionDates = Record<WarningField, string | null>;
+type VehicleSectionDates = {
+  insurance_on?: string | null;
+  inspection_on?: string | null;
+  road_tax_on?: string | null;
+  registration_on?: string | null;
+  /** Optional custom rows — each `expires_on` participates in US-89 nav urgency. */
+  custom_expirations?: Iterable<Pick<VehicleCustomExpiration, "expires_on">> | null;
+};
 
 /**
- * Fleet-wide worst-wins nav urgency from section dates (ADR-004 / US-28).
+ * Fleet-wide worst-wins nav urgency from section dates (ADR-004 / US-28 / US-89).
  * critical: any daysUntil &lt; 7 (incl. overdue); warning: else any daysUntil === 7; else none.
- * Do not derive from `warnings` (30-day only).
+ * Includes custom expiration `expires_on`. Do not derive from `warnings` (30-day only).
+ * `registration_on` never participates.
  */
 export function vehiclesNavUrgency(
   vehicles: Iterable<VehicleSectionDates>,
@@ -111,6 +165,13 @@ export function vehiclesNavUrgency(
   for (const vehicle of vehicles) {
     for (const field of VEHICLE_SECTION_FIELDS) {
       const value = vehicle[field];
+      if (!value) continue;
+      const days = daysUntilUtc(value, todayIso);
+      if (days < 7) return "critical";
+      if (days === 7) hasWarning = true;
+    }
+    for (const row of vehicle.custom_expirations ?? []) {
+      const value = row.expires_on;
       if (!value) continue;
       const days = daysUntilUtc(value, todayIso);
       if (days < 7) return "critical";
@@ -131,10 +192,130 @@ export function vehiclesNavA11yLabel(urgency: VehiclesNavUrgency): string {
   }
 }
 
+/** US-72 / US-89 compliance notification menu item (client-derived; ADR-017 / ADR-019). */
+export type ComplianceNotificationField = Exclude<
+  WarningField,
+  "registration_on"
+>;
+
+export type ComplianceNotificationItem = {
+  vehicle_id: string;
+  make: string;
+  model: string;
+  license_plate: string;
+  field: ComplianceNotificationField;
+  /** Display label (built-in name or custom row label). */
+  field_label: string;
+  state: WarningState;
+  date_on: string;
+  days_until: number;
+};
+
+const NOTIFICATION_FIELD_ORDER: Record<string, number> = {
+  insurance_on: 0,
+  inspection_on: 1,
+  road_tax_on: 2,
+};
+
+function notificationFieldOrder(field: string): number {
+  if (field in NOTIFICATION_FIELD_ORDER) return NOTIFICATION_FIELD_ORDER[field]!;
+  // Custom fields after built-ins; stable by field string.
+  return 100;
+}
+
+export type ComplianceNotificationVehicle = {
+  id: string;
+  make: string;
+  model: string;
+  license_plate: string;
+  insurance_on: string | null;
+  inspection_on: string | null;
+  road_tax_on: string | null;
+  custom_expirations?: VehicleCustomExpiration[] | null;
+  warnings: Warning[];
+};
+
+/**
+ * Project OA Global Header notification rows from vehicles + server `warnings[]`.
+ * Inclusion trusts API warnings (ADR-004 / ADR-019); does not re-apply the 30-day window.
+ * Includes `custom:<uuid>` when present. Sort: days_until ascending; tie-break field order then plate. Cap 50 (rule 114).
+ */
+export function complianceNotificationItems(
+  vehicles: Iterable<ComplianceNotificationVehicle>,
+  todayIso = utcToday(),
+  cap = 50,
+): { items: ComplianceNotificationItem[]; truncated: boolean; total: number } {
+  const items: ComplianceNotificationItem[] = [];
+  for (const vehicle of vehicles) {
+    const customs = vehicle.custom_expirations ?? [];
+    const customById = new Map(customs.map((row) => [row.id, row]));
+    for (const warning of vehicle.warnings) {
+      if (warning.field === "registration_on") continue;
+      let date_on: string | null | undefined;
+      let field_label: string;
+      if (isCustomWarningField(warning.field)) {
+        const id = customExpirationIdFromWarningField(warning.field);
+        const row = id ? customById.get(id) : undefined;
+        if (!row?.expires_on) continue;
+        date_on = row.expires_on;
+        field_label = row.label;
+      } else if (VEHICLE_SECTION_FIELDS.includes(warning.field as BuiltInWarningField)) {
+        date_on = vehicle[warning.field as "insurance_on" | "inspection_on" | "road_tax_on"];
+        field_label = warningFieldLabel(warning.field);
+      } else {
+        continue;
+      }
+      if (!date_on) continue;
+      items.push({
+        vehicle_id: vehicle.id,
+        make: vehicle.make,
+        model: vehicle.model,
+        license_plate: vehicle.license_plate,
+        field: warning.field as ComplianceNotificationField,
+        field_label,
+        state: warning.state,
+        date_on,
+        days_until: daysUntilUtc(date_on, todayIso),
+      });
+    }
+  }
+  items.sort((a, b) => {
+    if (a.days_until !== b.days_until) return a.days_until - b.days_until;
+    const fieldDelta =
+      notificationFieldOrder(a.field) - notificationFieldOrder(b.field);
+    if (fieldDelta !== 0) return fieldDelta;
+    if (a.field !== b.field) return a.field.localeCompare(b.field);
+    return a.license_plate.localeCompare(b.license_plate);
+  });
+  const total = items.length;
+  return {
+    items: items.slice(0, cap),
+    truncated: total > cap,
+    total,
+  };
+}
+
+/** Accessible name for the Global Header notification control (US-70 / US-74). */
+export function complianceNotificationsA11yLabel(count: number): string {
+  if (count <= 0) return "Notifications";
+  return `Notifications, ${count} compliance alerts`;
+}
+
 /** List/home identity: "Make Model" with single space. */
 export function vehicleLabel(v: { make: string; model: string }): string {
   return `${v.make} ${v.model}`.replace(/\s+/g, " ").trim();
 }
+
+export {
+  VEHICLE_CATALOG_OTHER,
+  VEHICLE_MAKES_MODELS_CATALOG,
+  vehicleCatalogMakes,
+  vehicleCatalogModelsForMake,
+  vehicleMakeSelectValue,
+  vehicleModelSelectValue,
+  type VehicleMakeModelsEntry,
+  type VehicleMakesModelsCatalog,
+} from "./vehicle-makes-models.js";
 
 export function mapAuthError(code: string, fallback: string): string {
   switch (code) {
@@ -451,6 +632,8 @@ export type Vehicle = {
   inspection_on: string | null;
   road_tax_on: string | null;
   registration_on: string | null;
+  /** Always present on API reads (min `[]`). */
+  custom_expirations: VehicleCustomExpiration[];
   warnings: Warning[];
   has_side_images: boolean;
   side_images: Record<VehicleSide, SideImage | null>;
@@ -467,6 +650,12 @@ export type VehicleWrite = {
   inspection_on?: string | null;
   road_tax_on?: string | null;
   registration_on?: string | null;
+  /** When present: full replace. Omit on PATCH = unchanged. `[]` clears. */
+  custom_expirations?: Array<{
+    id?: string | null;
+    label: string;
+    expires_on: string;
+  }>;
 };
 
 export type Home = {
@@ -578,6 +767,39 @@ export type CreateHandoverInput = {
   damages_text?: string;
   /** Optional damage photos (0–10). Field name `damages`. */
   damages?: SideImageUploadFile[];
+};
+
+export type DailyUsageVehicleSummary = {
+  id: string;
+  make: string;
+  model: string;
+  license_plate: string;
+  label: string;
+};
+
+export type DailyUsage = {
+  id: string;
+  vehicle_id: string;
+  usage_date: string;
+  start_place: string;
+  start_distance: number;
+  end_place: string;
+  end_distance: number;
+  distance_unit: OdometerUnit;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  vehicle: DailyUsageVehicleSummary | null;
+};
+
+export type CreateDailyUsageInput = {
+  usage_date: string;
+  start_place: string;
+  start_distance: number | string;
+  start_time: string;
+  end_place: string;
+  end_distance: number | string;
+  end_time: string;
 };
 
 export function odometerUnitLabel(unit: OdometerUnit): string {
@@ -731,6 +953,13 @@ export class FleetClient {
     address: string;
   }) {
     return this.request<Omit<AuthSuccess, "status">>("POST", "/v1/auth/register", {
+      body: input,
+      auth: false,
+    });
+  }
+
+  registerIndividual(input: { email: string; password: string }) {
+    return this.request<Omit<AuthSuccess, "status">>("POST", "/v1/auth/register/individual", {
       body: input,
       auth: false,
     });
@@ -937,6 +1166,16 @@ export class FleetClient {
       "GET",
       `/v1/vehicles/${vehicleId}/handovers/${handoverId}`,
     );
+  }
+
+  /** US-63 — list own Daily usage (newest first). */
+  listDriverDailyUsage() {
+    return this.request<{ items: DailyUsage[] }>("GET", "/v1/driver/daily-usage");
+  }
+
+  /** US-61 — create Daily usage against active next-travel vehicle. */
+  createDriverDailyUsage(input: CreateDailyUsageInput) {
+    return this.request<DailyUsage>("POST", "/v1/driver/daily-usage", { body: input });
   }
 }
 

@@ -1,8 +1,8 @@
 # Denied and unauthenticated
 
-**Stories:** US-14, US-15, E8, E9 (and Admin create denial US-06)  
+**Stories:** US-14, US-15, E8, E9 (Admin create denial US-06); **US-82 / E75–E77** (Individual → Company-only)  
 **Density:** Matches host surface (web compact / mobile comfortable).  
-**E7 retired:** Do **not** use a “driver on web” blanket deny. Drivers may complete usable auth + minimal home on web. Owner/Admin **management** areas stay denied via **US-14 / E8**.
+**E7 retired:** Do **not** use a “driver on web” blanket deny. Drivers may complete usable auth + minimal home on web. Owner/Admin **management** areas stay denied via **US-14 / E8**. Individual Owner **Drivers/Admins** (and driver-ops shells) denied via **E77** — hide nav when possible; still deny deep links.
 
 Authorization is **calm ops copy**, not a crash. Do not use `bannerDanger` / `danger` chrome for authz destinations.
 
@@ -47,6 +47,24 @@ Applies when a **driver** (including `must_change_password` still true) opens Ow
 - Body “Only the Owner can add Admins.”
 - `buttonSecondary` back (keep Owner shell chrome if already authenticated as Admin)
 
+## Individual Owner → Company-only (US-82 / E75–E77)
+
+Applies when a signed-in **Individual Owner** opens **Drivers** admin, **Admins**, driver invite/create/delete, or **driver-ops** shells (next-travel / handover create / Daily usage as a driver product) — web or mobile, including deep links.
+
+- Stay in **Individual management shell** (Home / Vehicles / Security only). **Do not** flash Company Drivers/Admins nav items while denying.
+- Title **“Not available”**
+- Body **“Drivers and Admins are available on company accounts only.”**
+- `buttonPrimary` **“Back to home”** → [owner-home.md](owner-home.md) Individual home
+- Optional `buttonSecondary` **“View vehicles”** → [vehicles.md](vehicles.md) when the denied target was driver-related
+- No peek of driver roster, Admin create form, or invite controls
+- API still denies (E75/E76); UI hide is not the only control
+
+| Denied target | Body emphasis |
+| --- | --- |
+| Drivers list/create/invite | Default body above |
+| Admins list/create | Default body above (E76) |
+| Driver-ops shell | Same title; body may stay default — do not invent a second product |
+
 ## Token usage
 
 | Role | Class |
@@ -68,6 +86,7 @@ Do **not** use `danger` for authorization.
 | US-15 | Sign in required |
 | US-14 | Not available |
 | US-06 | Not allowed |
+| US-82 / E77 | Not available |
 | Primary | Sign in / Back to home |
 
 - Announce the denied title. Focus the primary button.

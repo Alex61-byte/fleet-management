@@ -1,32 +1,58 @@
 import {
   FleetApiError,
+  VEHICLE_CATALOG_OTHER,
+  daysUntilUtc,
   odometerUnitForCountry,
   odometerUnitLabel,
+  utcToday,
+  vehicleCatalogMakes,
+  vehicleCatalogModelsForMake,
+  vehicleMakeSelectValue,
+  vehicleModelSelectValue,
   WARNING_FIELD_LABEL,
+  type BuiltInWarningField,
   type Vehicle,
   type VehicleSide,
   type VehicleWrite,
-  type WarningField,
+  type WarningState,
 } from "@fleet/sdk";
 import * as ImagePicker from "expo-image-picker";
-import { useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { Image, Pressable, Text, TextInput as RNTextInput, View } from "react-native";
 
 type VehicleFormTab = "details" | "images" | "handovers";
 import { ConfirmDeleteDialog, TrashIcon } from "./confirm-delete-dialog";
 import { VehicleHandoversTab } from "./vehicle-handovers-tab";
 import { VehicleSideImageViewer } from "./vehicle-side-image-viewer";
-import { Field, PrimaryButton, SecondaryButton, TextInput } from "./ui";
+import { Field, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "./ui";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { prepareVehicleSideImageForUpload } from "../lib/prepare-side-image";
 import { sideImageLog } from "../lib/side-image-log";
 
-const DATE_FIELDS: WarningField[] = [
+const DATE_FIELDS: BuiltInWarningField[] = [
   "insurance_on",
   "inspection_on",
   "road_tax_on",
   "registration_on",
 ];
+
+const CUSTOM_EXPIRATION_MAX = 10;
+const CUSTOM_LABEL_MAX = 80;
+const DATE_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+type CustomExpirationDraft = {
+  id?: string;
+  key: string;
+  label: string;
+  expires_on: string;
+  serverOwned: boolean;
+};
+
+type CustomExpirationFieldErrors = {
+  label?: string;
+  expires_on?: string;
+};
 
 /** Local constants — avoid relying on SDK runtime exports in the client bundle. */
 const VEHICLE_SIDES: VehicleSide[] = ["FRONT", "LEFT", "RIGHT", "BACK"];
@@ -56,12 +82,94 @@ function normalizeVehicle(v: Vehicle): Vehicle {
   };
   return {
     ...v,
+    custom_expirations: v.custom_expirations ?? [],
     side_images,
     has_side_images:
       typeof v.has_side_images === "boolean"
         ? v.has_side_images
         : VEHICLE_SIDES.some((side) => Boolean(side_images[side])),
   };
+}
+
+function draftsFromVehicle(v: Vehicle | undefined): CustomExpirationDraft[] {
+  return (v?.custom_expirations ?? []).map((row) => ({
+    id: row.id,
+    key: row.id,
+    label: row.label,
+    expires_on: dateInputValue(row.expires_on),
+    serverOwned: true,
+  }));
+}
+
+function newCustomDraft(): CustomExpirationDraft {
+  const key =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? `tmp-${crypto.randomUUID()}`
+      : `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return { key, label: "", expires_on: "", serverOwned: false };
+}
+
+function a1StateForDate(expiresOn: string, todayIso = utcToday()): WarningState | null {
+  const value = dateInputValue(expiresOn);
+  if (!DATE_ISO_RE.test(value)) return null;
+  const days = daysUntilUtc(value, todayIso);
+  if (days < 0) return "expired";
+  if (days <= 30) return "due_soon";
+  return null;
+}
+
+function validateCustomExpirations(
+  drafts: CustomExpirationDraft[],
+): Record<string, CustomExpirationFieldErrors> {
+  const errors: Record<string, CustomExpirationFieldErrors> = {};
+  const seen = new Map<string, string>();
+
+  for (const row of drafts) {
+    const rowErrors: CustomExpirationFieldErrors = {};
+    const trimmed = row.label.trim();
+
+    if (!trimmed) {
+      rowErrors.label = "Enter a label (1–80 characters).";
+    } else if (trimmed.length > CUSTOM_LABEL_MAX) {
+      rowErrors.label = "Label must be 80 characters or fewer.";
+    } else {
+      const key = trimmed.toLowerCase();
+      const prior = seen.get(key);
+      if (prior) {
+        rowErrors.label = "Label must be unique on this vehicle.";
+        const priorErrors = errors[prior] ?? {};
+        if (!priorErrors.label) {
+          errors[prior] = { ...priorErrors, label: "Label must be unique on this vehicle." };
+        }
+      } else {
+        seen.set(key, row.key);
+      }
+    }
+
+    const date = dateInputValue(row.expires_on);
+    if (!date || !DATE_ISO_RE.test(date)) {
+      rowErrors.expires_on = "Choose an expiration date.";
+    }
+
+    if (rowErrors.label || rowErrors.expires_on) {
+      errors[row.key] = { ...errors[row.key], ...rowErrors };
+    }
+  }
+
+  return errors;
+}
+
+function customExpirationsWritePayload(
+  drafts: CustomExpirationDraft[],
+): NonNullable<VehicleWrite["custom_expirations"]> {
+  return drafts.map((row) => {
+    const item: { id?: string; label: string; expires_on: string } = {
+      label: row.label.trim(),
+      expires_on: dateInputValue(row.expires_on),
+    };
+    if (row.serverOwned && row.id) item.id = row.id;
+    return item;
+  });
 }
 
 export function VehicleForm({
@@ -77,19 +185,51 @@ export function VehicleForm({
   onSubmit: (body: VehicleWrite) => Promise<Vehicle | void>;
   onVehicleChange?: (vehicle: Vehicle) => void;
 }) {
+  const { me } = useAuth();
+  const companyTenant = me?.account_kind !== "individual";
   const [make, setMake] = useState(initial?.make ?? "");
   const [model, setModel] = useState(initial?.model ?? "");
+  const [makeSelect, setMakeSelect] = useState(() => vehicleMakeSelectValue(initial?.make));
+  const [modelSelect, setModelSelect] = useState(() =>
+    vehicleModelSelectValue(initial?.make, initial?.model),
+  );
   const [plate, setPlate] = useState(initial?.license_plate ?? "");
   const [country, setCountry] = useState(initial?.country_of_registration ?? "");
   const [mileage, setMileage] = useState(
     initial?.mileage != null && Number.isFinite(initial.mileage) ? String(initial.mileage) : "",
   );
-  const [dates, setDates] = useState<Record<WarningField, string>>({
+  const catalogMakes = useMemo(() => vehicleCatalogMakes(), []);
+  const catalogModels = useMemo(
+    () => (makeSelect && makeSelect !== VEHICLE_CATALOG_OTHER ? vehicleCatalogModelsForMake(makeSelect) : []),
+    [makeSelect],
+  );
+  const makeOptions = useMemo(
+    () => [
+      { value: "", label: "Select make" },
+      ...catalogMakes.map((name) => ({ value: name, label: name })),
+      { value: VEHICLE_CATALOG_OTHER, label: VEHICLE_CATALOG_OTHER },
+    ],
+    [catalogMakes],
+  );
+  const modelOptions = useMemo(
+    () => [
+      { value: "", label: makeSelect ? "Select model" : "Select make first" },
+      ...catalogModels.map((name) => ({ value: name, label: name })),
+      ...(makeSelect ? [{ value: VEHICLE_CATALOG_OTHER, label: VEHICLE_CATALOG_OTHER }] : []),
+    ],
+    [catalogModels, makeSelect],
+  );
+  const [dates, setDates] = useState<Record<BuiltInWarningField, string>>({
     insurance_on: dateInputValue(initial?.insurance_on),
     inspection_on: dateInputValue(initial?.inspection_on),
     road_tax_on: dateInputValue(initial?.road_tax_on),
     registration_on: dateInputValue(initial?.registration_on),
   });
+  const [customExpirations, setCustomExpirations] = useState<CustomExpirationDraft[]>(() =>
+    draftsFromVehicle(initial),
+  );
+  const [customErrors, setCustomErrors] = useState<Record<string, CustomExpirationFieldErrors>>({});
+  const [removeCustomKey, setRemoveCustomKey] = useState<string | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | undefined>(
     initial ? normalizeVehicle(initial) : undefined,
   );
@@ -100,11 +240,84 @@ export function VehicleForm({
   const [clearConfirmSide, setClearConfirmSide] = useState<VehicleSide | null>(null);
   const [viewerSide, setViewerSide] = useState<VehicleSide | null>(null);
   const [tab, setTab] = useState<VehicleFormTab>("details");
+  const customLabelInputRefs = useRef<Partial<Record<string, RNTextInput | null>>>({});
+
+  const removeCustomTarget = useMemo(
+    () => customExpirations.find((row) => row.key === removeCustomKey) ?? null,
+    [customExpirations, removeCustomKey],
+  );
 
   function applyVehicle(next: Vehicle) {
     const normalized = normalizeVehicle(next);
     setVehicle(normalized);
+    setCustomExpirations(draftsFromVehicle(normalized));
+    setCustomErrors({});
     onVehicleChange?.(normalized);
+  }
+
+  function addCustomExpiration() {
+    if (customExpirations.length >= CUSTOM_EXPIRATION_MAX || offline || busy) return;
+    const draft = newCustomDraft();
+    setCustomExpirations((rows) => [...rows, draft]);
+    queueMicrotask(() => customLabelInputRefs.current[draft.key]?.focus());
+  }
+
+  function updateCustomExpiration(
+    key: string,
+    patch: Partial<Pick<CustomExpirationDraft, "label" | "expires_on">>,
+  ) {
+    setCustomExpirations((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    setCustomErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      const rowErr = { ...next[key] };
+      if (patch.label !== undefined) delete rowErr.label;
+      if (patch.expires_on !== undefined) delete rowErr.expires_on;
+      if (!rowErr.label && !rowErr.expires_on) delete next[key];
+      else next[key] = rowErr;
+      return next;
+    });
+  }
+
+  function confirmRemoveCustom() {
+    const key = removeCustomKey;
+    if (!key) return;
+    setCustomExpirations((rows) => rows.filter((row) => row.key !== key));
+    setCustomErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setRemoveCustomKey(null);
+  }
+
+  async function submitDetails() {
+    const fieldErrors = validateCustomExpirations(customExpirations);
+    if (Object.keys(fieldErrors).length > 0) {
+      setCustomErrors(fieldErrors);
+      setTab("details");
+      return;
+    }
+    setCustomErrors({});
+    setBusy(true);
+    try {
+      const next = await onSubmit({
+        make: make.trim(),
+        model: model.trim(),
+        license_plate: plate.trim(),
+        country_of_registration: country || null,
+        mileage: mileage.trim() === "" ? null : mileage.trim(),
+        insurance_on: dates.insurance_on || null,
+        inspection_on: dates.inspection_on || null,
+        road_tax_on: dates.road_tax_on || null,
+        registration_on: dates.registration_on || null,
+        custom_expirations: customExpirationsWritePayload(customExpirations),
+      });
+      if (next) applyVehicle(next);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function pickAndUpload(side: VehicleSide) {
@@ -263,23 +476,25 @@ export function VehicleForm({
             Details
           </Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: tab === "images" }}
-          onPress={() => setTab("images")}
-          className={`min-h-hit px-2 items-center justify-center border-b-2 ${
-            tab === "images" ? "border-brand" : "border-transparent"
-          }`}
-        >
-          <Text
-            className={`text-label ${
-              tab === "images" ? "font-semibold text-text-primary" : "font-medium text-text-secondary"
+        {companyTenant ? (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === "images" }}
+            onPress={() => setTab("images")}
+            className={`min-h-hit px-2 items-center justify-center border-b-2 ${
+              tab === "images" ? "border-brand" : "border-transparent"
             }`}
           >
-            Images
-          </Text>
-        </Pressable>
-        {vehicle?.id ? (
+            <Text
+              className={`text-label ${
+                tab === "images" ? "font-semibold text-text-primary" : "font-medium text-text-secondary"
+              }`}
+            >
+              Images
+            </Text>
+          </Pressable>
+        ) : null}
+        {companyTenant && vehicle?.id ? (
           <Pressable
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === "handovers" }}
@@ -304,11 +519,62 @@ export function VehicleForm({
       {tab === "details" ? (
         <View className="gap-2 pt-2">
           <Field label="Make">
-            <TextInput value={make} onChangeText={setMake} />
+            <SelectInput
+              label="Make"
+              value={makeSelect}
+              placeholder="Select make"
+              options={makeOptions}
+              onChange={(next) => {
+                setMakeSelect(next);
+                if (!next) {
+                  setMake("");
+                  setModel("");
+                  setModelSelect("");
+                  return;
+                }
+                if (next === VEHICLE_CATALOG_OTHER) {
+                  setMake("");
+                  setModel("");
+                  setModelSelect(VEHICLE_CATALOG_OTHER);
+                  return;
+                }
+                setMake(next);
+                setModel("");
+                setModelSelect("");
+              }}
+            />
           </Field>
+          {makeSelect === VEHICLE_CATALOG_OTHER ? (
+            <Field label="Make (custom)">
+              <TextInput value={make} onChangeText={setMake} accessibilityLabel="Custom make" />
+            </Field>
+          ) : null}
           <Field label="Model">
-            <TextInput value={model} onChangeText={setModel} />
+            <SelectInput
+              label="Model"
+              value={modelSelect}
+              placeholder={makeSelect ? "Select model" : "Select make first"}
+              options={modelOptions}
+              disabled={!makeSelect}
+              onChange={(next) => {
+                setModelSelect(next);
+                if (!next) {
+                  setModel("");
+                  return;
+                }
+                if (next === VEHICLE_CATALOG_OTHER) {
+                  setModel("");
+                  return;
+                }
+                setModel(next);
+              }}
+            />
           </Field>
+          {modelSelect === VEHICLE_CATALOG_OTHER ? (
+            <Field label="Model (custom)">
+              <TextInput value={model} onChangeText={setModel} accessibilityLabel="Custom model" />
+            </Field>
+          ) : null}
           <Field label="License plate">
             <TextInput value={plate} onChangeText={setPlate} autoCapitalize="characters" />
           </Field>
@@ -350,10 +616,97 @@ export function VehicleForm({
               </Field>
             );
           })}
+
+          <View className="gap-2">
+            <Text className="font-semibold text-section text-text-primary">Custom expirations</Text>
+            {customExpirations.length === 0 ? (
+              <Text className="text-caption text-text-secondary">No custom expirations yet.</Text>
+            ) : (
+              <View className="gap-2">
+                {customExpirations.map((row, index) => {
+                  const rowErrors = customErrors[row.key] ?? {};
+                  const labelTrim = row.label.trim();
+                  const badgeLabel = labelTrim || "Expires on";
+                  const serverWarning =
+                    row.serverOwned && row.id
+                      ? vehicle?.warnings.find((w) => w.field === `custom:${row.id}`)
+                      : undefined;
+                  const previewState =
+                    serverWarning?.state ?? a1StateForDate(row.expires_on) ?? null;
+                  const removeName = labelTrim
+                    ? `Remove ${labelTrim} expiration`
+                    : "Remove custom expiration";
+                  return (
+                    <View key={row.key} className="gap-2 w-full">
+                      <View className="flex-row items-center justify-between gap-1">
+                        <Text className="text-caption text-text-secondary">Expiration {index + 1}</Text>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={removeName}
+                          disabled={busy || offline || removeCustomKey !== null}
+                          onPress={() => setRemoveCustomKey(row.key)}
+                          className={`h-hit w-hit flex items-center justify-center rounded-md p-0 ${
+                            busy || offline ? "opacity-50" : ""
+                          }`}
+                        >
+                          <TrashIcon />
+                        </Pressable>
+                      </View>
+                      <Field label="Label" error={rowErrors.label}>
+                        <TextInput
+                          ref={(el) => {
+                            customLabelInputRefs.current[row.key] = el;
+                          }}
+                          value={row.label}
+                          onChangeText={(v) => updateCustomExpiration(row.key, { label: v })}
+                          error={Boolean(rowErrors.label)}
+                          placeholder="e.g. Fire extinguisher"
+                          accessibilityLabel={`Custom expiration ${index + 1} label`}
+                          maxLength={CUSTOM_LABEL_MAX + 20}
+                          editable={!busy}
+                        />
+                      </Field>
+                      <Field label="Expires on" error={rowErrors.expires_on}>
+                        <TextInput
+                          value={row.expires_on}
+                          onChangeText={(v) => updateCustomExpiration(row.key, { expires_on: v })}
+                          error={Boolean(rowErrors.expires_on)}
+                          placeholder="YYYY-MM-DD"
+                          accessibilityLabel={`Custom expiration ${index + 1} date`}
+                          editable={!busy}
+                        />
+                        {previewState ? (
+                          <Text
+                            className={
+                              previewState === "expired"
+                                ? "text-danger text-caption"
+                                : "text-warning text-caption"
+                            }
+                          >
+                            {badgeLabel} · {previewState === "expired" ? "Expired" : "Due soon"}
+                          </Text>
+                        ) : null}
+                      </Field>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+            <SecondaryButton
+              title="Add expiration"
+              disabled={busy || offline || customExpirations.length >= CUSTOM_EXPIRATION_MAX}
+              onPress={addCustomExpiration}
+            />
+            {customExpirations.length >= CUSTOM_EXPIRATION_MAX ? (
+              <Text className="text-caption text-text-secondary">
+                Maximum of 10 custom expirations.
+              </Text>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
-      {tab === "images" ? (
+      {companyTenant && tab === "images" ? (
         <View className="gap-2 pt-2">
           <Text className="text-caption text-text-secondary">
             Optional photos from four sides. Any image type up to 5 MB.
@@ -431,7 +784,7 @@ export function VehicleForm({
         </View>
       ) : null}
 
-      {tab === "handovers" && vehicle?.id ? (
+      {companyTenant && tab === "handovers" && vehicle?.id ? (
         <VehicleHandoversTab vehicleId={vehicle.id} offline={offline} />
       ) : null}
 
@@ -462,31 +815,29 @@ export function VehicleForm({
         onConfirm={() => void clearSideConfirmed()}
       />
 
+      <ConfirmDeleteDialog
+        open={removeCustomKey !== null}
+        title={
+          removeCustomTarget?.label.trim()
+            ? `Remove ${removeCustomTarget.label.trim()}?`
+            : "Remove custom expiration?"
+        }
+        body="This removes the custom expiration from the vehicle."
+        caption="You can add it again later."
+        confirmLabel="Remove"
+        confirmBusyLabel="Removing…"
+        disabledConfirm={offline}
+        onCancel={() => setRemoveCustomKey(null)}
+        onConfirm={confirmRemoveCustom}
+      />
+
       {tab !== "handovers" ? (
         <PrimaryButton
           title={submitLabel}
           busy={busy || Boolean(sideBusy)}
           disabled={offline}
           onPress={() => {
-            void (async () => {
-              setBusy(true);
-              try {
-                const next = await onSubmit({
-                  make: make.trim(),
-                  model: model.trim(),
-                  license_plate: plate.trim(),
-                  country_of_registration: country || null,
-                  mileage: mileage.trim() === "" ? null : mileage.trim(),
-                  insurance_on: dates.insurance_on || null,
-                  inspection_on: dates.inspection_on || null,
-                  road_tax_on: dates.road_tax_on || null,
-                  registration_on: dates.registration_on || null,
-                });
-                if (next) applyVehicle(next);
-              } finally {
-                setBusy(false);
-              }
-            })();
+            void submitDetails();
           }}
         />
       ) : null}

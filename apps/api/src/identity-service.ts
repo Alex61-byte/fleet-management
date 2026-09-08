@@ -76,6 +76,7 @@ export class IdentityService {
       await this.store.withTransaction(async (tx) => {
         await tx.insertCompany({
           id: companyId,
+          accountKind: "company",
           registrationNumber,
           vatNumber,
           address,
@@ -87,7 +88,47 @@ export class IdentityService {
     }
     const tokens = await issueTokens(this.store, this.jwtSecret, principal);
     return {
-      principal: toPublicPrincipal(principal),
+      principal: toPublicPrincipal(principal, "company"),
+      ...tokens,
+      must_change_password: false,
+    };
+  }
+
+  async registerIndividual(input: { email: string; password: string }) {
+    requirePasswordLength(input.password);
+    const normalized = normalizeEmail(input.email);
+    if (!normalized) throw errors.validation("Email is required.");
+    const companyId = newId();
+    const principal: Principal = {
+      id: newId(),
+      companyId,
+      email: normalized,
+      role: "owner",
+      passwordHash: await hashPassword(input.password),
+      mustChangePassword: false,
+      loginEnabled: true,
+      totpEnabled: false,
+      totpSecret: null,
+      totpPendingSecret: null,
+      ...blankInviteFields(),
+    };
+    try {
+      await this.store.withTransaction(async (tx) => {
+        await tx.insertCompany({
+          id: companyId,
+          accountKind: "individual",
+          registrationNumber: "",
+          vatNumber: "",
+          address: "",
+        });
+        await tx.insertPrincipal(principal);
+      });
+    } catch (err) {
+      mapUnique(err);
+    }
+    const tokens = await issueTokens(this.store, this.jwtSecret, principal);
+    return {
+      principal: toPublicPrincipal(principal, "individual"),
       ...tokens,
       must_change_password: false,
     };
@@ -189,11 +230,13 @@ export class IdentityService {
 
   async me(claims: AccessClaims) {
     const principal = await this.requirePrincipal(claims.sub);
+    const account_kind = await this.accountKindForCompany(principal.companyId);
     return {
       id: principal.id,
       email: principal.email,
       role: principal.role,
       company_id: principal.companyId,
+      account_kind,
       must_change_password: principal.mustChangePassword,
       login_enabled: principal.loginEnabled,
       totp_enabled: principal.role === "driver" ? false : principal.totpEnabled,
@@ -269,13 +312,13 @@ export class IdentityService {
   }
 
   async listAdmins(claims: AccessClaims) {
-    this.assertCompanyUser(claims);
+    await this.assertCompanyTenantUser(claims);
     const items = await this.store.listAdmins(claims.company_id);
     return { items: items.map((p) => ({ id: p.id, email: p.email, role: "admin" as const })) };
   }
 
   async createAdmin(claims: AccessClaims, email: string, password: string) {
-    this.assertCompanyUser(claims);
+    await this.assertCompanyTenantUser(claims);
     if (claims.role !== "owner") throw errors.forbidden();
     requirePasswordLength(password);
     const principal: Principal = {
@@ -305,13 +348,13 @@ export class IdentityService {
   }
 
   async listDrivers(claims: AccessClaims) {
-    this.assertCompanyUser(claims);
+    await this.assertCompanyTenantUser(claims);
     const items = await this.store.listDrivers(claims.company_id);
     return { items: items.map(driverJson) };
   }
 
   async createDriver(claims: AccessClaims, email: string) {
-    this.assertCompanyUser(claims);
+    await this.assertCompanyTenantUser(claims);
     const rawToken = randomToken();
     const principal: Principal = {
       id: newId(),
@@ -340,7 +383,7 @@ export class IdentityService {
   }
 
   async resendDriverInvite(claims: AccessClaims, id: string) {
-    this.assertCompanyUser(claims);
+    await this.assertCompanyTenantUser(claims);
     const principal = await this.store.findPrincipalById(id);
     if (!principal || principal.role !== "driver" || principal.companyId !== claims.company_id) {
       throw errors.notFound();
@@ -360,7 +403,7 @@ export class IdentityService {
   }
 
   async getDriver(claims: AccessClaims, id: string) {
-    this.assertCompanyUser(claims);
+    await this.assertCompanyTenantUser(claims);
     const principal = await this.store.findPrincipalById(id);
     if (!principal || principal.role !== "driver" || principal.companyId !== claims.company_id) {
       throw errors.notFound();
@@ -373,7 +416,7 @@ export class IdentityService {
     id: string,
     patch: { email?: string; login_enabled?: boolean },
   ) {
-    this.assertCompanyUser(claims);
+    await this.assertCompanyTenantUser(claims);
     const principal = await this.store.findPrincipalById(id);
     if (!principal || principal.role !== "driver" || principal.companyId !== claims.company_id) {
       throw errors.notFound();
@@ -389,7 +432,7 @@ export class IdentityService {
   }
 
   async deleteDriver(claims: AccessClaims, id: string): Promise<void> {
-    this.assertCompanyUser(claims);
+    await this.assertCompanyTenantUser(claims);
     const principal = await this.store.findPrincipalById(id);
     if (!principal || principal.role !== "driver" || principal.companyId !== claims.company_id) {
       throw errors.notFound();
@@ -397,6 +440,7 @@ export class IdentityService {
     await this.store.withTransaction(async (tx) => {
       await tx.voidOpenOutsForDriver(id);
       await tx.deleteDriverTravelForDriver(id);
+      await tx.deleteDailyUsageForDriver(id);
       await tx.clearPrincipalAuthSide(id);
       await tx.deletePrincipal(id);
     });
@@ -438,6 +482,18 @@ export class IdentityService {
 
   private assertCompanyUser(claims: AccessClaims) {
     if (claims.role === "driver") throw errors.forbidden();
+  }
+
+  /** Owner/Admin on a company-kind tenant only (Drivers/Admins — E75/E76). */
+  private async assertCompanyTenantUser(claims: AccessClaims) {
+    this.assertCompanyUser(claims);
+    const kind = await this.accountKindForCompany(claims.company_id);
+    if (kind !== "company") throw errors.forbidden();
+  }
+
+  private async accountKindForCompany(companyId: string) {
+    const company = await this.store.findCompany(companyId);
+    return company?.accountKind === "individual" ? "individual" : "company";
   }
 }
 

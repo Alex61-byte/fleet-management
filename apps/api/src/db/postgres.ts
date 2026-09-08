@@ -3,10 +3,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import type {
+  DriverDailyUsage,
   DriverTravelSelection,
   OdometerUnit,
   Principal,
   Vehicle,
+  VehicleCustomExpiration,
   VehicleHandover,
   VehicleHandoverImage,
 } from "../domain.ts";
@@ -34,21 +36,30 @@ function mapPrincipal(row: pg.QueryResultRow): Principal {
 }
 
 /**
- * node-pg returns DATE as a JS Date. `String(date).slice(0, 10)` is locale text
- * (e.g. "Thu Sep 1…"), not `YYYY-MM-DD`, so edit forms and warnings break.
- * Prefer ISO calendar day; accept already-normalized strings.
+ * node-pg returns DATE as a JS Date at **local** midnight for that calendar day.
+ * `toISOString().slice(0, 10)` is UTC and shifts the day west of UTC (e.g. RO
+ * 2026-09-07 → 2026-09-06). Use local Y-M-D for Date values; prefer a leading
+ * `YYYY-MM-DD` on strings so opaque calendar dates never TZ-shift.
  */
 export function pgDateToIso(value: unknown): string | null {
   if (value == null || value === "") return null;
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return null;
-    return value.toISOString().slice(0, 10);
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   }
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
     const parsed = new Date(trimmed);
-    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    if (!Number.isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear();
+      const m = String(parsed.getMonth() + 1).padStart(2, "0");
+      const d = String(parsed.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
     return null;
   }
   return null;
@@ -59,6 +70,45 @@ function mapMileage(value: unknown): number | null {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return null;
   return n;
+}
+
+function mapCustomExpirations(value: unknown): VehicleCustomExpiration[] {
+  if (value == null) return [];
+  let raw: unknown = value;
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  const out: VehicleCustomExpiration[] = [];
+  for (const item of raw) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const id = typeof row.id === "string" ? row.id : "";
+    const label = typeof row.label === "string" ? row.label : "";
+    const expiresOn =
+      typeof row.expires_on === "string"
+        ? row.expires_on
+        : typeof row.expiresOn === "string"
+          ? row.expiresOn
+          : "";
+    if (!id || !label || !expiresOn) continue;
+    out.push({ id, label, expiresOn });
+  }
+  return out;
+}
+
+function customExpirationsJson(rows: VehicleCustomExpiration[]): string {
+  return JSON.stringify(
+    rows.map((row) => ({
+      id: row.id,
+      label: row.label,
+      expires_on: row.expiresOn,
+    })),
+  );
 }
 
 function mapVehicle(row: pg.QueryResultRow): Vehicle {
@@ -74,6 +124,7 @@ function mapVehicle(row: pg.QueryResultRow): Vehicle {
     inspectionOn: pgDateToIso(row.inspection_on),
     roadTaxOn: pgDateToIso(row.road_tax_on),
     registrationOn: pgDateToIso(row.registration_on),
+    customExpirations: mapCustomExpirations(row.custom_expirations),
     imageFrontPath: row.image_front_path ?? null,
     imageLeftPath: row.image_left_path ?? null,
     imageRightPath: row.image_right_path ?? null,
@@ -214,10 +265,41 @@ export class PostgresStore implements Store {
 
   async insertCompany(company: CompanyInsert): Promise<void> {
     await this.q(
-      `INSERT INTO companies (id, registration_number, vat_number, address)
-       VALUES ($1,$2,$3,$4)`,
-      [company.id, company.registrationNumber, company.vatNumber, company.address],
+      `INSERT INTO companies (id, account_kind, registration_number, vat_number, address)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [
+        company.id,
+        company.accountKind,
+        company.registrationNumber,
+        company.vatNumber,
+        company.address,
+      ],
     );
+  }
+
+  async findCompany(id: string): Promise<CompanyInsert | undefined> {
+    const { rows } = await this.q(
+      `SELECT id, account_kind, registration_number, vat_number, address
+       FROM companies WHERE id = $1`,
+      [id],
+    );
+    const row = rows[0] as
+      | {
+          id: string;
+          account_kind: string;
+          registration_number: string;
+          vat_number: string;
+          address: string;
+        }
+      | undefined;
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      accountKind: row.account_kind === "individual" ? "individual" : "company",
+      registrationNumber: row.registration_number ?? "",
+      vatNumber: row.vat_number ?? "",
+      address: row.address ?? "",
+    };
   }
 
   async insertPrincipal(p: Principal): Promise<void> {
@@ -393,8 +475,9 @@ export class PostgresStore implements Store {
         id, company_id, make, model, license_plate, country_of_registration,
         mileage,
         insurance_on, inspection_on, road_tax_on, registration_on,
+        custom_expirations,
         image_front_path, image_left_path, image_right_path, image_back_path
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15,$16)`,
       [
         v.id,
         v.companyId,
@@ -407,6 +490,7 @@ export class PostgresStore implements Store {
         v.inspectionOn,
         v.roadTaxOn,
         v.registrationOn,
+        customExpirationsJson(v.customExpirations),
         v.imageFrontPath,
         v.imageLeftPath,
         v.imageRightPath,
@@ -420,7 +504,8 @@ export class PostgresStore implements Store {
       `UPDATE vehicles SET make=$2, model=$3, license_plate=$4, country_of_registration=$5,
         mileage=$6,
         insurance_on=$7, inspection_on=$8, road_tax_on=$9, registration_on=$10,
-        image_front_path=$11, image_left_path=$12, image_right_path=$13, image_back_path=$14
+        custom_expirations=$11::jsonb,
+        image_front_path=$12, image_left_path=$13, image_right_path=$14, image_back_path=$15
        WHERE id=$1`,
       [
         v.id,
@@ -433,6 +518,7 @@ export class PostgresStore implements Store {
         v.inspectionOn,
         v.roadTaxOn,
         v.registrationOn,
+        customExpirationsJson(v.customExpirations),
         v.imageFrontPath,
         v.imageLeftPath,
         v.imageRightPath,
@@ -649,4 +735,67 @@ export class PostgresStore implements Store {
   async deleteDriverTravelForDriver(driverId: string): Promise<void> {
     await this.q("DELETE FROM driver_travel_selections WHERE driver_id=$1", [driverId]);
   }
+
+  async insertDailyUsage(row: DriverDailyUsage): Promise<void> {
+    await this.q(
+      `INSERT INTO driver_daily_usages
+        (id, company_id, driver_id, vehicle_id, usage_date, start_place, end_place,
+         start_distance, end_distance, distance_unit, start_time, end_time, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,to_timestamp($13/1000.0))`,
+      [
+        row.id,
+        row.companyId,
+        row.driverId,
+        row.vehicleId,
+        row.usageDate,
+        row.startPlace,
+        row.endPlace,
+        row.startDistance,
+        row.endDistance,
+        row.distanceUnit,
+        row.startTime,
+        row.endTime,
+        row.createdAt,
+      ],
+    );
+  }
+
+  async listDailyUsageForDriver(
+    driverId: string,
+    companyId: string,
+  ): Promise<DriverDailyUsage[]> {
+    const { rows } = await this.q(
+      `SELECT id, company_id, driver_id, vehicle_id,
+              to_char(usage_date, 'YYYY-MM-DD') AS usage_date,
+              start_place, end_place, start_distance, end_distance, distance_unit,
+              start_time, end_time, created_at
+       FROM driver_daily_usages
+       WHERE driver_id=$1 AND company_id=$2
+       ORDER BY created_at DESC`,
+      [driverId, companyId],
+    );
+    return rows.map(mapDailyUsage);
+  }
+
+  async deleteDailyUsageForDriver(driverId: string): Promise<void> {
+    await this.q("DELETE FROM driver_daily_usages WHERE driver_id=$1", [driverId]);
+  }
+}
+
+function mapDailyUsage(row: pg.QueryResultRow): DriverDailyUsage {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    driverId: row.driver_id,
+    vehicleId: row.vehicle_id,
+    usageDate: pgDateToIso(row.usage_date) ?? "1970-01-01",
+    startPlace: row.start_place,
+    endPlace: row.end_place,
+    startDistance: Number(row.start_distance),
+    endDistance: Number(row.end_distance),
+    distanceUnit: row.distance_unit as OdometerUnit,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  };
 }

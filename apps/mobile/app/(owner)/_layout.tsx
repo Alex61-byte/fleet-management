@@ -2,6 +2,10 @@ import { vehiclesNavA11yLabel } from "@fleet/sdk";
 import { Redirect, Tabs, useRouter } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 import { NavIcon, tabBarIconForName } from "../../components/nav-icons";
+import {
+  OwnerHeaderNotifications,
+  OwnerNotificationsProvider,
+} from "../../components/owner-header-notifications";
 import { useAuth } from "../../lib/auth";
 import { useVehiclesNavUrgency } from "../../lib/vehicles-nav-urgency";
 
@@ -37,10 +41,12 @@ export default function OwnerLayout() {
         : undefined;
 
   return (
+    <OwnerNotificationsProvider>
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: TAB_BAR_BG, height: 44 },
         headerTitleStyle: { fontSize: 20, fontWeight: "600", color: "#0c1219" },
+        headerRight: () => <OwnerHeaderNotifications />,
         // Icon + label need >44; default RN label (~10px) is too small for US-32.
         tabBarStyle: {
           minHeight: 56,
@@ -78,6 +84,7 @@ export default function OwnerLayout() {
         options={{
           title: "Drivers",
           headerShown: false,
+          href: me.account_kind === "individual" ? null : undefined,
           tabBarIcon: tabBarIconForName("users"),
         }}
       />
@@ -137,5 +144,6 @@ export default function OwnerLayout() {
         }}
       />
     </Tabs>
+    </OwnerNotificationsProvider>
   );
 }

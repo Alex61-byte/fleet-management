@@ -1,7 +1,7 @@
 import { FleetApiError, type Vehicle } from "@fleet/sdk";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
 import { Banner, PrimaryButton } from "../../../components/ui";
 import { VehicleForm } from "../../../components/vehicle-form";
 import { notifyVehiclesChanged } from "../../../lib/vehicles-changed";
@@ -42,30 +42,40 @@ export default function EditVehicle() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-2 gap-2">
-      <Stack.Screen options={{ title: "Edit vehicle" }} />
-      {error ? (
-        <>
-          <Banner>{error}</Banner>
-          <PrimaryButton title="Retry" onPress={() => void load()} />
-        </>
-      ) : vehicle ? (
-        <VehicleForm
-          initial={vehicle}
-          offline={offline}
-          submitLabel="Save vehicle"
-          onVehicleChange={setVehicle}
-          onSubmit={async (body) => {
-            const next = await api.patchVehicle(String(id), body);
-            setVehicle(next);
-            notifyVehiclesChanged();
-            router.replace("/(owner)/vehicles");
-            return next;
-          }}
-        />
-      ) : (
-        <View className="h-40 bg-disabled-surface rounded-md" />
-      )}
-    </ScrollView>
+    <KeyboardAvoidingView
+      className="flex-1 bg-surface"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="p-2 gap-2"
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
+        <Stack.Screen options={{ title: "Edit vehicle" }} />
+        {error ? (
+          <>
+            <Banner>{error}</Banner>
+            <PrimaryButton title="Retry" onPress={() => void load()} />
+          </>
+        ) : vehicle ? (
+          <VehicleForm
+            initial={vehicle}
+            offline={offline}
+            submitLabel="Save vehicle"
+            onVehicleChange={setVehicle}
+            onSubmit={async (body) => {
+              const next = await api.patchVehicle(String(id), body);
+              setVehicle(next);
+              notifyVehiclesChanged();
+              router.replace("/(owner)/vehicles");
+              return next;
+            }}
+          />
+        ) : (
+          <View className="h-40 bg-disabled-surface rounded-md" />
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

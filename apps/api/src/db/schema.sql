@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS companies (
   id UUID PRIMARY KEY,
+  account_kind TEXT NOT NULL DEFAULT 'company' CHECK (account_kind IN ('company', 'individual')),
   registration_number TEXT NOT NULL DEFAULT '',
   vat_number TEXT NOT NULL DEFAULT '',
   address TEXT NOT NULL DEFAULT '',
@@ -9,6 +10,10 @@ CREATE TABLE IF NOT EXISTS companies (
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS registration_number TEXT NOT NULL DEFAULT '';
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS vat_number TEXT NOT NULL DEFAULT '';
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT '';
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS account_kind TEXT;
+UPDATE companies SET account_kind = 'company' WHERE account_kind IS NULL;
+ALTER TABLE companies ALTER COLUMN account_kind SET DEFAULT 'company';
+ALTER TABLE companies ALTER COLUMN account_kind SET NOT NULL;
 
 CREATE TABLE IF NOT EXISTS principals (
   id UUID PRIMARY KEY,
@@ -93,6 +98,8 @@ ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS image_back_path TEXT;
 
 ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS mileage DOUBLE PRECISION;
 
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS custom_expirations JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 CREATE TABLE IF NOT EXISTS driver_travel_selections (
   id UUID PRIMARY KEY,
   company_id UUID NOT NULL REFERENCES companies (id),
@@ -161,4 +168,27 @@ CREATE TABLE IF NOT EXISTS vehicle_handover_images (
 
 CREATE INDEX IF NOT EXISTS vehicle_handover_images_handover
   ON vehicle_handover_images (handover_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS driver_daily_usages (
+  id UUID PRIMARY KEY,
+  company_id UUID NOT NULL REFERENCES companies (id),
+  driver_id UUID NOT NULL REFERENCES principals (id) ON DELETE CASCADE,
+  vehicle_id UUID NOT NULL REFERENCES vehicles (id),
+  usage_date DATE NOT NULL,
+  start_place TEXT NOT NULL,
+  end_place TEXT NOT NULL,
+  start_distance DOUBLE PRECISION NOT NULL,
+  end_distance DOUBLE PRECISION NOT NULL,
+  distance_unit TEXT NOT NULL CHECK (distance_unit IN ('mi', 'km')),
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT driver_daily_usages_distance_order CHECK (end_distance >= start_distance),
+  CONSTRAINT driver_daily_usages_time_order CHECK (end_time >= start_time)
+);
+
+CREATE INDEX IF NOT EXISTS driver_daily_usages_driver_created
+  ON driver_daily_usages (driver_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS driver_daily_usages_company
+  ON driver_daily_usages (company_id);
 

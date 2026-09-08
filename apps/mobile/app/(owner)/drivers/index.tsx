@@ -1,5 +1,6 @@
 import type { Driver } from "@fleet/sdk";
 import { Link, Stack } from "expo-router";
+import { OwnerHeaderNotifications } from "../../../components/owner-header-notifications";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Banner, PrimaryButton, PrimaryLink } from "../../../components/ui";
@@ -13,7 +14,7 @@ function statusCopy(d: Driver) {
 }
 
 export default function DriversList() {
-  const { offline } = useAuth();
+  const { offline, me } = useAuth();
   const [items, setItems] = useState<Driver[] | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -31,8 +32,25 @@ export default function DriversList() {
   }
 
   useEffect(() => {
+    if (me?.account_kind === "individual") {
+      setLoading(false);
+      return;
+    }
     void load();
-  }, []);
+  }, [me?.account_kind]);
+
+  if (me?.account_kind === "individual") {
+    return (
+      <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-2 gap-2">
+        <Stack.Screen options={{ title: "Drivers", headerRight: () => <OwnerHeaderNotifications /> }} />
+        <Text className="font-semibold text-title text-text-primary">Not available</Text>
+        <Text className="text-body text-text-secondary">
+          Driver management is only available on company accounts.
+        </Text>
+        <PrimaryLink href="/(owner)" title="Back to home" />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-2 gap-2">
@@ -40,9 +58,13 @@ export default function DriversList() {
         options={{
           title: "Drivers",
           headerRight: () => (
-            <Link href="/(owner)/drivers/new" className="text-brand text-label font-semibold">
-              Add driver
-            </Link>
+            <OwnerHeaderNotifications
+              trailing={
+                <Link href="/(owner)/drivers/new" className="text-brand text-label font-semibold">
+                  Add driver
+                </Link>
+              }
+            />
           ),
         }}
       />

@@ -96,8 +96,17 @@ describe("HTTP /v1 first slice", () => {
     });
     assert.equal(ok.status, 201);
     assert.equal(ok.body.principal.role, "owner");
+    assert.equal(ok.body.principal.account_kind, "company");
     assert.equal(ok.body.must_change_password, false);
     assert.ok(ok.body.access_token);
+
+    const me = await json(inject, {
+      method: "GET",
+      url: "/v1/me",
+      token: ok.body.access_token,
+    });
+    assert.equal(me.status, 200);
+    assert.equal(me.body.account_kind, "company");
 
     const dup = await json(inject, {
       method: "POST",
@@ -106,6 +115,167 @@ describe("HTTP /v1 first slice", () => {
     });
     assert.equal(dup.status, 409);
     assert.equal(dup.body.error.code, "email_in_use");
+  });
+
+  it("US-78 individual register creates individual owner; no legal fields; short password rejected", async () => {
+    const short = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register/individual",
+      payload: { email: "solo@fleet.example", password: "short" },
+    });
+    assert.equal(short.status, 400);
+    assert.equal(short.body.error.code, "password_too_short");
+
+    const withLegal = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register/individual",
+      payload: {
+        email: "solo-legal@fleet.example",
+        password: "password1",
+        registration_number: "X",
+      },
+    });
+    assert.equal(withLegal.status, 400);
+    assert.equal(withLegal.body.error.code, "validation_error");
+
+    const ok = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register/individual",
+      payload: { email: "solo@fleet.example", password: "password1" },
+    });
+    assert.equal(ok.status, 201);
+    assert.equal(ok.body.principal.role, "owner");
+    assert.equal(ok.body.principal.account_kind, "individual");
+    assert.equal(ok.body.must_change_password, false);
+    assert.ok(ok.body.access_token);
+
+    const me = await json(inject, {
+      method: "GET",
+      url: "/v1/me",
+      token: ok.body.access_token,
+    });
+    assert.equal(me.status, 200);
+    assert.equal(me.body.account_kind, "individual");
+    assert.equal(me.body.role, "owner");
+
+    const login = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "solo@fleet.example", password: "password1", client: "web" },
+    });
+    assert.equal(login.status, 200);
+    assert.equal(login.body.status, "authenticated");
+    assert.equal(login.body.principal.account_kind, "individual");
+
+    const dupCompany = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: { email: "solo@fleet.example", password: "password1", ...companyFields },
+    });
+    assert.equal(dupCompany.status, 409);
+    assert.equal(dupCompany.body.error.code, "email_in_use");
+
+    const dupInd = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register/individual",
+      payload: { email: "owner@fleet.example", password: "password1" },
+    });
+    assert.equal(dupInd.status, 409);
+    assert.equal(dupInd.body.error.code, "email_in_use");
+  });
+
+  it("US-82 individual owner forbidden on drivers and admins; can use vehicles", async () => {
+    const reg = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register/individual",
+      payload: { email: "solo-ops@fleet.example", password: "password1" },
+    });
+    assert.equal(reg.status, 201);
+    const token = reg.body.access_token as string;
+
+    const drivers = await json(inject, { method: "GET", url: "/v1/drivers", token });
+    assert.equal(drivers.status, 403);
+    assert.equal(drivers.body.error.code, "forbidden");
+
+    const createDriver = await json(inject, {
+      method: "POST",
+      url: "/v1/drivers",
+      token,
+      payload: { email: "nope@fleet.example" },
+    });
+    assert.equal(createDriver.status, 403);
+    assert.equal(createDriver.body.error.code, "forbidden");
+
+    const admins = await json(inject, { method: "GET", url: "/v1/admins", token });
+    assert.equal(admins.status, 403);
+    assert.equal(admins.body.error.code, "forbidden");
+
+    const createAdmin = await json(inject, {
+      method: "POST",
+      url: "/v1/admins",
+      token,
+      payload: { email: "admin-nope@fleet.example", password: "password1" },
+    });
+    assert.equal(createAdmin.status, 403);
+    assert.equal(createAdmin.body.error.code, "forbidden");
+
+    const vehicle = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token,
+      payload: {
+        make: "Toyota",
+        model: "Corolla",
+        license_plate: "IND-01",
+        country_of_registration: "RO",
+        insurance_on: null,
+        inspection_on: null,
+        road_tax_on: null,
+        registration_on: null,
+      },
+    });
+    assert.equal(vehicle.status, 201);
+    assert.equal(vehicle.body.license_plate, "IND-01");
+
+    const home = await json(inject, { method: "GET", url: "/v1/home", token });
+    assert.equal(home.status, 200);
+    assert.equal(home.body.driver_count, 0);
+    assert.equal(home.body.vehicle_count, 1);
+
+    const vehicleId = vehicle.body.id as string;
+    const sidePut = await inject({
+      method: "PUT",
+      url: `/v1/vehicles/${vehicleId}/sides/FRONT`,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "multipart/form-data; boundary=----indside",
+      },
+      payload:
+        "------indside\r\n" +
+        'Content-Disposition: form-data; name="file"; filename="front.png"\r\n' +
+        "Content-Type: image/png\r\n\r\n" +
+        "not-a-real-png-but-gate-runs-first\r\n" +
+        "------indside--\r\n",
+    });
+    // Kind gate runs before multipart parse/type checks → 403 forbidden for individual.
+    assert.equal(sidePut.statusCode, 403);
+    assert.equal(JSON.parse(sidePut.body).error.code, "forbidden");
+
+    const sideDel = await json(inject, {
+      method: "DELETE",
+      url: `/v1/vehicles/${vehicleId}/sides/FRONT`,
+      token,
+    });
+    assert.equal(sideDel.status, 403);
+    assert.equal(sideDel.body.error.code, "forbidden");
+
+    const handovers = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}/handovers`,
+      token,
+    });
+    assert.equal(handovers.status, 403);
+    assert.equal(handovers.body.error.code, "forbidden");
   });
 
   it("US-02 login web/mobile; wrong password is 401", async () => {
@@ -1698,6 +1868,497 @@ describe("HTTP /v1 first slice", () => {
       payload: ownerCreate.body,
     });
     assert.equal(ownerCreateRes.statusCode, 403);
+  });
+
+  it("US-61–67 driver daily usage create/list, gate, validation, no mileage write", async () => {
+    const ownerReg = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        email: "owner-daily@fleet.example",
+        password: "password1",
+        ...companyFields,
+      },
+    });
+    assert.equal(ownerReg.status, 201);
+    const ownerToken = ownerReg.body.access_token as string;
+
+    const driverCreate = await json(inject, {
+      method: "POST",
+      url: "/v1/drivers",
+      token: ownerToken,
+      payload: { email: "driver-daily@fleet.example" },
+    });
+    assert.equal(driverCreate.status, 201);
+    const driverId = driverCreate.body.id as string;
+    const inviteToken = mailer.lastToken();
+    const accept = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/invite/accept",
+      payload: {
+        token: inviteToken,
+        email: "driver-daily@fleet.example",
+        password: "password1",
+        client: "web",
+      },
+    });
+    assert.equal(accept.status, 200);
+    const driverToken = accept.body.access_token as string;
+
+    const vehicle = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: ownerToken,
+      payload: {
+        make: "Daily",
+        model: "Van",
+        license_plate: "D-01-USE",
+        country_of_registration: "RO",
+        mileage: 1000,
+      },
+    });
+    assert.equal(vehicle.status, 201);
+    const vehicleId = vehicle.body.id as string;
+
+    const emptyList = await json(inject, {
+      method: "GET",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+    });
+    assert.equal(emptyList.status, 200);
+    assert.deepEqual(emptyList.body.items, []);
+
+    const noTravel = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+      payload: {
+        usage_date: "2026-09-07",
+        start_place: "Depot",
+        start_distance: 1000,
+        start_time: "08:00",
+        end_place: "Site",
+        end_distance: 1010,
+        end_time: "17:00",
+      },
+    });
+    assert.equal(noTravel.status, 409);
+    assert.equal(noTravel.body.error.code, "daily_usage_no_active_travel");
+
+    const travel = await json(inject, {
+      method: "PUT",
+      url: "/v1/driver/travel",
+      token: driverToken,
+      payload: { vehicle_id: vehicleId, odometer: 1000 },
+    });
+    assert.equal(travel.status, 200);
+
+    const lowStart = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+      payload: {
+        usage_date: "2026-09-07",
+        start_place: "Depot",
+        start_distance: 999,
+        start_time: "08:00",
+        end_place: "Site",
+        end_distance: 1010,
+        end_time: "17:00",
+      },
+    });
+    assert.equal(lowStart.status, 400);
+    assert.equal(lowStart.body.error.code, "validation_error");
+
+    const endBeforeStart = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+      payload: {
+        usage_date: "2026-09-07",
+        start_place: "Depot",
+        start_distance: 1000,
+        start_time: "17:00",
+        end_place: "Site",
+        end_distance: 1010,
+        end_time: "08:00",
+      },
+    });
+    assert.equal(endBeforeStart.status, 400);
+
+    const endKmLow = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+      payload: {
+        usage_date: "2026-09-07",
+        start_place: "Depot",
+        start_distance: 1010,
+        start_time: "08:00",
+        end_place: "Site",
+        end_distance: 1005,
+        end_time: "17:00",
+      },
+    });
+    assert.equal(endKmLow.status, 400);
+
+    const ok1 = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+      payload: {
+        usage_date: "2026-09-07",
+        start_place: "Depot A",
+        start_distance: "1000.5",
+        start_time: "08:30",
+        end_place: "Site B",
+        end_distance: 1100,
+        end_time: "17:15",
+      },
+    });
+    assert.equal(ok1.status, 201);
+    assert.equal(ok1.body.vehicle_id, vehicleId);
+    assert.equal(ok1.body.distance_unit, "km");
+    assert.equal(ok1.body.start_place, "Depot A");
+    assert.equal(ok1.body.vehicle.label, "Daily Van");
+
+    const afterMileage = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}`,
+      token: ownerToken,
+    });
+    assert.equal(afterMileage.status, 200);
+    assert.equal(afterMileage.body.mileage, 1000);
+
+    const ok2 = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+      payload: {
+        usage_date: "2026-09-07",
+        start_place: "Site B",
+        start_distance: 1100,
+        start_time: "18:00",
+        end_place: "Depot A",
+        end_distance: 1150,
+        end_time: "19:00",
+      },
+    });
+    assert.equal(ok2.status, 201);
+
+    const list = await json(inject, {
+      method: "GET",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+    });
+    assert.equal(list.status, 200);
+    assert.equal(list.body.items.length, 2);
+    const ids = list.body.items.map((i: { id: string }) => i.id);
+    assert.ok(ids.includes(ok1.body.id));
+    assert.ok(ids.includes(ok2.body.id));
+
+    const ownerList = await json(inject, {
+      method: "GET",
+      url: "/v1/driver/daily-usage",
+      token: ownerToken,
+    });
+    assert.equal(ownerList.status, 403);
+
+    const ownerPost = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: ownerToken,
+      payload: {
+        usage_date: "2026-09-07",
+        start_place: "X",
+        start_distance: 1000,
+        start_time: "08:00",
+        end_place: "Y",
+        end_distance: 1010,
+        end_time: "09:00",
+      },
+    });
+    assert.equal(ownerPost.status, 403);
+
+    await json(inject, {
+      method: "DELETE",
+      url: `/v1/drivers/${driverId}`,
+      token: ownerToken,
+    });
+    // Driver gone; owner still cannot list driver daily usage route as owner.
+    const ownerAfterDelete = await json(inject, {
+      method: "GET",
+      url: "/v1/driver/daily-usage",
+      token: ownerToken,
+    });
+    assert.equal(ownerAfterDelete.status, 403);
+  });
+
+  it("US-86–90 vehicle custom expirations CRUD warnings authz validation", async () => {
+    const owner = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "owner@fleet.example", password: "password1", client: "web" },
+    });
+    const token = owner.body.access_token as string;
+    const today = utcToday();
+
+    // 1. Create without customs → empty array on read
+    const bare = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token,
+      payload: { make: "Custom", model: "Bare", license_plate: "CE-BARE" },
+    });
+    assert.equal(bare.status, 201);
+    assert.deepEqual(bare.body.custom_expirations, []);
+
+    // 2. Create with one row (no id) → mint UUID + echo
+    const created = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token,
+      payload: {
+        make: "Custom",
+        model: "One",
+        license_plate: "CE-01",
+        custom_expirations: [{ label: "  Fire ext  ", expires_on: addDays(today, 10) }],
+      },
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.custom_expirations.length, 1);
+    const row0 = created.body.custom_expirations[0];
+    assert.equal(row0.label, "Fire ext");
+    assert.equal(row0.expires_on, addDays(today, 10));
+    assert.match(row0.id, /^[0-9a-f-]{36}$/i);
+    assert.equal(
+      created.body.warnings.some(
+        (w: { field: string; state: string }) =>
+          w.field === `custom:${row0.id}` && w.state === "due_soon",
+      ),
+      true,
+    );
+
+    // 3. PATCH omit custom_expirations → unchanged
+    const omitPatch = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${created.body.id}`,
+      token,
+      payload: { license_plate: "CE-01A" },
+    });
+    assert.equal(omitPatch.status, 200);
+    assert.equal(omitPatch.body.license_plate, "CE-01A");
+    assert.deepEqual(omitPatch.body.custom_expirations, created.body.custom_expirations);
+
+    // 4. PATCH [] → clear
+    const cleared = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${created.body.id}`,
+      token,
+      payload: { custom_expirations: [] },
+    });
+    assert.equal(cleared.status, 200);
+    assert.deepEqual(cleared.body.custom_expirations, []);
+    assert.equal(
+      cleared.body.warnings.some((w: { field: string }) => w.field.startsWith("custom:")),
+      false,
+    );
+
+    // 5. Full replace keep id + add second (server mint)
+    const keptId = row0.id as string;
+    const replaced = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${created.body.id}`,
+      token,
+      payload: {
+        custom_expirations: [
+          { id: keptId, label: "Fire ext", expires_on: addDays(today, -2) },
+          { label: "First aid", expires_on: addDays(today, 60) },
+        ],
+      },
+    });
+    assert.equal(replaced.status, 200);
+    assert.equal(replaced.body.custom_expirations.length, 2);
+    assert.equal(replaced.body.custom_expirations[0].id, keptId);
+    assert.equal(replaced.body.custom_expirations[0].label, "Fire ext");
+    assert.equal(replaced.body.custom_expirations[0].expires_on, addDays(today, -2));
+    const second = replaced.body.custom_expirations[1];
+    assert.notEqual(second.id, keptId);
+    assert.equal(second.label, "First aid");
+    const warnMap = Object.fromEntries(
+      replaced.body.warnings.map((w: { field: string; state: string }) => [w.field, w.state]),
+    );
+    assert.equal(warnMap[`custom:${keptId}`], "expired");
+    assert.equal(warnMap[`custom:${second.id}`], undefined);
+
+    // 6. expiring filter includes custom-only warning vehicle
+    const listExpiring = await json(inject, {
+      method: "GET",
+      url: "/v1/vehicles?expiring=true",
+      token,
+    });
+    assert.equal(listExpiring.status, 200);
+    assert.equal(
+      listExpiring.body.items.some((v: { id: string }) => v.id === created.body.id),
+      true,
+    );
+
+    // 7. registration still never warns even with customs outside window only on another car
+    const regOnly = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token,
+      payload: {
+        make: "Custom",
+        model: "Reg",
+        license_plate: "CE-REG",
+        registration_on: addDays(today, -10),
+        custom_expirations: [{ label: "Far", expires_on: addDays(today, 90) }],
+      },
+    });
+    assert.equal(regOnly.status, 201);
+    assert.equal(regOnly.body.warnings.length, 0);
+    assert.equal(
+      regOnly.body.warnings.some((w: { field: string }) => w.field === "registration_on"),
+      false,
+    );
+
+    // 8–14 validation matrix
+    const vehicleId = created.body.id as string;
+    async function badCustoms(payload: unknown) {
+      return json(inject, {
+        method: "PATCH",
+        url: `/v1/vehicles/${vehicleId}`,
+        token,
+        payload: { custom_expirations: payload },
+      });
+    }
+
+    // not array
+    const notArray = await badCustoms({ label: "x", expires_on: addDays(today, 1) });
+    assert.equal(notArray.status, 400);
+    assert.equal(notArray.body.error.code, "validation_error");
+
+    // >10
+    const eleven = await badCustoms(
+      Array.from({ length: 11 }, (_, i) => ({
+        label: `Item ${i}`,
+        expires_on: addDays(today, 40),
+      })),
+    );
+    assert.equal(eleven.status, 400);
+    assert.equal(eleven.body.error.code, "validation_error");
+
+    // empty label / whitespace
+    const emptyLabel = await badCustoms([{ label: "   ", expires_on: addDays(today, 40) }]);
+    assert.equal(emptyLabel.status, 400);
+    assert.equal(emptyLabel.body.error.code, "validation_error");
+
+    // label > 80
+    const longLabel = await badCustoms([
+      { label: "x".repeat(81), expires_on: addDays(today, 40) },
+    ]);
+    assert.equal(longLabel.status, 400);
+    assert.equal(longLabel.body.error.code, "validation_error");
+
+    // duplicate labels CI
+    const dupLabel = await badCustoms([
+      { label: "Kit", expires_on: addDays(today, 40) },
+      { label: " kit ", expires_on: addDays(today, 41) },
+    ]);
+    assert.equal(dupLabel.status, 400);
+    assert.equal(dupLabel.body.error.code, "validation_error");
+
+    // bad expires_on
+    const badDate = await badCustoms([{ label: "Kit", expires_on: "07-09-2026" }]);
+    assert.equal(badDate.status, 400);
+    assert.equal(badDate.body.error.code, "validation_error");
+
+    const missingDate = await badCustoms([{ label: "Kit" }]);
+    assert.equal(missingDate.status, 400);
+    assert.equal(missingDate.body.error.code, "validation_error");
+
+    // bad id
+    const badId = await badCustoms([
+      { id: "not-a-uuid", label: "Kit", expires_on: addDays(today, 40) },
+    ]);
+    assert.equal(badId.status, 400);
+    assert.equal(badId.body.error.code, "validation_error");
+
+    // duplicate ids
+    const sameId = "11111111-1111-4111-8111-111111111111";
+    const dupId = await badCustoms([
+      { id: sameId, label: "A", expires_on: addDays(today, 40) },
+      { id: sameId, label: "B", expires_on: addDays(today, 41) },
+    ]);
+    assert.equal(dupId.status, 400);
+    assert.equal(dupId.body.error.code, "validation_error");
+
+    // prior good state still intact after validation failures
+    const still = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}`,
+      token,
+    });
+    assert.equal(still.status, 200);
+    assert.equal(still.body.custom_expirations.length, 2);
+
+    // 15. driver 403
+    const driverLogin = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "driver@fleet.example", password: "new-driver", client: "mobile" },
+    });
+    assert.equal(driverLogin.status, 200);
+    const driverPatch = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${vehicleId}`,
+      token: driverLogin.body.access_token,
+      payload: { custom_expirations: [{ label: "Nope", expires_on: addDays(today, 5) }] },
+    });
+    assert.equal(driverPatch.status, 403);
+    assert.equal(driverPatch.body.error.code, "forbidden");
+
+    // 16. Individual Owner allowed
+    const solo = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register/individual",
+      payload: { email: "solo-ce@fleet.example", password: "password1" },
+    });
+    assert.equal(solo.status, 201);
+    const soloVeh = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: solo.body.access_token,
+      payload: {
+        make: "Solo",
+        model: "Car",
+        license_plate: "CE-IND",
+        custom_expirations: [{ label: "Vignette", expires_on: addDays(today, 5) }],
+      },
+    });
+    assert.equal(soloVeh.status, 201);
+    assert.equal(soloVeh.body.custom_expirations.length, 1);
+    assert.equal(soloVeh.body.custom_expirations[0].label, "Vignette");
+    assert.equal(
+      soloVeh.body.warnings.some((w: { field: string }) => w.field.startsWith("custom:")),
+      true,
+    );
+
+    // 10 items OK
+    const tenOk = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${vehicleId}`,
+      token,
+      payload: {
+        custom_expirations: Array.from({ length: 10 }, (_, i) => ({
+          label: `Cap ${i}`,
+          expires_on: addDays(today, 50 + i),
+        })),
+      },
+    });
+    assert.equal(tenOk.status, 200);
+    assert.equal(tenOk.body.custom_expirations.length, 10);
   });
 
 });

@@ -1,9 +1,12 @@
 # Company sign-up
 
-**Stories:** US-01  
+**Stories:** US-01 (after **US-77** chooses Company; landing **US-85** may deep-link)  
+**Rules:** 1, 49–51, 117–119, 121; E1, E33, E34  
 **Surfaces:** Web compact; mobile comfortable if creating the company on phone. Same IA.  
-**Purpose:** Create company + first Owner with email, password, **registration number**, **VAT number**, and **address**. No company display name.  
+**Purpose:** Create **`account_kind = company`** tenant + first Owner with email, password, **registration number**, **VAT number**, and **address**. No company display name.  
 **Chrome:** Unauthenticated [auth canvas](_patterns.md). No sidebar. **No public landing header** — lockup stays inside `authCard`.
+
+**Entry:** Default from [account-kind.md](account-kind.md) → **Company**. Direct Company route allowed (Architect). **Individual** registration is a **separate** screen — [individual-sign-up.md](individual-sign-up.md). Do not merge both forms onto one page.
 
 ## Layout
 
@@ -18,6 +21,7 @@ flowchart TB
     caption[authCaption]
     form[Email Password Confirm Reg VAT Address]
     submit[buttonPrimary Create company]
+    back[authLinks Back to account type]
     alt[authLinks link Already have an account? Sign in]
   end
 ```
@@ -25,6 +29,7 @@ flowchart TB
 - Web: vertically centered `authCanvas`; card `max-w-auth-card`. Longer form: card scrolls inside the canvas; primary stays reachable (scroll, do not cover with keyboard).
 - Mobile: safe-area top, card full width inside `px-2`, not a second nested card.
 - **No** company display-name field (BA). Legal + address fields are required with Owner credentials.
+- **Back to account type** in `authLinks` (`link`, `min-h-hit`) → [account-kind.md](account-kind.md). Include by default when user can still change kind before submit.
 
 ## Fields
 
@@ -65,7 +70,7 @@ Assistive only — does not replace the Address field.
 | Duplicate email (E1) | `bannerDanger` in card + email `inputError`: “This email cannot be used.” Company not created |
 | Lookup fail / empty (E34) | Non-blocking message above; user completes Address manually; valid submit still succeeds |
 | Offline (submit) | `bannerWarning` “You are offline.”; submit `buttonDisabled` |
-| Success | Owner home (Owner shell) |
+| Success | Company **Owner** home — Company Owner shell (Drivers + Admins available per role) |
 
 - Field rule failures use `inputError` + `errorText`, not `bannerDanger`, except duplicate email (E1) which may combine banner + field.
 - Submit client gate may require all required fields non-empty and passwords ≥ 8; server remains source of truth.
@@ -96,6 +101,7 @@ No new tokens. No hex. No company name field.
 | Look up | Look up address |
 | Suggestion | {formatted address suggestion} |
 | Submit | Create company |
+| Back | Back to account type |
 | Sign-in link | Already have an account? Sign in |
 
 - Password: `secureTextEntry`; errors in a live region.
@@ -103,3 +109,11 @@ No new tokens. No hex. No company name field.
 - Focus first field on web. `inputFocus` / `buttonFocus` rings.
 - Safe area; keyboard avoiding — scroll the card, do not cover submit.
 - Reduce-motion: no map animation; lookup list appears instantly.
+
+## Related
+
+| Path | Spec |
+| --- | --- |
+| Kind chooser | [account-kind.md](account-kind.md) |
+| Individual (email + password only) | [individual-sign-up.md](individual-sign-up.md) |
+| Public landing entry | [landing.md](landing.md) |

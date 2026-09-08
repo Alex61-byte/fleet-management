@@ -1,17 +1,17 @@
 # Vehicles (list, create, edit)
 
-**Stories:** US-11, US-12, US-13, US-15, **US-28** (nav/tab urgency — chrome only; see [\_patterns.md](_patterns.md#vehicles-nav--tab-urgency-us-28--states--stacking)), **US-35–US-39** (optional side appearance images), **US-41–US-44** (larger side previews + view-only zoom viewer), **US-45–US-49** (optional vehicle mileage / kilometres), **US-55–US-57** (Owner/Admin **Handovers** tab — history + detail, read-only)  
-**Density:** Web compact **table**; mobile comfortable **rows**. Owner/Admin.  
-**Purpose:** Fleet records: **Make** + **Model** (two free-text fields), plate, optional **current mileage** (odometer reading; unit Miles/Kilometers from country), insurance, inspection, country of registration, road tax **dates**, plus optional **appearance photos** from four sides (**FRONT**, **LEFT**, **RIGHT**, **BACK**), plus **handover history** (Out/In) on a third tab. Warn on list **and** detail (BA Q8 — design: **both**). Country is a text field, not a catalog. Make/Model are free text — **no** make/model catalog dropdowns. Compliance stays **dates only** — **no** insurance/inspection/tax/registration **document** upload (A2). Side images are **not** compliance documents (A35–A40). Handover damage photos are **not** side-appearance slots (A50, A56). **US-41–US-44:** larger Images-tab frames; filled sides open a **view-only** zoom viewer; dismiss leaves data unchanged. **US-45–US-49:** optional mileage on Details tab + list when present (rules 64–71). **US-55–US-56:** Handovers tab list + detail; **no** edit/delete (E57). Shared handover patterns: [handover.md](handover.md).  
-**Chrome:** Authenticated shell. Sidebar / tab **Vehicles** selected when on this area. No search. **US-28:** Vehicles nav/tab may show red/orange urgency fill from fleet-wide worst section dates — pattern chrome, not list badges.  
-**Parity (A16):** Same list / create / edit / side-image manage **and** side-image viewer **and** Handovers history/detail on web and Owner/Admin mobile. Drivers have **no** side-image manage or viewer UI (A40, E38) and **no** Handovers history tab (E55). Owner/Admin **do not** create handovers here (driver-only create — E54).
+**Stories:** US-11, US-12, US-13, US-15, **US-28** (nav/tab urgency — chrome only; see [\_patterns.md](_patterns.md#vehicles-nav--tab-urgency-us-28--states--stacking)), **US-35–US-39** (optional side appearance images), **US-41–US-44** (larger side previews + view-only zoom viewer), **US-45–US-49** (optional vehicle mileage / kilometres), **US-55–US-57** (Owner/Admin **Handovers** tab — history + detail, read-only), **US-86–US-90** (custom expiration definitions on Details)  
+**Density:** Web compact **table**; mobile comfortable **rows**. **Company** Owner/Admin **and** **Individual** Owner (own tenant only — US-81).  
+**Purpose:** Fleet records: **Make** + **Model** (two free-text fields), plate, optional **current mileage** (odometer reading; unit Miles/Kilometers from country), insurance, inspection, country of registration, road tax **dates**, optional **custom expiration** rows (label + date; max 10), plus optional **appearance photos** from four sides (**FRONT**, **LEFT**, **RIGHT**, **BACK**), plus **handover history** (Out/In) on a third tab. Warn on list **and** detail (BA Q8 — design: **both**). Country is a text field, not a catalog. Make/Model are free text — **no** make/model catalog dropdowns. Compliance stays **dates only** — **no** insurance/inspection/tax/registration/custom **document** upload (A2). Side images are **not** compliance documents (A35–A40). Handover damage photos are **not** side-appearance slots (A50, A56). **US-41–US-44:** larger Images-tab frames; filled sides open a **view-only** zoom viewer; dismiss leaves data unchanged. **US-45–US-49:** optional mileage on Details tab + list when present (rules 64–71). **US-55–US-56:** Handovers tab list + detail; **no** edit/delete (E57). **US-86–US-90:** custom expirations CRUD on **Details** only — same A1 badges as insurance/inspection/road tax; no separate pages; built-in four dates unchanged. Shared handover patterns: [handover.md](handover.md).  
+**Chrome:** Authenticated **management** shell. Sidebar / tab **Vehicles** selected when on this area. No search. **US-28:** Vehicles nav/tab may show red/orange urgency fill from **tenant**-wide worst section dates — pattern chrome, not list badges. **Should (US-89):** worst-wins urgency may include custom expiration dates with the same 7-day bands. **Individual:** same Vehicles area; no Drivers/Admins chrome beside it.  
+**Parity (A16):** Company Owner/Admin: list / create / edit / side-image manage **and** side-image viewer **and** Handovers history on web + management mobile. **Individual Owner:** same list / create / edit **Details** (identity, built-in dates, **custom expirations**, mileage) only — **omit Images and Handovers tabs** (A86, E80). Drivers have **no** side-image manage or viewer UI (A40, E38), **no** custom-expiration manage UI, and **no** Handovers history tab (E55). Management roles **do not** create handovers here (driver-only create — E54).
 
 ## List — web
 
 ```
 pageHeader
   pageTitle Vehicles
-  pageSubtitle Insurance, inspection, road tax, and registration dates
+  pageSubtitle Insurance, inspection, road tax, registration, and other dates
   pageHeaderActions buttonPrimary Add vehicle
 toolbar
   caption font-tabular “{n} vehicles”
@@ -25,9 +25,22 @@ tableWrap sticky header
 | Plate | `tableCellMuted` | License plate — secondary |
 | Mileage | `tableCellNum` / `caption` | **US-49:** when `mileage` is set, show `{n}` + unit short (`km` / `mi`) or full label; `font-tabular`. When null/unknown: **em dash** or empty cell — **no** fabricated `0`. Unit from `mileage_unit` / country (not editable on list). |
 | Country | `tableCellMuted` | Free text |
-| Date columns | `tableCellNum` | Tabular date; if due/expired, `badgeWarning` / `badgeExpired` **and** the date |
+| Date columns | `tableCellNum` | Tabular date; if due/expired, `badgeWarning` / `badgeExpired` **and** the date. Built-in Insurance / Inspection / Road tax only in these columns (Registration never badges). |
 
-Row hover `tableRowHover`; tap → edit. Do **not** use a card per vehicle on web. Do **not** split Make/Model into two list columns. Do **not** put four side thumbnails on the list (not a gallery).
+Row hover `tableRowHover`; tap → edit. Do **not** use a card per vehicle on web. Do **not** split Make/Model into two list columns. Do **not** put four side thumbnails on the list (not a gallery). Do **not** add a fifth fixed column per custom label (variable count).
+
+### List custom expiration badges (US-89 Should)
+
+| Surface | Placement | Treatment |
+| --- | --- | --- |
+| Web table | Same row, **after** built-in date cells or trailing wrap in the last visible date-ish area — prefer wrap under the identity/plate cluster if columns stay fixed | For each custom item in A1 window: `badgeWarning` / `badgeExpired` **plus** truncated **label** (not color-only). Cap visible chips sensibly (e.g. first few + `caption` “+{n} more”); full set on Details. |
+| Mobile row | Badge wrap with built-in date badges | Same chips: badge + custom **label** text; wrap; hairline row unchanged |
+| None due/expired | — | **No** extra chips |
+| Loading list | Skeleton rows | Do **not** flash custom chips until row data known |
+
+- Same A1 window as insurance/inspection/road tax (30-day Due soon / past Expired).
+- Label is the badge companion text (like section name on built-ins).
+- Does **not** replace built-in columns or invent a multi-column custom matrix on the list.
 
 ### List presence cue (US-39 Should)
 
@@ -47,7 +60,7 @@ Compact “has photos” signal only — **not** four previews, **not** which si
 
 ## List — mobile
 
-`appBarMobile` “Vehicles” + Add. `listRow`: primary identity **`{Make} {Model}`** as `label`, plate as `caption` (muted secondary). **US-49:** when mileage present, second `caption` line or same caption trail: `Mileage {n} {km|mi}` / unit label — omit line when null. Badges wrap (`badgeWarning` / `badgeExpired` with date name). **Should:** `vehicleSidePresence` when any side image exists. Hairline divider, not raised cards.
+`appBarMobile` “Vehicles” + Add. `listRow`: primary identity **`{Make} {Model}`** as `label`, plate as `caption` (muted secondary). **US-49:** when mileage present, second `caption` line or same caption trail: `Mileage {n} {km|mi}` / unit label — omit line when null. Badges wrap (`badgeWarning` / `badgeExpired` with date name **or custom label**). **Should:** `vehicleSidePresence` when any side image exists. **Should (US-89):** custom expiration chips in the same wrap. Hairline divider, not raised cards.
 
 ## Empty / loading
 
@@ -64,9 +77,9 @@ Push page (or same route with mode). **One** `panel` with **three tabs** (not a 
 
 | Tab | Contents | Save vehicle |
 | --- | --- | --- |
-| **Details** (default) | Identity + compliance dates — `vehicleFormDetails` max ~400px | Visible |
-| **Images** | Side appearance only — same four-side grid (US-35–US-39) | Visible |
-| **Handovers** (third) | Read-only Out/In **history** + drill-in **detail** (US-55–US-56) | **Hidden** on this tab — history is not vehicle field save |
+| **Details** (default) | Identity + built-in compliance dates + **Custom expirations** — `vehicleFormDetails` max ~400px | Visible |
+| **Images** | Side appearance only — same four-side grid (US-35–US-39) | Visible (**Company** only; **omit** for Individual — E80) |
+| **Handovers** (third) | Read-only Out/In **history** + drill-in **detail** (US-55–US-56) | **Hidden** on this tab — history is not vehicle field save; **omit** tab for Individual (E80) |
 
 Tab chrome: `vehicleFormTabList` + `vehicleFormTab` / `vehicleFormTabSelected` (selected = bottom `border-brand` + semibold; not color-only). Panels: `vehicleFormTabPanel`. **Save vehicle** stays **below the tab strip** on **Details** and **Images** so field save is not buried under photos. On **Handovers**, omit Save (read-only). Same Details/Images field inventory for create and edit — **not** two visual systems. **Handovers** tab: **Owner/Admin only**; omit for drivers (E55). On **create** (no persisted vehicle yet), **omit or disable** Handovers — prefer **omit** until the vehicle exists; optional `caption` only if tab kept disabled: “Save the vehicle to view handovers.” **Web (desktop) Must;** mobile **Should** use the same three tabs (comfortable density) rather than stacking Appearance/history under dates.
 
@@ -76,19 +89,19 @@ Tab chrome: `vehicleFormTabList` + `vehicleFormTab` / `vehicleFormTabSelected` (
 
 | Mode | Entry | Page title | Fields | Primary |
 | --- | --- | --- | --- | --- |
-| **Create** | Header “Add vehicle” / empty CTA | “Add vehicle” | **Blank** — empty text inputs; mileage empty; date controls empty / unset (no placeholder fake dates); **all four side slots empty** | `buttonPrimary` “Save vehicle” |
-| **Edit** | List row tap / identity link | “Edit vehicle” (subtitle optional: plate or `{Make} {Model}` once known) | **Prepopulated** from stored vehicle: make, model, plate, country, mileage (empty if null), each section date, **and** side images (filled preview or empty slot per side) as returned by API (US-39, US-46, rule 59) | Same `buttonPrimary` “Save vehicle” |
+| **Create** | Header “Add vehicle” / empty CTA | “Add vehicle” | **Blank** — empty text inputs; mileage empty; date controls empty / unset (no placeholder fake dates); **custom expirations empty** (calm empty caption; no starter row); **all four side slots empty** | `buttonPrimary` “Save vehicle” |
+| **Edit** | List row tap / identity link | “Edit vehicle” (subtitle optional: plate or `{Make} {Model}` once known) | **Prepopulated** from stored vehicle: make, model, plate, country, mileage (empty if null), each built-in section date, **custom expiration rows** (`id`, `label`, `expires_on`), **and** side images (filled preview or empty slot per side) as returned by API (US-39, US-46, rule 59, US-87) | Same `buttonPrimary` “Save vehicle” |
 
-- Edit must show stored values on first paint after load (no flash of empty then fill if avoidable; loading uses form skeleton in the same `panel`, including four side-slot skeletons).
-- Create must **not** inherit the last-edited vehicle or its images.
-- Under each date on **both** modes: if the current field value warrants it, badge + `caption` (“Insurance · Expired” / “Inspection · Due soon”) — same A1 rules as list. Empty date → no badge.
+- Edit must show stored values on first paint after load (no flash of empty then fill if avoidable; loading uses form skeleton in the same `panel`, including custom-expiration row skeletons and four side-slot skeletons).
+- Create must **not** inherit the last-edited vehicle, its images, or its custom rows.
+- Under each **warnable** date on **both** modes: if the current field value warrants it, badge + `caption` (“Insurance · Expired” / “Inspection · Due soon” / “{custom label} · Due soon”) — same A1 rules as list. Empty date → no badge. **Registration** never badges.
 - No separate “detail read-only” screen in this slice: row opens **edit** with prepopulated fields (Details/Images). **Handovers** is the read-only history surface for custody records only.
-- Denied paths (driver create, other-company edit, driver Handovers history) → [denied.md](denied.md); form not shown with foreign data; **no** image manage controls for drivers (E38); **no** Handovers tab for drivers (E55).
+- Denied paths (driver create, other-company edit, driver Handovers history) → [denied.md](denied.md); form not shown with foreign data; **no** image manage controls for drivers (E38); **no** custom-expiration manage for drivers; **no** Handovers tab for drivers (E55).
 
 | Field | Type | Copy |
 | --- | --- | --- |
-| Make | Text | “Make” — free text; **not** a catalog dropdown |
-| Model | Text | “Model” — free text; **not** a catalog dropdown |
+| Make | Select (+ text if Other) | “Make” — options from static client catalog (`@fleet/sdk`); last option **Other** shows free-text Make |
+| Model | Select (+ text if Other) | “Model” — options filtered by selected make; disabled until make chosen; **Other** shows free-text Model |
 | License plate | Text | “License plate” |
 | Country of registration | Text | “Country of registration” — free text, not a law catalog |
 | Mileage (current) | Number / decimal text | **US-45–US-47:** one control. **Label** = unit from country: **“Miles”** or **“Kilometers”** (same strings as driver odometer). **Hint/caption** may repeat unit. Optional; empty = unknown. No separate unit picker. Place **after country**, **before** insurance date. |
@@ -96,9 +109,10 @@ Tab chrome: `vehicleFormTabList` + `vehicleFormTab` / `vehicleFormTabSelected` (
 | Inspection date | Date | “Inspection” — Admin-entered; not computed from country |
 | Road tax date | Date | “Road tax” |
 | Registration date | Date | “Registration” — optional stored date; **no** expiry badge or nav urgency |
+| Custom expirations | Repeatable rows | **Details** only — see **Custom expirations (US-86–US-90)**. After registration; before Save on Details. |
 | Side appearance | Four slots | **Images** tab only — see **Side appearance images** |
 
-**Make and Model** are two separate controls, stacked with the same form `gap-2` as other fields (Make above Model). Do not combine into one “Car” field. No make/model pickers or typeahead catalogs in this slice.
+**Make and Model** are two separate controls, stacked with the same form `gap-2` as other fields (Make above Model). Do not combine into one “Car” field. Catalog is **client-only** (no server enum). Changing make clears model selection. Existing stored values outside the list open as **Other** + free text so edit never loses data.
 
 ### Mileage control (US-45–US-49)
 
@@ -113,9 +127,170 @@ Tab chrome: `vehicleFormTabList` + `vehicleFormTab` / `vehicleFormTabSelected` (
 | Edit load | Prepopulate stored number as plain decimal string; empty if null |
 | A11y | Accessible name is the unit label (e.g. “Kilometers” or “Miles”); not color-only |
 
-One date each (BA Q7 — **single date per item**).
+One date each for built-ins (BA Q7 — **single date per item**). Custom rows also carry **one** `expires_on` each (US-86).
 
-Primary `buttonPrimary` “Save vehicle” on **Details** / **Images** only. Saving with expired/soon dates **allowed**; badges show immediately on insurance/inspection/road tax (A11). Saving **without any side images** is allowed (US-35, rule 57). Side images are **optional** and independent of date validity. **Handovers** tab never offers Save, edit, or delete of custody rows (E57).
+Primary `buttonPrimary` “Save vehicle” on **Details** / **Images** only. Saving with expired/soon dates **allowed**; badges show immediately on insurance/inspection/road tax **and** custom rows (A11 / US-89). Saving **without any side images** is allowed (US-35, rule 57). Saving **without custom expirations** is allowed (empty section). Side images are **optional** and independent of date validity. Custom rows validate on save (and inline where noted). **Handovers** tab never offers Save, edit, or delete of custody rows (E57).
+
+## Custom expirations (US-86–US-90)
+
+**In scope:** Company **Owner/Admin** and **Individual Owner** on **create + edit** **Details** tab (web + management mobile). Items: `{ id, label, expires_on }` — label **1–80** after trim, **unique per vehicle** (case-insensitive), **max 10** rows. Same **A1** 30-day badges as insurance / inspection / road tax. **Must** on Details; list badges **Should**; nav urgency **Should**; notification menu inclusion **Could** (no separate notification redesign this pass).
+
+**Out of scope:** Separate custom-expiration pages or tabs; changing built-in four date fields; document upload; driver manage UI; more than 10 rows; catalog of preset labels.
+
+### Placement (Details only)
+
+Inside `vehicleFormDetails` / `vehicleFormTabPanel`, **after** the four built-in dates (Insurance → Inspection → Road tax → Registration), **before** primary **Save vehicle**. Still **one** raised `panel` — no second card. **Individual** keeps this section (still **no** Images / Handovers).
+
+```
+… Registration date …
+── vehicleCustomExpirations (gap-2) ──
+  sectionTitle Custom expirations
+  [empty caption | list of rows]
+  buttonSecondary Add expiration   ← disabled at 10
+buttonPrimary Save vehicle
+```
+
+| Region | Class / token | Notes |
+| --- | --- | --- |
+| Section | `vehicleCustomExpirations` | `flex flex-col gap-2`; optional top hairline `border-t border-divider` + `pt-2` if needed to separate from Registration — prefer calm stack without extra chrome |
+| Heading | `sectionTitle` | **Custom expirations** (alt OK: **Other expirations** — pick one product-wide; default **Custom expirations**) |
+| Empty | `caption` | **No custom expirations yet.** — calm; **not** full-page `emptyState`; **no** primary CTA (Add is the secondary control) |
+| List | `vehicleCustomExpirationList` | Stack of rows; `gap-2` |
+| Row | `vehicleCustomExpirationRow` | See anatomy; reusable **labeled date row** pattern in [_patterns.md](_patterns.md#labeled-date-row-custom-expiration) |
+| Add | `buttonSecondary` | **Add expiration**; `buttonDisabled` at cap 10 |
+| Cap hint | `caption` | When count = 10: **Maximum of 10 custom expirations.** under Add (or replacing helper). When count &lt; 10, optional calm `caption` “Up to 10.” is unnecessary — prefer silence until cap |
+
+### Row anatomy (US-86 add / US-87 edit)
+
+Match built-in date **field language**: visible `label`, `input`, optional badge/`caption` under the date, inline `errorText`. Prefer **stacked** label field then date field (same as Insurance block) for a11y and mobile Dynamic Type. **Compact pair** (label | date on one row) is allowed on **wide web only** if both controls keep visible labels and ≥44pt hits — mobile **Must** stack.
+
+```
+vehicleCustomExpirationRow
+  [header row: optional overline “Expiration {n}” + buttonIcon Remove]
+  label “Label” → input (text)
+  errorText? (label)
+  label “Expires on” → input (date)
+  badgeWarning | badgeExpired ? + caption “{Label} · Due soon” | “{Label} · Expired”
+  errorText? (date)
+```
+
+| Element | Class | Spec |
+| --- | --- | --- |
+| Row wrapper | `vehicleCustomExpirationRow` | `flex flex-col gap-2`; full width of `vehicleFormDetails`; not a nested raised card |
+| Label field | `label` + `input` | Visible **Label**; placeholder optional muted e.g. “e.g. Fire extinguisher” — never as the only name |
+| Date field | `label` + `input` | Visible **Expires on** (or **Expiration date**); same date control as Insurance |
+| Badge under date | `badgeWarning` / `badgeExpired` + `caption` | A1 only; empty date → no badge; copy uses **current label value** (fallback “Custom” only if label empty while typing — prefer hide badge until label non-empty **or** still show date-only badge text “Due soon”/“Expired” with field name “Expires on”) |
+| Remove | `buttonIcon` | Trash outline, `text-danger` glyph, `min-h-hit` `w-hit`; name **Remove {label} expiration** (or **Remove custom expiration** if label empty). **First tap opens confirm only** (rule 61) — never deletes immediately |
+| Focus | `inputFocus` / `buttonFocus` | Standard ring; error `inputError` |
+
+**Stable `id`:** each persisted row keeps `id` for a11y/`aria` and remove confirm. New unsaved rows may use client temp ids until save — do not flash empty then reshuffle order if API returns stable order (document order / created order — Architect).
+
+### Add (US-86)
+
+| Step | UI |
+| --- | --- |
+| Activate **Add expiration** | Append one empty row (empty label, unset date) at end of list; focus **Label** input of new row |
+| Count becomes 10 | Add → `buttonDisabled`; cap `caption` shown |
+| Count &lt; 10 after remove | Add re-enables |
+| Offline | Add `buttonDisabled`; `bannerWarning` “You are offline.” |
+| Busy save | Prefer keep rows editable until submit; primary Save shows busy — do not double-submit |
+
+Rows are part of the **vehicle Details** form: **Save vehicle** persists label/date create+update (Architect: embed vs sub-resource). UI must not invent a second primary “Save expirations”.
+
+### Edit (US-87)
+
+- Prepopulate `label` + `expires_on` per row on edit load.
+- Inline edit in place (no drill-in page).
+- Changing label updates badge companion text live.
+- Duplicate label (CI, trim) → `inputError` + `errorText` on the offending **Label** field(s): **Label must be unique on this vehicle.**
+- Label empty / whitespace-only on save → **Enter a label (1–80 characters).**
+- Label &gt; 80 after trim → **Label must be 80 characters or fewer.**
+- Missing date on a row that was added → **Choose an expiration date.** (both label and date required per item when row present)
+- Unchanged built-in dates stay independent controls above this section.
+
+### Remove (US-88 + rule 61)
+
+| | |
+| --- | --- |
+| Trigger | Row `buttonIcon` remove — opens **ConfirmDeleteDialog** / sheet; **does not** remove on first tap |
+| Pattern | Same overlay family as side-image clear and driver delete: `bg-surface-overlay` + raised `shadow-overlay` panel ([_patterns.md](_patterns.md) Sheet) |
+| Title | **Remove {label}?** — if label empty: **Remove custom expiration?** |
+| Body | **This removes the custom expiration from the vehicle.** Optional calm second line: **You can add it again later.** |
+| Cancel | `buttonSecondary` **Cancel** (default focus) — no change; return focus to remove trigger |
+| Confirm | `buttonDanger` **Remove** (busy **Removing…**) |
+| Success | Row gone from list; if zero rows → empty caption; Add enabled if was at cap |
+| Web | Modal dialog semantics |
+| Mobile | Bottom sheet / anchored sheet (destructive family — **not** full-screen viewer) |
+
+Do **not** merge remove confirm with Save. Do **not** swipe-to-delete without confirm.
+
+### States matrix
+
+| State | UI |
+| --- | --- |
+| **Empty** | `caption` **No custom expirations yet.** + **Add expiration** enabled (if online / not denied) |
+| **Filled (1–9)** | Rows stacked; Add enabled; badges per A1 under each date |
+| **Cap reached (10)** | Ten rows; Add `buttonDisabled` + cap `caption`; remove still available per row |
+| **Add in progress** | New empty row visible; focus Label |
+| **Edit** | Fields prepopulated; inline validation as above |
+| **Remove confirm open** | Sheet/dialog; underlying row still visible; focus trapped in confirm |
+| **Removing busy** | Confirm **Removing…**; actions disabled until settle |
+| **Validation errors** | Per-field `inputError` + `errorText`; keep values; optional form `bannerDanger` only for global save fail |
+| **Loading (edit)** | Skeleton blocks for section heading + 0–n row-shaped skeletons (or one skeleton stack); Add/Remove not actionable until loaded |
+| **Save busy** | Primary **Saving…**; avoid duplicate Save; prefer leave row inputs readable |
+| **Offline** | `bannerWarning`; Add/Remove/Save disabled as appropriate; existing rows still visible read-only if already loaded |
+| **Denied** | No section with foreign data → [denied.md](denied.md) |
+| **Individual** | Same section on Details; no Images/Handovers |
+| **Driver** | No manage UI |
+
+### Density
+
+| | Web | Mobile |
+| --- | --- | --- |
+| Form width | Inside `vehicleFormDetails` ~400px | Full comfortable content width |
+| Row layout | Stacked fields **Must**; optional compact pair only if wide + labeled | **Stacked only** |
+| Hits | 44pt inputs, Add, Remove icon | 44pt; thumb-friendly Remove |
+| Tabs | Section only on Details | Same |
+
+### Warning rules (A1) for custom rows
+
+Same table as built-in warnable dates — see [Warning rules](#warning-rules-a1--list--form-only). Registration still never badges. Custom **always** participates in A1 when `expires_on` set.
+
+### List + chrome (US-89)
+
+| Surface | Priority | Behavior |
+| --- | --- | --- |
+| Details badges | **Must** | Under each custom date |
+| List chips | **Should** | Badge + label; wrap; no new columns |
+| Nav / tab urgency | **Should** | Include custom `expires_on` in tenant worst-wins with insurance/inspection/road tax (still **not** registration); same red/orange bands — [_patterns.md](_patterns.md#vehicles-nav--tab-urgency-us-28--states--stacking) |
+| Notifications menu | **Could** | If product includes later: grain vehicle + custom label; same 30-day window; do not block this slice on menu redesign |
+
+### A11y (section)
+
+| Control | Name / behavior |
+| --- | --- |
+| Section heading | Custom expirations (`id` target e.g. `vehicle-custom-expirations-heading`) |
+| List | `aria-labelledby` → heading; when empty, empty caption referenced or spoken as section status |
+| Row group | Prefer `role="group"` **Custom expiration: {label}** (or **New custom expiration** when label empty) |
+| Label input | Label |
+| Date input | Expires on |
+| Add | Add expiration · when disabled: **Add expiration, maximum of 10 reached** |
+| Remove | Remove {label} expiration |
+| Confirm dialog | `role="dialog"` `aria-modal="true"` `aria-labelledby` → title **Remove {label}?** |
+| Confirm primary | Remove |
+| Confirm cancel | Cancel |
+| Badge | Not color-only — text Due soon / Expired + label in caption/name |
+| Errors | `aria-describedby` / `aria-invalid` on fields; announce with field name |
+| Focus | Add → focus new Label; Cancel confirm → Remove trigger; after successful remove → Add or adjacent row |
+| Live region | Optional polite on cap reached / remove success; no spam |
+
+### What not to build
+
+- Separate route/page for custom expirations  
+- Replacing or renaming built-in Insurance / Inspection / Road tax / Registration  
+- Required custom rows (zero is valid)  
+- Drag-reorder chrome unless Architect later requires stable order UX  
+- Hex, nested cards per row, or a second design system  
 
 ## Handovers tab (US-55–US-57)
 
@@ -366,67 +541,19 @@ vehicleSideViewerOverlay | vehicleSideViewerScreen
 | Stage | `vehicleSideViewerStage` | `flex-1`, `bg-surface-sunken`, clip overflow, center content, `p-2` |
 | Image | `vehicleSideViewerImage` | `object-contain` / RN contain; transform scale from zoom factor; no edit handles |
 
-##Driver Handovers history | Tab absent (E55); no history API chrome |
-| Other company edit / images / handovers | Denied; vehicle, images, handovers unchanged |
-| Validation (fields) | BA Q6 open — all listed fields shown; empty dates mean no warning |
-| Side image validation | Per-side only (table above); vehicle field save still allowed with empty sides |
-| Partial sides | Filled sides show preview; empty sides stay empty (US-35) |
-| Handovers empty / loading / error | See [Handovers tab](#handovers-tab-us-55us-57) |
-| Handover detail | Read-only; no edit/delete (E57) |
+#### Zoom behavior
 
-## Token usage
-
-| Role | Class |
+| Control | Spec |
 | --- | --- |
-| Table | `tableWrap` `tableHeader` `tableCell` `tableCellNum` `tableCellLink` `tableCellMuted` `tableRowHover` |
-| Form tabs | `vehicleForm` `vehicleFormTabList` `vehicleFormTab` `vehicleFormTabSelected` `vehicleFormTabPanel` `vehicleFormDetails` |
-| Side frames / actions | `vehicleSideSection` `vehicleSideGrid` `vehicleSideSlot` `vehicleSideFrame` `vehicleSideFrameFilled` `vehicleSideFrameFocus` `vehicleSideFrameError` `vehicleSidePreview` `vehicleSideActions` |
-| Side actions | `buttonSecondary` `buttonGhost` `buttonDisabled` `buttonFocus` |
-| Side viewer | `vehicleSideViewerOverlay` `vehicleSideViewerOverlayMobile` `vehicleSideViewerDialog` `vehicleSideViewerScreen` `vehicleSideViewerToolbar` `vehicleSideViewerTitle` `vehicleSideViewerZoomGroup` `vehicleSideViewerStage` `vehicleSideViewerImage` `vehicleSideViewerClose` `vehicleSideViewerZoomIn` `vehicleSideViewerZoomOut` |
-| Side errors | `errorText` (+ optional page `bannerDanger` / `bannerWarning`) |
-| Handovers history | `badgeNeutral` `badgeOk` `emptyState` `listRow` `caption` `bannerDanger` `bannerWarning` |
-| Handover damage (detail) | `handoverDamageGrid` `handoverDamageThumb` `handoverDamageThumbFocus` — read-only (no remove) |
-| List presence (Should) | `vehicleSidePresence` `vehicleSidePresenceIcon` — **unchanged** by US-41–US-44 / handovers |
-| Loading | `skeleton` |
-| Spacing tokens | `vehicle-side-slot` **176px**; `vehicle-side-grid-max` **400px**; `vehicle-side-viewer-toolbar` **56px**; damage thumbs use spacing **`6`** (48px) |
-| Zoom tokens | `motion.vehicle-side-zoom` min **1** / max **3** / step **0.5** / default **1** |
+| Default | **1×** every open (US-43) — do not restore prior zoom |
+| Zoom in / out | Buttons required; step `motion.vehicle-side-zoom` (0.5); min 1 / max 3 |
+| Wheel (web Should) | Optional; same clamps |
+| Pinch (mobile Should) | Optional; same clamps; +/− remain |
+| Reduce-motion | Instant scale; no bounce |
 
-## A11y
+#### Dismiss (US-44)
 
-| Control | Name |
-| --- | --- |
-| Screen (list) | Vehicles |
-| Screen (create) | Add vehicle |
-| Screen (edit) | Edit vehicle |
-| Add | Add vehicle |
-| Row (no photos) | {Make} {Model}, {plate}, {date name} expired \| due soon |
-| Row (has photos, Should) | {Make} {Model}, {plate}, has photos, {date name} expired \| due soon |
-| List presence chip | Photos (decorative icon hidden) |
-| Make | Make |
-| Model | Model |
-| Save | Save vehicle |
-| Tab Details | Details |
-| Tab Images | Images |
-| Tab Handovers | Handovers |
-| Handover history | Handover history |
-| Handover row | {Out\|In}, {when}, {driver}, mileage {n} {unit} |
-| Handover detail | Handover detail, {Out\|In} |
-| Close handover detail | Close handover detail |
-| Handover damage thumb | Damage photo {n}; activate to enlarge |
-| Appearance section | Appearance (heading) |
-| Side slot group | Front photo \| Left photo \| Right photo \| Back photo |
-| Add (empty side) | Add Front photo (etc.) |
-| Filled frame (open viewer) | View Front photo (etc.) — button/dialog trigger |
-| Optional View action | View Front photo (etc.) |
-| Replace | Replace Front photo (etc.) |
-| Clear | Clear Front photo (etc.) |
-| Side error | Announced with the side name; not color-only (`errorText` + `vehicleSideFrameError`) |
-| Viewer dialog | `{Front\|Left\|Right\|Back} photo` or **Damage photo {n} of {m}**
-| Opening | Instant under reduce-motion; otherwise optional `motion.duration.fast` fade — no bounce |
-| Ready | Image contained at 1×; focus to **Close** (safe default) or dialog container per platform dialog pattern |
-| Zoomed | Image scaled; ± enablement updates; live region **optional polite** “Zoom {n}%” — do not spam every half-step if noisy |
-| Image load fail in viewer | Stage `caption` “Photo could not be shown.” + Close; does not clear side data |
-| Offline | Viewer may still show already-loaded blob/URL if cached; otherwise same fail caption; no upload from viewer |
+Close, Escape (web), backdrop (web), system back (mobile). **No** data change; zoom forgotten; return focus to opener.
 
 ### Validation & errors (US-38) — per side
 
@@ -467,17 +594,17 @@ Do **not** use a single form-level `inputError` for all sides. Failures are **sc
 
 ## Warning rules (A1) — list & form only
 
-Applies to **Insurance, Inspection, Road tax** only. **Registration never shows** `badgeExpired` / `badgeWarning`.
+Applies to **Insurance, Inspection, Road tax**, and **each custom expiration** with a set `expires_on`. **Registration never shows** `badgeExpired` / `badgeWarning`.
 
 | Condition | Treatment |
 | --- | --- |
-| Date in past | `badgeExpired` “Expired” + date name |
-| Date within 30 days including today | `badgeWarning` “Due soon” + date name |
+| Date in past | `badgeExpired` “Expired” + date name **or custom label** |
+| Date within 30 days including today | `badgeWarning` “Due soon” + date name **or custom label** |
 | Date > 30 days | Date only, no badge |
 | Empty date | No badge |
 | Registration any value | Date only, **no** badge |
 
-Show on **list** (web cells / mobile wrap) **and** **edit/create form** (inline under insurance/inspection/road tax). **Unchanged by US-28** and **unchanged by US-35–US-39**.
+Show on **list** (web cells / mobile wrap — built-in columns + **Should** custom chips) **and** **edit/create form** (inline under insurance/inspection/road tax **and** each custom date). **Unchanged by US-28** chrome bands and **unchanged by US-35–US-39**. Custom Details badges are **Must (US-89)**.
 
 ## Nav / tab urgency (US-28) — chrome only
 
@@ -485,9 +612,11 @@ Worst-wins fleet urgency on the **Vehicles** sidebar item (web) and **Vehicles**
 
 | Band | When | Chrome |
 | --- | --- | --- |
-| Red | Any company section `daysUntil < 7` (incl. overdue) | `navItemUrgencyCritical` / `tabItemUrgencyCritical` |
+| Red | Any tenant section `daysUntil < 7` (incl. overdue) | `navItemUrgencyCritical` / `tabItemUrgencyCritical` |
 | Orange | No red; any section `daysUntil = 7` | `navItemUrgencySoon` / `tabItemUrgencySoon` |
 | None | Else | Base nav/tab only |
+
+**Sources:** non-null `insurance_on`, `inspection_on`, `road_tax_on`, and **Should (US-89)** each custom `expires_on`. **Not** `registration_on`.
 
 Full state matrix, selected+urgency stacking, contrast, and accessible names: [\_patterns.md](_patterns.md#vehicles-nav--tab-urgency-us-28--states--stacking). List/detail stay on the **30-day** badge window (A1); nav uses the **7-day / exact-7** bands (A20).
 
@@ -495,24 +624,34 @@ Full state matrix, selected+urgency stacking, contrast, and accessible names: [\
 
 | State | UI |
 | --- | --- |
-| Driver create / image manage | Denied; no vehicle created; no image UI → [denied.md](denied.md) |
-| Other company edit / images | Denied; vehicle and images unchanged |
-| Validation (fields) | BA Q6 open — all listed fields shown; empty dates mean no warning |
+| Driver create / image manage / custom expirations | Denied; no vehicle created; no image or custom-expiration UI → [denied.md](denied.md) |
+| Other company edit / images / custom | Denied; vehicle, images, custom rows unchanged |
+| Validation (fields) | Built-in + custom inline/`bannerDanger` as specified; empty built-in dates mean no warning; empty custom **section** is valid; **incomplete custom row** blocks save with field errors (US-90) |
+| Custom empty / cap / remove confirm | See [Custom expirations](#custom-expirations-us-86us-90) |
 | Side image validation | Per-side only (table above); vehicle field save still allowed with empty sides |
 | Partial sides | Filled sides show preview; empty sides stay empty (US-35) |
+| Handovers empty / loading / error | See [Handovers tab](#handovers-tab-us-55us-57) |
+| Handover detail | Read-only; no edit/delete (E57) |
 
 ## Token usage
 
 | Role | Class |
 | --- | --- |
-| Table | `tableWrap` `tableHeader` `tableCell` `tableCellNum` `tableCellLink` `tableCellMutedilled` `vehicleSideFrameFocus` `vehicleSideFrameError` `vehicleSidePreview` `vehicleSideActions` |
+| Table | `tableWrap` `tableHeader` `tableCell` `tableCellNum` `tableCellLink` `tableCellMuted` `tableRowHover` |
+| Form tabs | `vehicleForm` `vehicleFormTabList` `vehicleFormTab` `vehicleFormTabSelected` `vehicleFormTabPanel` `vehicleFormDetails` |
+| Custom expirations | `vehicleCustomExpirations` `vehicleCustomExpirationList` `vehicleCustomExpirationRow` — layout only; fields reuse `sectionTitle` `label` `input` `inputHover` `inputFocus` `inputError` `errorText` `caption` `badgeWarning` `badgeExpired` `buttonSecondary` `buttonDisabled` `buttonIcon` `buttonDanger` `buttonFocus` |
+| Side frames / actions | `vehicleSideSection` `vehicleSideGrid` `vehicleSideSlot` `vehicleSideFrame` `vehicleSideFrameFilled` `vehicleSideFrameFocus` `vehicleSideFrameError` `vehicleSidePreview` `vehicleSideActions` |
 | Side actions | `buttonSecondary` `buttonGhost` `buttonDisabled` `buttonFocus` |
 | Side viewer | `vehicleSideViewerOverlay` `vehicleSideViewerOverlayMobile` `vehicleSideViewerDialog` `vehicleSideViewerScreen` `vehicleSideViewerToolbar` `vehicleSideViewerTitle` `vehicleSideViewerZoomGroup` `vehicleSideViewerStage` `vehicleSideViewerImage` `vehicleSideViewerClose` `vehicleSideViewerZoomIn` `vehicleSideViewerZoomOut` |
-| Side errors | `errorText` (+ optional page `bannerDanger` / `bannerWarning`) |
-| List presence (Should) | `vehicleSidePresence` `vehicleSidePresenceIcon` — **unchanged** by US-41–US-44 |
+| Side / form errors | `errorText` (+ optional page `bannerDanger` / `bannerWarning`) |
+| Handovers history | `badgeNeutral` `badgeOk` `emptyState` `listRow` `caption` `bannerDanger` `bannerWarning` |
+| Handover damage (detail) | `handoverDamageGrid` `handoverDamageThumb` `handoverDamageThumbFocus` — read-only (no remove) |
+| List presence (Should) | `vehicleSidePresence` `vehicleSidePresenceIcon` — **unchanged** by custom expirations |
 | Loading | `skeleton` |
-| Spacing tokens | `vehicle-side-slot` **176px**; `vehicle-side-grid-max` **400px**; `vehicle-side-viewer-toolbar` **56px** |
+| Spacing tokens | `vehicle-side-slot` **176px**; `vehicle-side-grid-max` **400px**; `vehicle-side-viewer-toolbar` **56px**; damage thumbs use spacing **`6`** (48px); custom rows use form `gap-2` only |
 | Zoom tokens | `motion.vehicle-side-zoom` min **1** / max **3** / step **0.5** / default **1** |
+
+**No new color or spacing tokens** for US-86–US-90. Confirm remove reuses Sheet / ConfirmDeleteDialog pattern from [_patterns.md](_patterns.md).
 
 ## A11y
 
@@ -521,13 +660,31 @@ Full state matrix, selected+urgency stacking, contrast, and accessible names: [\
 | Screen (list) | Vehicles |
 | Screen (create) | Add vehicle |
 | Screen (edit) | Edit vehicle |
-| Add | Add vehicle |
-| Row (no photos) | {Make} {Model}, {plate}, {date name} expired \| due soon |
-| Row (has photos, Should) | {Make} {Model}, {plate}, has photos, {date name} expired \| due soon |
+| Add vehicle | Add vehicle |
+| Row (no photos) | {Make} {Model}, {plate}, {date name \| custom label} expired \| due soon |
+| Row (has photos, Should) | {Make} {Model}, {plate}, has photos, {date name \| custom label} expired \| due soon |
 | List presence chip | Photos (decorative icon hidden) |
 | Make | Make |
 | Model | Model |
 | Save | Save vehicle |
+| Tab Details | Details |
+| Tab Images | Images |
+| Tab Handovers | Handovers |
+| Handover history | Handover history |
+| Handover row | {Out\|In}, {when}, {driver}, mileage {n} {unit} |
+| Handover detail | Handover detail, {Out\|In} |
+| Close handover detail | Close handover detail |
+| Handover damage thumb | Damage photo {n}; activate to enlarge |
+| Custom expirations heading | Custom expirations |
+| Custom expiration row | Custom expiration: {label} |
+| Custom label field | Label |
+| Custom date field | Expires on |
+| Add expiration | Add expiration |
+| Add expiration (cap) | Add expiration, maximum of 10 reached |
+| Remove custom | Remove {label} expiration |
+| Remove confirm | Remove {label}? |
+| Remove confirm primary | Remove |
+| Remove confirm cancel | Cancel |
 | Appearance section | Appearance (heading) |
 | Side slot group | Front photo \| Left photo \| Right photo \| Back photo |
 | Add (empty side) | Add Front photo (etc.) |
@@ -549,19 +706,15 @@ Full state matrix, selected+urgency stacking, contrast, and accessible names: [\
 - Badges not color-only; nav urgency not color-only (name + fill + selected edge).
 - Side presence cue not color-only (text **Photos** and/or name on row).
 - Date picker 44pt; web keyboard reachable.
+- Custom Add/Remove and label/date fields ≥ 44pt; remove confirm focus-trapped; Cancel default focus.
+- Suggested stable ids (Architect/FE): `vehicle-custom-expirations-heading`, `vehicle-custom-expiration-list`, `vehicle-custom-expiration-{id}`, `vehicle-custom-expiration-{id}-label`, `vehicle-custom-expiration-{id}-expires-on`, `vehicle-custom-expiration-add`, `vehicle-custom-expiration-{id}-remove`, `vehicle-custom-expiration-remove-dialog`.
 - Side Add/Replace/Clear/View and frames ≥ 44pt hits; focus `vehicleSideFrameFocus` / `buttonFocus`.
 - **Viewer (web):** `role="dialog"`, `aria-modal="true"`, `aria-labelledby` → title. **Focus trap** while open; initial focus **Close** (or dialog). On dismiss, return focus to the **filled frame** (or View) that opened it.
 - **Viewer (mobile):** modal/accessibilityViewIsModal (or equivalent) so VO stays in viewer; dismiss returns focus/accessibility to the slot trigger.
 - Backdrop is dismissive but not the only path — visible Close always present.
 - Zoom not gesture-only: +/− always available and named.
-- Do not clip labels; wrap badges and presence chip on mobile.
+- Do not clip labels; wrap badges, custom chips, and presence chip on mobile.
 - Edit: fields keep visible labels; prepopulated values and image previews are the accessible value, not a second unlabeled string.
-- List primary identity is one string (`Make Model`); form exposes Make and Model as separate labeled controls.
-- Live regions: optional polite announce on per-side upload/clear success is fine; optional polite zoom percent; do not spam on every poll.
+- List primary identity is one string (`Make Model`); form exposes Make and Model as separate labeled controls; custom label is its own control (not merged into built-in date labels).
+- Live regions: optional polite announce on per-side upload/clear success, custom remove success, or cap reached; optional polite zoom percent; do not spam on every poll.
 - Reduce-motion: no shimmer pulse on skeleton; static `skeleton` fill; viewer open/zoom without spring
-- Side Add/Replace/Clear and frames ≥ 44pt hits; focus `vehicleSideFrameFocus` / `buttonFocus`.
-- Do not clip labels; wrap badges and presence chip on mobile.
-- Edit: fields keep visible labels; prepopulated values and image previews are the accessible value, not a second unlabeled string.
-- List primary identity is one string (`Make Model`); form exposes Make and Model as separate labeled controls.
-- Live regions: optional polite announce on per-side upload/clear success is fine; do not spam on every poll.
-- Reduce-motion: no shimmer pulse required on skeleton; static `skeleton` fill.

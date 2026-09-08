@@ -1,9 +1,9 @@
 # TOTP settings (enable / disable)
 
-**Stories:** US-04, US-05  
-**Surfaces:** Web compact (nav **Security**); mobile Owner/Admin More → Security.  
-**Purpose:** Optional authenticator MFA for **this** Owner/Admin only.  
-**Chrome:** Authenticated shell ([_patterns.md](_patterns.md)).
+**Stories:** US-04, US-05, **US-80** (Individual Owner)  
+**Surfaces:** Web compact (nav **Security**); mobile management More → Security. **Company** Owner/Admin and **Individual** Owner.  
+**Purpose:** Optional authenticator MFA for **this** management principal only (not drivers).  
+**Chrome:** Authenticated management shell ([_patterns.md](_patterns.md)) — Individual reaches Security without Drivers/Admins nav.
 
 ## Layout — web
 

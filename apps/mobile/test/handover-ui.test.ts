@@ -32,6 +32,8 @@ describe("vehicle handovers UI (US-51–US-60 mobile)", () => {
     assert.match(handoverPage, /DriverHandoverPanel/);
     assert.match(handoverPage, /onHandoverSaved/);
     assert.match(handoverPage, /Go to Next travel/);
+    assert.match(handoverPage, /ScrollView/);
+    assert.match(handoverPage, /KeyboardAvoidingView/);
     assert.match(panel, /getDriverActiveHandover/);
     assert.match(panel, /createDriverHandover/);
     assert.match(panel, /Submit Handover Out/);
