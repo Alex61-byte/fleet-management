@@ -613,7 +613,6 @@ export function VehicleForm({
                 {customExpirations.map((row, index) => {
                   const rowErrors = customErrors[row.key] ?? {};
                   const labelTrim = row.label.trim();
-                  const badgeLabel = labelTrim || "Expires on";
                   const serverWarning =
                     row.serverOwned && row.id
                       ? vehicle?.warnings.find((w) => w.field === `custom:${row.id}`)
@@ -623,38 +622,55 @@ export function VehicleForm({
                   const removeName = labelTrim
                     ? `Remove ${labelTrim} expiration`
                     : "Remove custom expiration";
+                  const dateA11y = labelTrim
+                    ? `${labelTrim} expiration date`
+                    : `Custom expiration ${index + 1} date`;
+                  const fieldError = rowErrors.expires_on ?? rowErrors.label;
                   return (
-                    <div key={row.key} className={themeClasses.vehicleCustomExpirationRow}>
-                      <div className="flex flex-row items-center justify-between gap-1">
-                        <span className={themeClasses.caption}>Expiration {index + 1}</span>
-                        <button
-                          ref={(el) => {
-                            customRemoveTriggerRefs.current[row.key] = el;
-                          }}
-                          type="button"
-                          className={`${themeClasses.buttonIcon} text-danger hover:bg-hover focus-visible:shadow-ring disabled:text-disabled`}
-                          disabled={busy || offline || removeCustomKey !== null}
-                          aria-label={removeName}
-                          onClick={() => openRemoveCustom(row.key)}
-                        >
-                          <TrashIcon className="block h-nav-icon w-nav-icon shrink-0" />
-                        </button>
-                      </div>
-                      <Field label="Label" error={rowErrors.label}>
-                        <TextInput
-                          ref={(el) => {
-                            customLabelInputRefs.current[row.key] = el;
-                          }}
-                          value={row.label}
-                          onChange={(e) => updateCustomExpiration(row.key, { label: e.target.value })}
-                          disabled={busy}
-                          error={Boolean(rowErrors.label)}
-                          placeholder="e.g. Fire extinguisher"
-                          aria-label={`Custom expiration ${index + 1} label`}
-                          maxLength={CUSTOM_LABEL_MAX + 20}
-                        />
-                      </Field>
-                      <Field label="Expires on" error={rowErrors.expires_on}>
+                    <div
+                      key={row.key}
+                      className={themeClasses.vehicleCustomExpirationRow}
+                      role="group"
+                      aria-label={
+                        labelTrim ? `Custom expiration: ${labelTrim}` : "New custom expiration"
+                      }
+                    >
+                      {/* Match Registration: title = object label, date control under it. */}
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center justify-between gap-1">
+                          <input
+                            ref={(el) => {
+                              customLabelInputRefs.current[row.key] = el;
+                            }}
+                            className={`${themeClasses.label} min-w-0 flex-1 border-0 bg-transparent p-0 outline-none focus-visible:shadow-ring ${
+                              rowErrors.label ? "text-danger" : ""
+                            }`}
+                            value={row.label}
+                            onChange={(e) =>
+                              updateCustomExpiration(row.key, { label: e.target.value })
+                            }
+                            disabled={busy}
+                            placeholder="e.g. Fire extinguisher"
+                            aria-label={
+                              labelTrim
+                                ? `${labelTrim} label`
+                                : `Custom expiration ${index + 1} label`
+                            }
+                            maxLength={CUSTOM_LABEL_MAX + 20}
+                          />
+                          <button
+                            ref={(el) => {
+                              customRemoveTriggerRefs.current[row.key] = el;
+                            }}
+                            type="button"
+                            className={`${themeClasses.buttonIcon} text-danger hover:bg-hover focus-visible:shadow-ring disabled:text-disabled`}
+                            disabled={busy || offline || removeCustomKey !== null}
+                            aria-label={removeName}
+                            onClick={() => openRemoveCustom(row.key)}
+                          >
+                            <TrashIcon className="block h-nav-icon w-nav-icon shrink-0" />
+                          </button>
+                        </div>
                         <TextInput
                           type="date"
                           value={row.expires_on}
@@ -663,7 +679,7 @@ export function VehicleForm({
                           }
                           disabled={busy}
                           error={Boolean(rowErrors.expires_on)}
-                          aria-label={`Custom expiration ${index + 1} date`}
+                          aria-label={dateA11y}
                         />
                         {previewState ? (
                           <span
@@ -673,10 +689,15 @@ export function VehicleForm({
                                 : themeClasses.badgeWarning
                             }
                           >
-                            {badgeLabel} · {previewState === "expired" ? "Expired" : "Due soon"}
+                            {previewState === "expired" ? "Expired" : "Due soon"}
                           </span>
                         ) : null}
-                      </Field>
+                        {fieldError ? (
+                          <span className={themeClasses.errorText} role="alert">
+                            {fieldError}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   );
                 })}
