@@ -7,6 +7,7 @@ import { Banner, Field, PrimaryButton, Skeleton, TextInput } from "../../compone
 import { themeClasses } from "../../../../design/tailwind.theme";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import { invalidateFleetLists, queryAdmins } from "../../lib/fleet-queries";
 
 type Admin = { id: string; email: string; role: "admin" };
 
@@ -24,12 +25,13 @@ export default function AdminsPage() {
   const [passwordError, setPasswordError] = useState("");
   const [banner, setBanner] = useState("");
 
-  async function load() {
+  async function load(force = false) {
+    if (!me) return;
     setLoading(true);
     setError("");
     try {
-      const res = await api.listAdmins();
-      setItems(res.items);
+      const res = await queryAdmins(me.company_id, { force });
+      setItems(res.data.items);
     } catch (err) {
       if (err instanceof FleetApiError && err.status === 403) setError("forbidden");
       else setError("Could not load Admins.");
@@ -73,11 +75,12 @@ export default function AdminsPage() {
     setBusy(true);
     try {
       await api.createAdmin(email, password);
+      if (me) invalidateFleetLists(me.company_id);
       setEmail("");
       setPassword("");
       setConfirm("");
       setShowForm(false);
-      await load();
+      await load(true);
     } catch (err) {
       if (err instanceof FleetApiError) {
         if (err.code === "email_in_use") setEmailError("This email cannot be used.");
@@ -103,7 +106,7 @@ export default function AdminsPage() {
       ) : error === "forbidden" ? (
         <Denied title="Not allowed" body="Only the Owner can add Admins." />
       ) : error ? (
-        <ErrorRetry message={error} onRetry={() => void load()} />
+        <ErrorRetry message={error} onRetry={() => void load(true)} />
       ) : (
         <>
           {items && items.length === 0 ? (

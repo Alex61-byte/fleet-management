@@ -2361,4 +2361,91 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(tenOk.body.custom_expirations.length, 10);
   });
 
+
+  it("ADR-020 list ETag 304 and opt-in pagination", async () => {
+    const reg = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        email: "etag-owner@fleet.example",
+        password: "password1",
+        ...companyFields,
+      },
+    });
+    assert.equal(reg.status, 201);
+    const token = reg.body.access_token as string;
+
+    const first = await inject({
+      method: "GET",
+      url: "/v1/vehicles",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(first.statusCode, 200);
+    const etag = first.headers.etag;
+    assert.ok(etag);
+    const body1 = JSON.parse(first.body);
+    assert.ok(Array.isArray(body1.items));
+
+    const cached = await inject({
+      method: "GET",
+      url: "/v1/vehicles",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "if-none-match": String(etag),
+      },
+    });
+    assert.equal(cached.statusCode, 304);
+    assert.equal(cached.body, "");
+
+    const created = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token,
+      payload: { make: "Ford", model: "Transit", license_plate: "ETAG-1" },
+    });
+    assert.equal(created.status, 201);
+
+    const afterWrite = await inject({
+      method: "GET",
+      url: "/v1/vehicles",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "if-none-match": String(etag),
+      },
+    });
+    assert.equal(afterWrite.statusCode, 200);
+    const body2 = JSON.parse(afterWrite.body);
+    assert.equal(body2.items.length, 1);
+    assert.ok(afterWrite.headers.etag);
+    assert.notEqual(afterWrite.headers.etag, etag);
+
+    const page = await json(inject, {
+      method: "GET",
+      url: "/v1/vehicles?limit=1",
+      token,
+    });
+    assert.equal(page.status, 200);
+    assert.ok(Array.isArray(page.body.items));
+    assert.equal(page.body.items.length, 1);
+    assert.equal(page.body.next_cursor, null);
+
+    const home1 = await inject({
+      method: "GET",
+      url: "/v1/home",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(home1.statusCode, 200);
+    const homeEtag = home1.headers.etag;
+    assert.ok(homeEtag);
+    const home304 = await inject({
+      method: "GET",
+      url: "/v1/home",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "if-none-match": String(homeEtag),
+      },
+    });
+    assert.equal(home304.statusCode, 304);
+  });
+
 });

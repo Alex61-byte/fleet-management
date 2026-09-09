@@ -8,7 +8,7 @@ import { useAuth } from "../../../lib/auth-context";
 import { notifyVehiclesChanged } from "../../../lib/vehicles-changed";
 
 export default function NewVehiclePage() {
-  const { offline } = useAuth();
+  const { offline, me } = useAuth();
   const router = useRouter();
   return (
     <AppShell title="Add vehicle">
@@ -17,7 +17,7 @@ export default function NewVehiclePage() {
         submitLabel="Save vehicle"
         onSubmit={async (body) => {
           const created = await api.createVehicle(body);
-          notifyVehiclesChanged();
+          notifyVehiclesChanged(me?.company_id);
           router.replace(`/vehicles/${created.id}`);
           return created;
         }}

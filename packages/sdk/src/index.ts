@@ -832,6 +832,17 @@ async function readError(res: Response): Promise<FleetApiError> {
   }
 }
 
+export type ConditionalGetResult<T> = {
+  data: T | undefined;
+  etag: string | null;
+  notModified: boolean;
+};
+
+export type ListPage<T> = {
+  items: T[];
+  next_cursor?: string | null;
+};
+
 export class FleetClient {
   /** Single-flight refresh promise (US-29). */
   private refreshInFlight: Promise<boolean> | null = null;
@@ -896,11 +907,14 @@ export class FleetClient {
       formData?: FormData;
       auth?: boolean;
       empty?: boolean;
+      headers?: Record<string, string>;
+      /** When true, return { data, etag, notModified } instead of bare T. */
+      conditional?: boolean;
       _skipRefresh?: boolean;
       _retried?: boolean;
     },
   ): Promise<T> {
-    const headers: Record<string, string> = { accept: "application/json" };
+    const headers: Record<string, string> = { accept: "application/json", ...(opts?.headers ?? {}) };
     if (opts?.body !== undefined && !opts.formData) headers["content-type"] = "application/json";
     if (opts?.auth !== false) {
       const access = this.tokens.getAccess();
@@ -930,6 +944,11 @@ export class FleetClient {
       throw await readError(res);
     }
 
+    if (res.status === 304 && opts?.conditional) {
+      const etag = res.headers.get("etag");
+      return { data: undefined, etag, notModified: true } as T;
+    }
+
     if (res.status === 204 || res.status === 202) {
       if (!res.ok) throw await readError(res);
       const text = await res.text();
@@ -942,7 +961,25 @@ export class FleetClient {
     }
     if (!res.ok) throw await readError(res);
     if (opts?.empty) return undefined as T;
-    return (await res.json()) as T;
+    const data = (await res.json()) as unknown;
+    if (opts?.conditional) {
+      return {
+        data,
+        etag: res.headers.get("etag"),
+        notModified: false,
+      } as T;
+    }
+    return data as T;
+  }
+
+  /** Conditional GET helper (ADR-020). */
+  private conditionalGet<T>(path: string, etag?: string | null) {
+    const headers: Record<string, string> = {};
+    if (etag) headers["if-none-match"] = etag;
+    return this.request<ConditionalGetResult<T>>("GET", path, {
+      conditional: true,
+      headers,
+    });
   }
 
   register(input: {
@@ -1039,10 +1076,14 @@ export class FleetClient {
     return this.request<void>("POST", "/v1/auth/totp/disable", { body: { code } });
   }
 
-  listAdmins() {
-    return this.request<{ items: { id: string; email: string; role: "admin" }[] }>(
-      "GET",
-      "/v1/admins",
+  listAdmins(opts?: { etag?: string | null; limit?: number; cursor?: string }) {
+    const q = new URLSearchParams();
+    if (opts?.limit != null) q.set("limit", String(opts.limit));
+    if (opts?.cursor) q.set("cursor", opts.cursor);
+    const qs = q.toString();
+    return this.conditionalGet<ListPage<{ id: string; email: string; role: "admin" }>>(
+      `/v1/admins${qs ? `?${qs}` : ""}`,
+      opts?.etag,
     );
   }
 
@@ -1054,8 +1095,15 @@ export class FleetClient {
     );
   }
 
-  listDrivers() {
-    return this.request<{ items: Driver[] }>("GET", "/v1/drivers");
+  listDrivers(opts?: { etag?: string | null; limit?: number; cursor?: string }) {
+    const q = new URLSearchParams();
+    if (opts?.limit != null) q.set("limit", String(opts.limit));
+    if (opts?.cursor) q.set("cursor", opts.cursor);
+    const qs = q.toString();
+    return this.conditionalGet<ListPage<Driver>>(
+      `/v1/drivers${qs ? `?${qs}` : ""}`,
+      opts?.etag,
+    );
   }
 
   createDriver(email: string) {
@@ -1081,9 +1129,19 @@ export class FleetClient {
     return this.request<void>("DELETE", `/v1/drivers/${id}`);
   }
 
-  listVehicles(expiring?: boolean) {
-    const q = expiring ? "?expiring=true" : "";
-    return this.request<{ items: Vehicle[] }>("GET", `/v1/vehicles${q}`);
+  listVehicles(
+    expiring?: boolean,
+    opts?: { etag?: string | null; limit?: number; cursor?: string },
+  ) {
+    const q = new URLSearchParams();
+    if (expiring) q.set("expiring", "true");
+    if (opts?.limit != null) q.set("limit", String(opts.limit));
+    if (opts?.cursor) q.set("cursor", opts.cursor);
+    const qs = q.toString();
+    return this.conditionalGet<ListPage<Vehicle>>(
+      `/v1/vehicles${qs ? `?${qs}` : ""}`,
+      opts?.etag,
+    );
   }
 
   createVehicle(body: VehicleWrite) {
@@ -1117,12 +1175,19 @@ export class FleetClient {
     return this.request<Vehicle>("DELETE", `/v1/vehicles/${id}/sides/${side}`);
   }
 
-  home() {
-    return this.request<Home>("GET", "/v1/home");
+  home(opts?: { etag?: string | null }) {
+    return this.conditionalGet<Home>("/v1/home", opts?.etag);
   }
 
-  listDriverVehicles() {
-    return this.request<{ items: DriverVehicle[] }>("GET", "/v1/driver/vehicles");
+  listDriverVehicles(opts?: { etag?: string | null; limit?: number; cursor?: string }) {
+    const q = new URLSearchParams();
+    if (opts?.limit != null) q.set("limit", String(opts.limit));
+    if (opts?.cursor) q.set("cursor", opts.cursor);
+    const qs = q.toString();
+    return this.conditionalGet<ListPage<DriverVehicle>>(
+      `/v1/driver/vehicles${qs ? `?${qs}` : ""}`,
+      opts?.etag,
+    );
   }
 
   getDriverTravel() {

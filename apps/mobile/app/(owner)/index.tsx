@@ -16,7 +16,7 @@ export default function OwnerHome() {
     setError("");
     setLoading(true);
     try {
-      setHome(await api.home());
+      setHome((await api.home()).data ?? null);
     } catch {
       setError("Could not load home.");
     } finally {

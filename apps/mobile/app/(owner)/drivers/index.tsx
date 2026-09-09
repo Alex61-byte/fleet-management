@@ -23,7 +23,7 @@ export default function DriversList() {
     setLoading(true);
     setError("");
     try {
-      setItems((await api.listDrivers()).items);
+      setItems((await api.listDrivers()).data?.items ?? []);
     } catch {
       setError("Could not load drivers.");
     } finally {

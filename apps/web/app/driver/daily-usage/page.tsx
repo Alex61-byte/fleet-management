@@ -93,7 +93,8 @@ export default function DriverDailyUsagePage() {
       setItems(list.items);
       if (t.travel?.vehicle_id) {
         try {
-          const vehicles = await api.listDriverVehicles();
+          const vehiclesRes = await api.listDriverVehicles();
+          const vehicles = vehiclesRes.data ?? { items: [] as NonNullable<typeof vehiclesRes.data>["items"] };
           const v = vehicles.items.find((x) => x.id === t.travel!.vehicle_id);
           setVehicleMileage(v?.mileage ?? null);
           setUnit(v?.odometer_unit ?? t.travel.odometer_unit ?? "km");

@@ -5,25 +5,27 @@ import {
   type VehiclesNavUrgency,
 } from "@fleet/sdk";
 import { useCallback, useEffect, useState } from "react";
-import { api } from "./api";
+import { useAuth } from "./auth-context";
+import { queryVehicles } from "./fleet-queries";
 import { VEHICLES_CHANGED_EVENT } from "./vehicles-changed";
 
 /** Load company vehicles and derive US-28 nav urgency; failures → none. */
 export function useVehiclesNavUrgency(enabled: boolean): VehiclesNavUrgency {
+  const { me } = useAuth();
   const [urgency, setUrgency] = useState<VehiclesNavUrgency>("none");
 
   const refresh = useCallback(async () => {
-    if (!enabled) {
+    if (!enabled || !me) {
       setUrgency("none");
       return;
     }
     try {
-      const { items } = await api.listVehicles();
-      setUrgency(vehiclesNavUrgency(items));
+      const res = await queryVehicles(me.company_id);
+      setUrgency(vehiclesNavUrgency(res.data.items));
     } catch {
       setUrgency("none");
     }
-  }, [enabled]);
+  }, [enabled, me]);
 
   useEffect(() => {
     void refresh();

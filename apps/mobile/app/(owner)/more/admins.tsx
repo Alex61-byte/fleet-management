@@ -24,7 +24,7 @@ export default function AdminsScreen() {
   async function load() {
     setError("");
     try {
-      setItems((await api.listAdmins()).items);
+      setItems((await api.listAdmins()).data?.items ?? []);
     } catch (err) {
       if (err instanceof FleetApiError && err.status === 403) setError("forbidden");
       else setError("Could not load Admins.");

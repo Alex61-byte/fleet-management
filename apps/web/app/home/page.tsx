@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 import { AppShell, ErrorRetry } from "../../components/app-shell";
 import { ExpiryBadges, PrimaryLink, Skeleton } from "../../components/ui";
 import { themeClasses } from "../../../../design/tailwind.theme";
-import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import { queryHome } from "../../lib/fleet-queries";
 
 export default function HomePage() {
   const { me, ready } = useAuth();
@@ -15,11 +15,13 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function load() {
+  async function load(force = false) {
+    if (!me) return;
     setError("");
     setLoading(true);
     try {
-      setHome(await api.home());
+      const res = await queryHome(me.company_id, { force });
+      setHome(res.data);
     } catch {
       setError("Could not load home.");
     } finally {
@@ -50,7 +52,7 @@ export default function HomePage() {
           <Skeleton className="h-12" />
         </div>
       ) : error ? (
-        <ErrorRetry message={error} onRetry={() => void load()} />
+        <ErrorRetry message={error} onRetry={() => void load(true)} />
       ) : home ? (
         <>
           {individual ? (

@@ -14,6 +14,13 @@ import {
   vehicleImageStorageFromEnvDetailed,
   type VehicleImageStorage,
 } from "./vehicle-image-storage.ts";
+import {
+  TenantRevisionRegistry,
+  ifNoneMatch,
+  parsePageParams,
+  slicePage,
+  type ListKey,
+} from "./tenant-revision.ts";
 
 /** Trim+lower body.email before AJV `format: "email"` so padded input is not validation_error. */
 function normalizeBodyEmail(req: FastifyRequest, _reply: FastifyReply, done: (err?: Error) => void) {
@@ -137,6 +144,50 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     console.log(`@fleet/api vehicle image storage: ${fromEnv.status}`);
   }
   const fleet = new FleetService(deps.store, vehicleImages);
+  const revisions = new TenantRevisionRegistry();
+
+  function bumpTenant(companyId: string | undefined) {
+    if (companyId) revisions.bump(companyId);
+  }
+
+  function sendList(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    companyId: string,
+    listKey: ListKey,
+    items: unknown[],
+    query: { limit?: string; cursor?: string; expiring?: string },
+  ) {
+    const etag = revisions.etag(companyId, listKey);
+    if (ifNoneMatch(req.headers["if-none-match"], etag)) {
+      return reply.status(304).header("ETag", etag).send();
+    }
+    const page = parsePageParams(
+      { limit: query.limit, cursor: query.cursor },
+      (message) => {
+        throw errors.validation(message);
+      },
+    );
+    reply.header("ETag", etag);
+    if (!page.paging) {
+      return reply.send({ items });
+    }
+    return reply.send(slicePage(items, page));
+  }
+
+  function sendHome(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    companyId: string,
+    body: unknown,
+  ) {
+    const etag = revisions.etag(companyId, "home");
+    if (ifNoneMatch(req.headers["if-none-match"], etag)) {
+      return reply.status(304).header("ETag", etag).send();
+    }
+    return reply.header("ETag", etag).send(body);
+  }
+
 
   await app.register(cors, { origin: true });
   await app.register(sensible);
@@ -400,8 +451,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
   );
 
-  app.get("/v1/admins", { preHandler: requireSession }, async (req) => {
-    return identity.listAdmins(req.claims!);
+  app.get("/v1/admins", { preHandler: requireSession }, async (req, reply) => {
+    const body = await identity.listAdmins(req.claims!);
+    const q = req.query as { limit?: string; cursor?: string };
+    return sendList(req, reply, req.claims!.company_id, "admins", body.items, q);
   });
 
   app.post(
@@ -410,12 +463,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     async (req, reply) => {
       const body = req.body as { email: string; password: string };
       const created = await identity.createAdmin(req.claims!, body.email, body.password);
+      bumpTenant(req.claims!.company_id);
       return reply.status(201).send(created);
     },
   );
 
-  app.get("/v1/drivers", { preHandler: requireSession }, async (req) => {
-    return identity.listDrivers(req.claims!);
+  app.get("/v1/drivers", { preHandler: requireSession }, async (req, reply) => {
+    const body = await identity.listDrivers(req.claims!);
+    const q = req.query as { limit?: string; cursor?: string };
+    return sendList(req, reply, req.claims!.company_id, "drivers", body.items, q);
   });
 
   app.post(
@@ -436,6 +492,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     async (req, reply) => {
       const body = req.body as { email: string };
       const created = await identity.createDriver(req.claims!, body.email);
+      bumpTenant(req.claims!.company_id);
       return reply.status(201).send(created);
     },
   );
@@ -445,7 +502,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     { preHandler: requireSession },
     async (req) => {
       const { id } = req.params as { id: string };
-      return identity.resendDriverInvite(req.claims!, id);
+      const res = await identity.resendDriverInvite(req.claims!, id);
+      bumpTenant(req.claims!.company_id);
+      return res;
     },
   );
 
@@ -472,19 +531,24 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     async (req) => {
       const { id } = req.params as { id: string };
       const body = req.body as { email?: string; login_enabled?: boolean };
-      return identity.patchDriver(req.claims!, id, body);
+      const patched = await identity.patchDriver(req.claims!, id, body);
+      bumpTenant(req.claims!.company_id);
+      return patched;
     },
   );
 
   app.delete("/v1/drivers/:id", { preHandler: requireSession }, async (req, reply) => {
     const { id } = req.params as { id: string };
     await identity.deleteDriver(req.claims!, id);
+    bumpTenant(req.claims!.company_id);
     return reply.status(204).send();
   });
 
-  app.get("/v1/vehicles", { preHandler: requireSession }, async (req) => {
-    const q = req.query as { expiring?: string };
-    return fleet.list(req.claims!, q.expiring === "true");
+  app.get("/v1/vehicles", { preHandler: requireSession }, async (req, reply) => {
+    const q = req.query as { expiring?: string; limit?: string; cursor?: string };
+    const body = await fleet.list(req.claims!, q.expiring === "true");
+    const listKey = q.expiring === "true" ? "vehicles:expiring" : "vehicles";
+    return sendList(req, reply, req.claims!.company_id, listKey, body.items, q);
   });
 
   app.post(
@@ -492,6 +556,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     { preHandler: requireSession, schema: { body: vehicleWrite } },
     async (req, reply) => {
       const created = await fleet.create(req.claims!, req.body as VehicleWriteBody);
+      bumpTenant(req.claims!.company_id);
       return reply.status(201).send(created);
     },
   );
@@ -506,7 +571,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     { preHandler: requireSession, schema: { body: vehicleWrite } },
     async (req) => {
       const { id } = req.params as { id: string };
-      return fleet.patch(req.claims!, id, req.body as VehicleWriteBody);
+      const patched = await fleet.patch(req.claims!, id, req.body as VehicleWriteBody);
+      bumpTenant(req.claims!.company_id);
+      return patched;
     },
   );
 
@@ -516,21 +583,28 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const file = await req.file();
     if (!file) throw errors.validation("file is required");
     const buffer = await file.toBuffer();
-    return fleet.putSideImage(req.claims!, id, side, new Uint8Array(buffer));
+    const updated = await fleet.putSideImage(req.claims!, id, side, new Uint8Array(buffer));
+    bumpTenant(req.claims!.company_id);
+    return updated;
   });
 
   app.delete("/v1/vehicles/:id/sides/:side", { preHandler: requireSession }, async (req) => {
     const { id, side: sideRaw } = req.params as { id: string; side: string };
     const side = parseVehicleSide(sideRaw);
-    return fleet.clearSideImage(req.claims!, id, side);
+    const cleared = await fleet.clearSideImage(req.claims!, id, side);
+    bumpTenant(req.claims!.company_id);
+    return cleared;
   });
 
-  app.get("/v1/home", { preHandler: requireSession }, async (req) => {
-    return fleet.home(req.claims!);
+  app.get("/v1/home", { preHandler: requireSession }, async (req, reply) => {
+    const body = await fleet.home(req.claims!);
+    return sendHome(req, reply, req.claims!.company_id, body);
   });
 
-  app.get("/v1/driver/vehicles", { preHandler: requireSession }, async (req) => {
-    return fleet.listDriverVehicles(req.claims!);
+  app.get("/v1/driver/vehicles", { preHandler: requireSession }, async (req, reply) => {
+    const body = await fleet.listDriverVehicles(req.claims!);
+    const q = req.query as { limit?: string; cursor?: string };
+    return sendList(req, reply, req.claims!.company_id, "driver-vehicles", body.items, q);
   });
 
   app.get("/v1/driver/travel", { preHandler: requireSession }, async (req) => {

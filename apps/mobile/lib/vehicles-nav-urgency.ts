@@ -17,7 +17,9 @@ export function useVehiclesNavUrgency(enabled: boolean): VehiclesNavUrgency {
       return;
     }
     try {
-      const { items } = await api.listVehicles();
+      const listRes = await api.listVehicles();
+      if (listRes.notModified || !listRes.data) return;
+      const items = listRes.data.items;
       setUrgency(vehiclesNavUrgency(items));
     } catch {
       setUrgency("none");
