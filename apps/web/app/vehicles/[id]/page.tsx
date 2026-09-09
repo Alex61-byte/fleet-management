@@ -12,7 +12,7 @@ import { notifyVehiclesChanged } from "../../../lib/vehicles-changed";
 
 export default function EditVehiclePage() {
   const { id } = useParams<{ id: string }>();
-  const { offline } = useAuth();
+  const { me, offline } = useAuth();
   const router = useRouter();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,7 +61,7 @@ export default function EditVehiclePage() {
           onSubmit={async (body) => {
             const next = await api.patchVehicle(id, body);
             setVehicle(next);
-            notifyVehiclesChanged();
+            notifyVehiclesChanged(me?.company_id);
             router.replace("/vehicles");
             return next;
           }}

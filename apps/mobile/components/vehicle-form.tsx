@@ -626,7 +626,6 @@ export function VehicleForm({
                 {customExpirations.map((row, index) => {
                   const rowErrors = customErrors[row.key] ?? {};
                   const labelTrim = row.label.trim();
-                  const badgeLabel = labelTrim || "Expires on";
                   const serverWarning =
                     row.serverOwned && row.id
                       ? vehicle?.warnings.find((w) => w.field === `custom:${row.id}`)
@@ -636,10 +635,37 @@ export function VehicleForm({
                   const removeName = labelTrim
                     ? `Remove ${labelTrim} expiration`
                     : "Remove custom expiration";
+                  const dateA11y = labelTrim
+                    ? `${labelTrim} expiration date`
+                    : `Custom expiration ${index + 1} date`;
+                  const fieldError = rowErrors.expires_on ?? rowErrors.label;
                   return (
-                    <View key={row.key} className="gap-2 w-full">
+                    <View
+                      key={row.key}
+                      className="w-full gap-0.5"
+                      accessibilityLabel={
+                        labelTrim ? `Custom expiration: ${labelTrim}` : "New custom expiration"
+                      }
+                    >
+                      {/* Match Registration: title = object label, date control under it. */}
                       <View className="flex-row items-center justify-between gap-1">
-                        <Text className="text-caption text-text-secondary">Expiration {index + 1}</Text>
+                        <TextInput
+                          ref={(el) => {
+                            customLabelInputRefs.current[row.key] = el;
+                          }}
+                          value={row.label}
+                          onChangeText={(v) => updateCustomExpiration(row.key, { label: v })}
+                          error={Boolean(rowErrors.label)}
+                          placeholder="e.g. Fire extinguisher"
+                          accessibilityLabel={
+                            labelTrim
+                              ? `${labelTrim} label`
+                              : `Custom expiration ${index + 1} label`
+                          }
+                          maxLength={CUSTOM_LABEL_MAX + 20}
+                          editable={!busy}
+                          className="min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-label font-medium text-text-primary"
+                        />
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={removeName}
@@ -652,41 +678,30 @@ export function VehicleForm({
                           <TrashIcon />
                         </Pressable>
                       </View>
-                      <Field label="Label" error={rowErrors.label}>
-                        <TextInput
-                          ref={(el) => {
-                            customLabelInputRefs.current[row.key] = el;
-                          }}
-                          value={row.label}
-                          onChangeText={(v) => updateCustomExpiration(row.key, { label: v })}
-                          error={Boolean(rowErrors.label)}
-                          placeholder="e.g. Fire extinguisher"
-                          accessibilityLabel={`Custom expiration ${index + 1} label`}
-                          maxLength={CUSTOM_LABEL_MAX + 20}
-                          editable={!busy}
-                        />
-                      </Field>
-                      <Field label="Expires on" error={rowErrors.expires_on}>
-                        <TextInput
-                          value={row.expires_on}
-                          onChangeText={(v) => updateCustomExpiration(row.key, { expires_on: v })}
-                          error={Boolean(rowErrors.expires_on)}
-                          placeholder="YYYY-MM-DD"
-                          accessibilityLabel={`Custom expiration ${index + 1} date`}
-                          editable={!busy}
-                        />
-                        {previewState ? (
-                          <Text
-                            className={
-                              previewState === "expired"
-                                ? "text-danger text-caption"
-                                : "text-warning text-caption"
-                            }
-                          >
-                            {badgeLabel} · {previewState === "expired" ? "Expired" : "Due soon"}
-                          </Text>
-                        ) : null}
-                      </Field>
+                      <TextInput
+                        value={row.expires_on}
+                        onChangeText={(v) => updateCustomExpiration(row.key, { expires_on: v })}
+                        error={Boolean(rowErrors.expires_on)}
+                        placeholder="YYYY-MM-DD"
+                        accessibilityLabel={dateA11y}
+                        editable={!busy}
+                      />
+                      {previewState ? (
+                        <Text
+                          className={
+                            previewState === "expired"
+                              ? "text-danger text-caption"
+                              : "text-warning text-caption"
+                          }
+                        >
+                          {previewState === "expired" ? "Expired" : "Due soon"}
+                        </Text>
+                      ) : null}
+                      {fieldError ? (
+                        <Text className="text-danger text-caption" accessibilityRole="alert">
+                          {fieldError}
+                        </Text>
+                      ) : null}
                     </View>
                   );
                 })}

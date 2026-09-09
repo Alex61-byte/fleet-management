@@ -30,7 +30,7 @@ test("public landing uses identity chrome, not ops records", () => {
 });
 
 test("Owner/Admin home lives under /home", () => {
-  assert.match(home, /api\.home\(/);
+  assert.match(home, /queryHome\(/);
   assert.match(home, /<AppShell/);
   assert.match(home, /title="Home"/);
   assert.match(home, /Due soon or expired/);

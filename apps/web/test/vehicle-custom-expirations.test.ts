@@ -21,7 +21,11 @@ describe("vehicle custom expirations (web US-86–90)", () => {
     assert.match(form, /Add expiration/);
     assert.match(form, /Maximum of 10 custom expirations\./);
     assert.match(form, /vehicleCustomExpirations/);
-    assert.match(form, /Expires on/);
+    // Registration-style: object label is the field title; date under it (no "Expires on" chrome).
+    assert.match(form, /Match Registration: title = object label/);
+    assert.match(form, /type="date"/);
+    assert.doesNotMatch(form, /label="Expires on"/);
+    assert.doesNotMatch(form, /label="Label"/);
     assert.match(theme, /vehicleCustomExpirations/);
     assert.match(theme, /vehicleCustomExpirationRow/);
   });

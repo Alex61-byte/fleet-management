@@ -49,14 +49,15 @@ export default function DriverTravelPage() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [v, t] = await Promise.all([api.listDriverVehicles(), api.getDriverTravel()]);
-      setVehicles(v.items);
+      const [vRes, t] = await Promise.all([api.listDriverVehicles(), api.getDriverTravel()]);
+      const vItems = vRes.data?.items ?? [];
+      setVehicles(vItems);
       setTravel(t.travel);
       if (t.travel) {
         setVehicleId(t.travel.vehicle_id);
         setOdometer(String(t.travel.odometer));
-      } else if (v.items.length === 1) {
-        setVehicleId(v.items[0]!.id);
+      } else if (vItems.length === 1) {
+        setVehicleId(vItems[0]!.id);
       }
     } catch (err) {
       setVehicles([]);

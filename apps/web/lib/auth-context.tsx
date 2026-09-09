@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from "react";
 import { api } from "./api";
+import { clearQueryCache } from "./query-cache";
 import { browserTokens, markSessionEnded } from "./session";
 
 type AuthState = {
@@ -80,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* still clear local session */
     }
     browserTokens.clear();
+    clearQueryCache();
     setMe(null);
   }, []);
 
@@ -91,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     api.setOnSessionInvalid(() => {
       markSessionEnded();
+      clearQueryCache();
       setMe(null);
     });
     return () => api.setOnSessionInvalid(null);

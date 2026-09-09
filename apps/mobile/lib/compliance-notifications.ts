@@ -48,7 +48,9 @@ export function useComplianceNotifications(
     setLoading(true);
     setError(null);
     try {
-      const { items: vehicles } = await api.listVehicles();
+      const listRes = await api.listVehicles();
+      if (listRes.notModified || !listRes.data) return;
+      const vehicles = listRes.data.items;
       const projected = complianceNotificationItems(vehicles);
       setItems(projected.items);
       setTruncated(projected.truncated);

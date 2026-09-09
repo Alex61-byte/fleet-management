@@ -26,7 +26,8 @@ export default function DriverTravelScreen() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [v, t] = await Promise.all([api.listDriverVehicles(), api.getDriverTravel()]);
+      const [vRes, t] = await Promise.all([api.listDriverVehicles(), api.getDriverTravel()]);
+      const v = vRes.data ?? { items: [] };
       setVehicles(v.items);
       setTravel(t.travel);
       if (t.travel) {

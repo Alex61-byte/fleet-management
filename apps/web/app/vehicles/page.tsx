@@ -12,8 +12,8 @@ import { useEffect, useState } from "react";
 import { AppShell, ErrorRetry } from "../../components/app-shell";
 import { ExpiryBadges, PrimaryLink, Skeleton } from "../../components/ui";
 import { themeClasses } from "../../../../design/tailwind.theme";
-import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import { queryVehicles } from "../../lib/fleet-queries";
 
 export default function VehiclesPage() {
   const { me, ready } = useAuth();
@@ -21,12 +21,13 @@ export default function VehiclesPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function load() {
+  async function load(force = false) {
+    if (!me) return;
     setLoading(true);
     setError("");
     try {
-      const res = await api.listVehicles();
-      setItems(res.items);
+      const res = await queryVehicles(me.company_id, { force });
+      setItems(res.data.items);
     } catch {
       setError("Could not load vehicles.");
     } finally {
@@ -49,7 +50,7 @@ export default function VehiclesPage() {
           <Skeleton className="h-12" />
         </div>
       ) : error ? (
-        <ErrorRetry message={error} onRetry={() => void load()} />
+        <ErrorRetry message={error} onRetry={() => void load(true)} />
       ) : items && items.length === 0 ? (
         <div className="flex flex-col gap-2">
           <p className={themeClasses.body}>No vehicles yet.</p>

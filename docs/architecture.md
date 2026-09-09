@@ -21,10 +21,13 @@ Specialist defaults already in-repo (not invented here): Fastify + TypeScript AP
 | Security | Email/password hashed at rest; TOTP secrets encrypted; no session until TOTP if enabled; driver token cannot call Owner/Admin APIs (E8); drivers may hold usable web sessions for auth + minimal home only |
 | Tenancy | Every driver/vehicle/admin row scoped by `company_id` (tenant id). Tenant has `account_kind` `company` \| `individual` ([ADR-018](adr/ADR-018-account-kinds.md)). Drivers/Admins APIs require `company`. Cross-tenant fail closed |
 | Consistency | Sign-up is one transaction (tenant + Owner). Vehicle save is allowed with expired dates. Expiry flags are derived, not stored as source of truth |
-| Latency | Interactive CRUD; no async bus required |
+| Latency | Interactive CRUD; list GETs support ETag 304 + optional cursor pages ([ADR-020](adr/ADR-020-tenant-data-cache-scale.md)) |
 | Operability | Structured error codes; request id; single deployable API |
-| Evolution | `vehicle.id` stable for later GPS; no ingest API now |
+| Evolution | `vehicle.id` stable for later GPS; no ingest API now; tenant list cache via revision/ETag — not Next BFF SoT ([ADR-020](adr/ADR-020-tenant-data-cache-scale.md)) |
+| Scale (reads) | Per-tenant data revision; client SWR + mutation invalidation; pooler/replicas operational; Redis optional multi-node later |
 | Cost | One API process + one Postgres; no extra brokers |
+
+**Read scale (ADR-020):** At multi-session scale, authenticated list reads use per-tenant **revision ETags** (`If-None-Match` → 304) and **opt-in cursor pagination**; web/mobile hold SWR caches **keyed by `company_id`**. The Fastify `/v1` API remains the only source of truth — not a Next.js BFF cache. Rate limits stay; shared revision store (e.g. Redis) is optional until multi-instance coherence demands it.
 
 **Constraints from BA/design:** unique email across all login identities; Owner-only Admin create; password min 8; 30-day warning window; dates only; one Expo binary role shells; drivers web + mobile for auth/minimal home only (not Owner fleet UI).
 
@@ -157,6 +160,7 @@ flowchart TD
 | [adr/ADR-006-turborepo-orchestration.md](adr/ADR-006-turborepo-orchestration.md) | npm workspaces + Turbo; Expo QR on its own TTY |
 | [adr/ADR-008-driver-hard-delete.md](adr/ADR-008-driver-hard-delete.md) | Driver hard delete vs disable; session revoke |
 | [adr/ADR-016-driver-daily-usage.md](adr/ADR-016-driver-daily-usage.md) | Driver Daily usage create/list; hard-delete cascade |
+| [adr/ADR-020-tenant-data-cache-scale.md](adr/ADR-020-tenant-data-cache-scale.md) | Tenant revision ETag/304, opt-in list pagination, client SWR keys |
 | [contracts/http-v1.md](contracts/http-v1.md) | Routes, bodies, error codes |
 
 **Next specialist (US-27):** Senior Backend Specialist — Identity `DELETE /v1/drivers/:id` + session fail-closed against contract and BA AC. Fleet no-op. Do not start Next.js/Expo until that slice passes tests. Then Senior Frontend Specialist per [design/pages/drivers.md](../design/pages/drivers.md).

@@ -23,7 +23,7 @@ export default function VehiclesList() {
     setLoading(true);
     setError("");
     try {
-      setItems((await api.listVehicles()).items);
+      setItems((await api.listVehicles()).data?.items ?? []);
     } catch {
       setError("Could not load vehicles.");
     } finally {

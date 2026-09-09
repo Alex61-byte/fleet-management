@@ -42,6 +42,50 @@ Invite: `invite_invalid` for token problems; `email_not_invited` only when token
 
 ---
 
+## Conditional list reads & optional pagination (ADR-020)
+
+**Goal:** cut repeat transfer for hot list GETs under many concurrent sessions; keep small-tenant bodies working.
+
+### ETag / If-None-Match / 304
+
+Applies to:
+
+| Method | Path |
+| --- | --- |
+| `GET` | `/v1/vehicles` (incl. `?expiring=true`) |
+| `GET` | `/v1/drivers` |
+| `GET` | `/v1/admins` |
+| `GET` | `/v1/home` |
+| `GET` | `/v1/driver/vehicles` |
+
+| | |
+| --- | --- |
+| **200** | Normal body (see each route). Response **MUST** include `ETag` (opaque). |
+| **Request** | Optional `If-None-Match: <etag>`. |
+| **304** | Representation unchanged. **Empty body.** **No** error envelope. `ETag` SHOULD be resent. |
+| **Authz** | Unchanged: session/tenant checks **before** 304. Wrong role/tenant → 401/403/404, never 304. |
+| **Vary** | ETag preimage MUST include `company_id`, route identity, and material query (e.g. `expiring`). MUST NOT be reusable across tenants. |
+
+Mutations that change list-visible data for the tenant advance the revision used to build `ETag` (ADR-020).
+
+### Optional cursor pagination
+
+Query (list routes above **except** `GET /v1/home`):
+
+| Param | Rule |
+| --- | --- |
+| `limit` | Optional. When pagination intent present: default **50**, max **100**. Values &lt; 1 or &gt; 100 → **400** `validation_error`. |
+| `cursor` | Optional opaque string from prior `next_cursor`. Invalid cursor → **400** `validation_error`. |
+
+| Client request | Body |
+| --- | --- |
+| **No** `limit` and **no** `cursor` | **Unchanged** current shape (full list). Still **ETag** on 200. |
+| `limit` and/or `cursor` present | `{ "items": [ ... ], "next_cursor": string \| null }` — `next_cursor` null = end. |
+
+`GET /v1/home` — **ETag/304 only**; no `limit`/`cursor`. ETag uses **tenant + list + filter** revision (not per-page).
+
+---
+
 ## Unauthenticated
 
 ### `POST /v1/auth/register`
@@ -248,6 +292,8 @@ Auth success `principal` objects (register*, login, totp/verify, invite/accept) 
 
 Owner create rules unchanged for **company** tenants. Create: `{ email, password }`.
 
+**GET:** **ETag** on 200; `If-None-Match` → **304** empty (ADR-020). Optional `limit`/`cursor` → `{ items, next_cursor }`.
+
 | Caller | Result |
 | --- | --- |
 | Company Owner | Existing behavior |
@@ -301,6 +347,8 @@ Owner or Admin. Drivers: **403**.
 **Invite pending:** `must_change_password === true` (no usable password).
 
 ### `GET /v1/drivers` → `{ items: [driver] }`
+
+**ETag** on 200; `If-None-Match` → **304** empty (ADR-020). Optional `limit`/`cursor` → `{ items, next_cursor }`.
 
 ### `POST /v1/drivers`
 
@@ -403,6 +451,8 @@ Allowed while login disabled (accept still blocked).
 ### `GET /v1/vehicles` · `GET /v1/vehicles?expiring=true`
 `{ "items": Vehicle[] }` — each item includes `mileage`, `mileage_unit`, `custom_expirations`, `has_side_images` and `side_images`. `expiring=true` filters `warnings.length > 0` (includes custom-only warnings).
 
+**ETag** on 200 (distinct for `expiring`); `If-None-Match` → **304** empty (ADR-020). Optional `limit`/`cursor` → `{ items, next_cursor }`.
+
 **Owner/Admin Global Header notifications (US-68–US-76 / ADR-017; custom **Could** US-89 / ADR-019):** **No** `GET /v1/notifications`. Clients project menu items from this list’s server `warnings[]` via `@fleet/sdk` (`complianceNotificationItems`). HTTP surface unchanged.
 
 ### `POST /v1/vehicles`
@@ -430,6 +480,8 @@ Object key: `{company_id}/{vehicle_id}/{side_lower}.{ext}` in bucket `vehicle-im
 Clear **one** side: delete that side’s object from Supabase Storage (S3 `DeleteObject` on the stored path) and null the DB path. Other sides unchanged. Idempotent if already empty. **200** Vehicle (`side_images.<SIDE>` = `null`). Same authz as PUT (Company Owner/Admin only; Individual **403**). **502/503** `storage_unavailable` if the object could not be removed — DB path unchanged so the product does not claim empty while the blob may still exist.
 
 ### `GET /v1/home`
+**ETag** on 200; `If-None-Match` → **304** empty (ADR-020). No pagination.
+
 ```json
 {
   "driver_count": 0,
@@ -518,6 +570,8 @@ Driver-only. Owner/Admin → **403** `forbidden`. Drivers remain **403** on owne
 
 ### `GET /v1/driver/vehicles`
 `{ "items": DriverVehicle[] }` — all company vehicles (read-only).
+
+**ETag** on 200; `If-None-Match` → **304** empty (ADR-020). Optional `limit`/`cursor` → `{ items, next_cursor }`.
 
 ### `GET /v1/driver/travel`
 `{ "travel": Travel | null }` — active selection for the signed-in driver.

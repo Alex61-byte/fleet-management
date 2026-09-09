@@ -5,7 +5,8 @@ import {
   type ComplianceNotificationItem,
 } from "@fleet/sdk";
 import { useCallback, useEffect, useState } from "react";
-import { api } from "./api";
+import { useAuth } from "./auth-context";
+import { queryVehicles } from "./fleet-queries";
 import { VEHICLES_CHANGED_EVENT } from "./vehicles-changed";
 
 export type ComplianceNotificationsState = {
@@ -23,6 +24,7 @@ export function useComplianceNotifications(
   enabled: boolean,
   offline = false,
 ): ComplianceNotificationsState {
+  const { me } = useAuth();
   const [items, setItems] = useState<ComplianceNotificationItem[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [count, setCount] = useState(0);
@@ -30,7 +32,7 @@ export function useComplianceNotifications(
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!enabled) {
+    if (!enabled || !me) {
       setItems([]);
       setTruncated(false);
       setCount(0);
@@ -49,8 +51,8 @@ export function useComplianceNotifications(
     setLoading(true);
     setError(null);
     try {
-      const { items: vehicles } = await api.listVehicles();
-      const projected = complianceNotificationItems(vehicles);
+      const res = await queryVehicles(me.company_id);
+      const projected = complianceNotificationItems(res.data.items);
       setItems(projected.items);
       setTruncated(projected.truncated);
       setCount(projected.items.length);
@@ -62,7 +64,7 @@ export function useComplianceNotifications(
     } finally {
       setLoading(false);
     }
-  }, [enabled, offline]);
+  }, [enabled, offline, me]);
 
   useEffect(() => {
     void refresh();

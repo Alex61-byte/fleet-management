@@ -8,6 +8,7 @@ import { Banner, Field, PrimaryButton, TextInput } from "../../../components/ui"
 import { themeClasses } from "../../../../../design/tailwind.theme";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth-context";
+import { invalidateFleetLists } from "../../../lib/fleet-queries";
 
 export default function NewDriverPage() {
   const { offline, me } = useAuth();
@@ -35,6 +36,7 @@ export default function NewDriverPage() {
     setBusy(true);
     try {
       const created = await api.createDriver(email.trim());
+      if (me) invalidateFleetLists(me.company_id);
       if (!created.invite_email_sent) {
         // Still navigate; list/edit can resend. Surface via query not required.
         setBanner("Driver created, but the invitation email could not be sent. Resend from the driver profile.");

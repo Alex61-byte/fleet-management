@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 import { AppShell, Denied, ErrorRetry } from "../../components/app-shell";
 import { PrimaryLink, Skeleton } from "../../components/ui";
 import { themeClasses } from "../../../../design/tailwind.theme";
-import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import { queryDrivers } from "../../lib/fleet-queries";
 
 function statusCopy(d: Driver) {
   if (!d.login_enabled) return "Login disabled";
@@ -21,12 +21,13 @@ export default function DriversPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function load() {
+  async function load(force = false) {
+    if (!me) return;
     setLoading(true);
     setError("");
     try {
-      const res = await api.listDrivers();
-      setItems(res.items);
+      const res = await queryDrivers(me.company_id, { force });
+      setItems(res.data.items);
     } catch {
       setError("Could not load drivers.");
     } finally {
@@ -60,7 +61,7 @@ export default function DriversPage() {
           <Skeleton className="h-12" />
         </div>
       ) : error ? (
-        <ErrorRetry message={error} onRetry={() => void load()} />
+        <ErrorRetry message={error} onRetry={() => void load(true)} />
       ) : items && items.length === 0 ? (
         <div className="flex flex-col gap-2">
           <p className={themeClasses.body}>No drivers yet. Invite a driver by email — they set their own password.</p>
