@@ -24,7 +24,8 @@ flowchart LR
   subgraph shell [themeClasses.shell]
     sidebar[themeClasses.sidebar 256px]
     subgraph mainCol [themeClasses.content]
-      header[pageHeader]
+      globalHeader[globalHeader sticky]
+      pageHeader[pageHeader]
       body[canvas + panels / table]
     end
   end
@@ -32,21 +33,22 @@ flowchart LR
 
 | Region | Spec |
 | --- | --- |
-| Sidebar | `w-sidebar` (256px) `bg-sidebar` with 2px top `border-t-brand-bar border-t-brand-accent`. Optional collapse to `w-sidebar-collapsed` (64px) — mark + tooltip name; honor reduce-motion (instant width). |
-| Lockup | `sidebarLockup` height `h-app-bar` (56px). Same product lockup as auth: `brandMark` 24×24 + `sidebarProduct` “Fleet” (`text-title font-semibold tracking-tight`). Meta line `sidebarMeta` is **role** only: “Owner” or “Admin”. Not a second product name, not an unlabeled square. Collapsed: mark only, tooltip “Fleet”. |
-| Nav | Items: Home, Drivers, Vehicles, Security. Owner also: Admins (after Vehicles). Driver never sees this sidebar. **Do not** style nav with `link` / underline. |
+| Sidebar | `w-sidebar` (256px) `bg-sidebar` with 2px top `border-t-brand-bar border-t-brand-accent`. Optional collapse to `w-sidebar-collapsed` (64px) — **nav icons only** (no product mark); honor reduce-motion (instant width). |
+| Sidebar top | Height `h-app-bar` (56px). **Role only** via `sidebarMeta` / `sidebarRole`: “Owner” or “Admin”. **Individual Owner** still shows **“Owner”** (not “Individual” as a second role word in the rail — kind is not a role). **No** product mark and **no** “Fleet” wordmark here — identity lives in Global Header (US-68–US-69). Not a second product name, not an unlabeled square. Collapsed: no mark; tooltips on nav items only. |
+| **Global Header (US-68–US-76)** | Sticky top of **main column** (`globalHeader`, `h-app-bar`). Leading: shielded `brandMark` 24 + `globalHeaderProduct` “Fleet”. Trailing: notification `buttonIcon` (bell) + optional count `notifBadge`. **Same region on every** management page including **Individual Owner**. Full menu anatomy: [global-header.md](global-header.md). Does **not** replace Vehicles nav urgency (US-28) or list A1 badges. **Not** on driver / public / auth. |
+| Nav | **By account kind + role** (US-82 / A86). **Company Owner:** Home, Drivers, Vehicles, Security, Admins (Admins after Vehicles). **Company Admin:** Home, Drivers, Vehicles, Security (no Admins). **Individual Owner:** Home, Vehicles, Security only — **omit Drivers and Admins** entirely (do not show disabled). Driver never sees this sidebar. **Do not** style nav with `link` / underline. |
 | Nav item | Height `min-h-hit`, `navItem`. **US-31:** each item is **icon + label** (not icon-only when expanded). Icon `navIcon` 20px outline, `currentColor`, `aria-hidden`. Metaphors: [nav-icons.md](nav-icons.md). Hover `navItemHover` must be obvious (`bg-sidebar-hover` + `text-nav-fg-selected`; pressed on RN). Selected `navItemSelected` (left 2px `border-brand` + selected fill + `font-semibold`). Focus-visible `navItemFocus` (`shadow-ring`). Selected is **not** color-only: selected fill + font-semibold + current page title match. Collapsed 64px: icon only + tooltip/accessible name. |
-| Nav urgency (US-28) | **Vehicles item only** (Owner/Admin). Fleet-wide worst-wins over non-null **`insurance_on`, `inspection_on`, `road_tax_on`** only (not `registration_on`), UTC `daysUntil` (A20, A22). **Red** if any section `daysUntil < 7` (0–6 or overdue). **Orange** if no red and any section `daysUntil = 7`. **None** otherwise. Does **not** change list/detail 30-day badges (A1). Not on Home/Drivers/Admins/Security. Not on Driver chrome. Company-scoped only. Icon inherits `text-nav-urgency-fg` with the fill — no extra urgency badge on the glyph. |
+| Nav urgency (US-28) | **Vehicles item only** (Company Owner/Admin **and** Individual Owner). Tenant-wide worst-wins over non-null **`insurance_on`, `inspection_on`, `road_tax_on`** and **Should (US-89)** each custom expiration `expires_on` (not `registration_on`), UTC `daysUntil` (A20, A22). **Red** if any section `daysUntil < 7` (0–6 or overdue). **Orange** if no red and any section `daysUntil = 7`. **None** otherwise. Does **not** change list/detail 30-day badges (A1). Not on Home/Drivers/Admins/Security. Not on Driver chrome. **Scoped to the signed-in tenant** (company or individual). Icon inherits `text-nav-urgency-fg` with the fill — no extra urgency badge on the glyph. |
 | Content canvas | `content` `bg-canvas`. Gutter `contentPadCompact`. No card-on-card gray soup — canvas is sunken; **one** raised plane per region (KPI row, table wrap, form panel). |
-| Page header | `pageHeader` min 56px. Left: `pageTitle` + optional `pageSubtitle`. Right: `pageHeaderActions` — secondary then primary. Actions stay in the header, not a floating FAB. |
-| Toolbar | On list pages only, under the header: `toolbar` height 44px. First slice: **no search** (not in BA). May hold count caption (`caption` + tabular-nums) and nothing else. Do not invent filters. |
+| Page header | `pageHeader` min 56px **below** Global Header. Left: `pageTitle` + optional `pageSubtitle`. Right: `pageHeaderActions` — secondary then primary. Page actions stay here, not in Global Header (except notifications). No floating FAB. |
+| Toolbar | On list pages only, under the page header: `toolbar` height 44px. First slice: **no search** (not in BA). May hold count caption (`caption` + tabular-nums) and nothing else. Do not invent filters. |
 
 **Mobile Owner/Admin chrome**
 
 | Region | Spec |
 | --- | --- |
-| App bar | Safe-area top + `appBarMobile` (56px content). Leading: `brandMark` 24px + `appBarProduct` “Fleet”. Screen title `pageTitleMobile` after the lockup, or replace the wordmark with the screen title on inner pages (mark always stays). Trailing primary as `buttonIcon` or text `buttonPrimary` if space. |
-| Tabs | Safe-area bottom + `tabBarMobile`. Owner/Admin: Home, Drivers, Vehicles, More. More → Security (TOTP); Owner also Admins from More or Home. Tab control: `tabItem` / selected `tabItemSelected` (`text-brand font-semibold` + 2px top `border-brand`) — not color-only. Hit `min-h-hit`. Do not use `link` underline on tabs. **US-32:** each tab is **icon above label** (`gap-0.5`). Same metaphors as web for Home/Drivers/Vehicles; More = horizontal dots. Icon `navIcon` 20px, tint = label color, decorative (`aria-hidden` / not exposed). Spec: [nav-icons.md](nav-icons.md). |
+| App bar (= Global Header affordances) | Safe-area top + `appBarMobile` (56px content). Leading: `brandMark` 24px + `appBarProduct` “Fleet”. Screen title `pageTitleMobile` after the lockup, or replace the wordmark with the screen title on inner pages (**mark always stays**). Trailing: **notification bell** first, then page primary as `buttonIcon` or text `buttonPrimary` if space. Spec: [global-header.md](global-header.md). |
+| Tabs | Safe-area bottom + `tabBarMobile`. **Company Owner/Admin:** Home, Drivers, Vehicles, More. More → Security (TOTP); **Company Owner** also Admins from More or Home. **Individual Owner:** Home, Vehicles, More — **no Drivers tab**; More → Security only (**no** Admins). Tab control: `tabItem` / selected `tabItemSelected` (`text-brand font-semibold` + 2px top `border-brand`) — not color-only. Hit `min-h-hit`. Do not use `link` underline on tabs. **US-32:** each tab is **icon above label** (`gap-0.5`). Same metaphors as web for destinations that exist; More = horizontal dots. Icon `navIcon` 20px, tint = label color, decorative (`aria-hidden` / not exposed). Spec: [nav-icons.md](nav-icons.md). **No** notification control on the tab bar. |
 | Tab urgency (US-28) | Same rules and tokens as web Vehicles nav. Apply only to the **Vehicles** tab. Other tabs never take urgency fill. Density stays comfortable (`tabBarMobile` + `min-h-hit`). Vehicles tab icon uses `nav-urgency-fg` with urgency fill — no second badge. |
 | Content | Full width, `contentPadComfortable`, keyboard avoiding. |
 
@@ -56,8 +58,8 @@ Drivers may complete **invite accept / set password**, **subsequent sign-in**, a
 
 | Region | Spec |
 | --- | --- |
-| Web | **Not** `themeClasses.shell` + sidebar. Top **driver app bar** only: `h-app-bar`, `bg-surface-raised`, `border-b border-divider`, 2px top `brand-accent` bar; `brandMark` 24px + `appBarProduct` “Fleet” + `pageTitle` “Home” (or screen title). Content: single identity `panel` + Sign out. **No** nav items, **no** Vehicles urgency, **no** KPI row, **no** tables. |
-| Mobile | `appBarMobile` lockup (mark + “Fleet”) then Home. **No** tab bar to Vehicles/Drivers/More. Sign out on home. **No** Vehicles urgency chrome (US-28). |
+| Web | **Not** `themeClasses.shell` + sidebar. Top **driver app bar** only: `h-app-bar`, `bg-surface-raised`, `border-b border-divider`, 2px top `brand-accent` bar; `brandMark` 24px + `appBarProduct` “Fleet” + `pageTitle` “Home” (or task screen title). Start content: identity `panel` + hub links (Next travel, Vehicle handover, Daily usage) + Sign out — [driver-home.md](driver-home.md). **No** Owner nav items, **no** Vehicles urgency, **no** Owner Global Header / notification menu (US-76 / E68), **no** KPI row, **no** Owner tables. |
+| Mobile | `appBarMobile` lockup (mark + “Fleet”) then Home or task title. **No** tab bar to Vehicles/Drivers/More. **No** OA notification bell. Sign out on home. Hub same as web. **No** Vehicles urgency chrome (US-28). |
 | Invite accept | Unauthenticated auth canvas on **both** surfaces — [driver-invite-accept.md](driver-invite-accept.md). Not driver home chrome; not Owner shell. Token from query/deep link. |
 | Parallel sessions (US-30) | No multi-device banner on driver chrome. |
 
@@ -113,11 +115,25 @@ Collapsed sidebar (64px): same fill on the mark/icon hit target; tooltip / acces
 - Reduce-motion: no pulse/blink on urgency; static fill only.
 - Screen reader: announce name on focus/land; do not live-region flash on every poll unless product later requires it.
 
-**Out of scope for urgency chrome:** list/detail `badgeWarning` / `badgeExpired` (30-day A1), owner-home KPI tiles, Driver app, public/auth chrome.
+**Out of scope for urgency chrome:** list/detail `badgeWarning` / `badgeExpired` (30-day A1), owner-home KPI tiles, Global Header notification menu (US-68–US-76 — complementary, separate chrome), Driver app, public/auth chrome.
+
+### Global Header notifications (US-68–US-76) — summary
+
+Full spec: [global-header.md](global-header.md).
+
+| Rule | Spec |
+| --- | --- |
+| Audience | Management web + mobile only (Company Owner/Admin + Individual Owner) |
+| Identity | **One** lockup in Global Header (shielded mark + “Fleet”); sidebar is role-only |
+| Control | Bell `buttonIcon`; count `notifBadge` when ≥1 MVP items (not color-only) |
+| Menu | Web **popover**; mobile **bottom sheet**; title “Compliance alerts” |
+| MVP items | `insurance_on` / `inspection_on` / `road_tax_on` within 30 days or past; **not** registration; grain = vehicle + section; cap 50. **Could (US-89):** custom expiration rows (grain = vehicle + custom label) — do not block MVP on menu redesign |
+| Navigate | Item → existing vehicle OA path `/vehicles/{id}` (edit/detail) |
+| States | Loading skeletons; empty “No compliance alerts.”; error + Try again |
 
 ## Product identity — Fleet lockup
 
-Same lockup on auth and sidebar. Do not invent a product name. Do not shout `FLEET` as an overline.
+Same **shielded** lockup on auth and **Owner/Admin Global Header** (and driver app bar). **Not** repeated in the OA web sidebar after US-69. Do not invent a product name. Do not shout `FLEET` as an overline.
 
 ### Wordmark
 
@@ -139,8 +155,9 @@ Same **shielded** SVG on auth, sidebar, and mobile app bar. Public landing heade
 | Surface | Treatment |
 | --- | --- |
 | Auth card (`surface-raised`, light or dark) | Navy `mark-fill` shield on the card. 1px `mark-glyph` keyline is present but invisible on light cards; keep it so one asset works everywhere. |
-| Web sidebar (`sidebar` = navy.900 / dark navy.950) | Same navy `mark-fill` would sink into the rail. The **1px `mark-glyph` keyline** is the contrasting frame (white ring on navy). Do not invert the shield fill on sidebar — one geometry, one fill recipe. |
-| Mobile app bar (`surface-raised`) | Same as auth: shield on a light/dark raised bar. |
+| Web OA Global Header (`surface-raised`) | Same as auth treatment on raised strip: navy `mark-fill` shield + keyline. **Primary** OA product lockup (US-69). |
+| Web sidebar (`sidebar` = navy.900 / dark navy.950) | **No product mark** after US-69 (role label only). If a legacy mark remains during migration, keyline still frames navy-on-navy — do not invert fill. Target state: **no** sidebar mark. |
+| Mobile OA / driver app bar (`surface-raised`) | Same as auth: shield on a light/dark raised bar. |
 | Public landing header (`surface-raised`) | **Unshielded** plate only. No keyline, no navy shield. `brandMarkPublic` 40×20. Contrast via `mark-plate-face` + `mark-fill` edge. Not this table’s shielded recipe. |
 
 Glyph (`mark-glyph` / `mark-fill` / `brand-accent`) vs fill must stay WCAG AA (non-text UI ≥ 3:1; character blocks are `mark-fill` on `mark-glyph` ≈ 11:1 light).
@@ -209,19 +226,19 @@ Auth: same markup, `width="32" height="32"`. Web: inline SVG. Mobile: `react-nat
 
 ### Lockup composition
 
-Horizontal: mark + 12px gap + stack (wordmark “Fleet”; caption **Fleet operations** on auth only via `authCaptionLockup`). Sidebar omits “Fleet operations”; `sidebarMeta` is role. Auth uses **shielded** `brandMarkAuth` (32px). Sidebar and mobile app bar use **shielded** `brandMark` (24px). Public landing header uses **unshielded** `brandMarkPublic` (40×20) + `publicWordmark` only.
+Horizontal: mark + 12px gap + stack (wordmark “Fleet”; caption **Fleet operations** on auth only via `authCaptionLockup`). **OA web sidebar** has **no** product lockup — `sidebarMeta` is **role** only. Auth uses **shielded** `brandMarkAuth` (32px). OA Global Header and mobile app bars use **shielded** `brandMark` (24px). Public landing header uses **unshielded** `brandMarkPublic` (40×20) + `publicWordmark` only.
 
 ### Accent bar
-, `sidebar`, and `publicHeader` (`border-t-brand-bar`). Same language — not a third accent
-2px `brand-accent` along the **top** of `authCard` and `sidebar` (`border-t-brand-bar`). Inside the mark, `brand-accent` is the **left country band** only — not a 2px strip on the plate top. Not on buttons, tables, or body text. Navy remains the brand.
+
+2px `brand-accent` along the **top** of `authCard`, `sidebar`, and `publicHeader` (`border-t-brand-bar`). Same language — not a third accent. **OA Global Header** does **not** add another top accent bar (sidebar already carries it). Inside the mark, `brand-accent` is the **left country band** only — not a 2px strip on the plate top. Not on buttons, tables, or body text. Navy remains the brand.
 
 ### Voice
 
 Short, operational. Keep existing BA captions. Tighten only if they were generic chrome, not story copy.
 
-- Auth supporting: “Sign in to manage your fleet.” / “Sign in to continue.” / “Create the first Owner account for your company.”
+- Auth supporting: “Sign in to manage your fleet.” / “Sign in to continue.” / “Create the first Owner account for your company.” / Individual: “Create a personal account to track your vehicles.” / Kind chooser: “Choose how you will use Fleet.”
 - Empty: one fact + one action (“No vehicles yet.” / “Add a vehicle to track compliance dates.”).
-- Denied: calm, no alarm chrome.
+- Denied: calm, no alarm chrome. Individual Company-only: “Drivers and Admins are available on company accounts only.”
 - Do not add slogans.
 
 ## Unauthenticated chrome — two distinct systems
@@ -230,12 +247,12 @@ Do **not** collapse these. User lock: public header is **not** on sign-in, sign-
 
 | Chrome | Pages | What it is |
 | --- | --- | --- |
-| **Public landing chrome** | [landing.md](landing.md) only (US-17–26) | Full-width sticky header + canvas **hero + one description**. Web only. Auth canvas unchanged (no hero). |
-| **Auth canvas** | Sign-in, sign-up, password, TOTP challenge, driver invite accept | Centered `authCard`. Lockup **inside** the card. **No** global header. |
+| **Public landing chrome** | [landing.md](landing.md) only (US-17–26, US-85) | Full-width sticky header + canvas **hero + one description**. Web only. Auth canvas unchanged (no hero). |
+| **Auth canvas** | Sign-in, account-kind, company sign-up, individual sign-up, password, TOTP challenge, driver invite accept | Centered `authCard`. Lockup **inside** the card. **No** global header. |
 
-Authenticated Owner/Admin shell (sidebar) is a third system — not used while unsigned-in.
+Authenticated **management** shell (sidebar / OA tabs) is a third system — not used while unsigned-in. **Company** vs **Individual** share the same shell chrome tokens; **nav inventory differs** (Individual omits Drivers/Admins).
 
-Authenticated **driver** shell (web top bar / mobile app bar only) is a **fourth** system — never reuse Owner sidebar or tabs for drivers (US-14 / E8).
+Authenticated **driver** shell (web top bar / mobile app bar only) is a **fourth** system — never reuse management sidebar or tabs for drivers (US-14 / E8). Individual Owners use **management** shell, never driver shell (A86 / rule 128).
 
 ## Public landing chrome (web only)
 
@@ -249,7 +266,7 @@ flowchart TB
   end
   subgraph header
     lockup[publicLockup unshielded plate + Fleet]
-    actions[Sign in secondary then Create company primary]
+    actions[Sign in secondary then Create account primary]
   end
   subgraph body
     hero[publicHero Fleet / Fleet operations + static map img]
@@ -259,11 +276,11 @@ flowchart TB
 
 | Rule | Spec |
 | --- | --- |
-| Where | Public landing **only**. Never on [sign-in.md](sign-in.md), [sign-up.md](sign-up.md), [password-reset.md](password-reset.md), TOTP, or signed-in shell. |
-| Header | `publicHeader`: sticky top, `h-app-bar` (56px), full width, `bg-surface-raised` + `border-b border-divider` + 2px top `brand-accent` bar — **same** accent language as `authCard` / `sidebar`, not a third bar. Stay visible (US-18). Reduce-motion: no hide-on-scroll. **Unchanged** — no extra header CTAs. |
+| Where | Public landing **only**. Never on [sign-in.md](sign-in.md), [sign-up.md](sign-up.md), [individual-sign-up.md](individual-sign-up.md), [account-kind.md](account-kind.md), [password-reset.md](password-reset.md), TOTP, or signed-in shell. |
+| Header | `publicHeader`: sticky top, `h-app-bar` (56px), full width, `bg-surface-raised` + `border-b border-divider` + 2px top `brand-accent` bar — **same** accent language as `authCard` / `sidebar`, not a third bar. Stay visible (US-18). Reduce-motion: no hide-on-scroll. **US-85:** still **two** header actions (Sign in + one create) — dual kind via chooser, not a third header button. |
 | Mark | **Unshielded** plate `brandMarkPublic` (40×20). No navy shield. Geometry and contrast: [mark.md](mark.md) public-header variant. Accessible name **Fleet**; mark `aria-hidden`. |
 | Wordmark | `publicWordmark` **Fleet**. Caption **Fleet operations** is **not** in the header (hero copy only). |
-| Actions | Right: `buttonSecondary` Sign in, then `buttonPrimary` Create company. Hit 44px. No Vehicles / Drivers / due-soon. Header-only — **no** duplicate hero CTAs. |
+| Actions | Right: `buttonSecondary` **Sign in**, then `buttonPrimary` **Create account** → [account-kind.md](account-kind.md) (Company **or** Individual). Hit 44px. No Vehicles / Drivers / due-soon. Header-only — **no** duplicate hero CTAs. |
 | Body | **Hero** (`publicHero`: h1 **Fleet** + caption **Fleet operations** + static street-map **image** on `publicHeroMap`) then **one** description `panel` (`publicDescription`). Identity copy **moved into** the hero — do not keep `publicIdentity` and a hero. No records (US-26). No feature grid, pricing, testimonials, KPI/table. |
 | Map | Static `img` only (US-24). Not live GPS, not slippy tiles, not vehicle pins. Fail → hide image; rest of page remains (E18). |
 | Auth | Auth canvas **does not** inherit hero or description. |
@@ -294,9 +311,9 @@ flowchart TB
 | Backdrop | `authCanvas` — centered, `bg-canvas`, vertical center on web; mobile: top-aligned under safe area + `py-4`. |
 | Card | `authCard` — single raised panel, max `max-w-auth-card` (420px), 2px top `brand-accent` bar. |
 | Lockup | `authLockup`: `brandMarkAuth` + `authWordmark` “Fleet” + `authCaptionLockup` “Fleet operations”. Same mark as sidebar. **Do not** use `authMark` / `FLEET` overline. |
-| Title | `authTitle`. Supporting sentence `authCaption**No** public-landing hero or static map image on auth. `. |
+| Title | `authTitle`. Supporting sentence `authCaption`. **No** public-landing hero or static map image on auth. |
 | Form | Labels above fields. Primary full width. |
-| Secondary actions | Stack in `authLinks`. Each is `link` (underline at rest) + `min-h-hit`. **Forgot password**, **Create company**, **Already have an account? Sign in**, **Back to sign in** — never faint `caption` text. Hover `linkHover`; focus-visible `linkFocus` (keep underline); pressed `linkPressed`. |
+| Secondary actions | Stack in `authLinks`. Each is `link` (underline at rest) + `min-h-hit`. **Forgot password**, **Create account** (→ kind chooser), **Already have an account? Sign in**, **Back to sign in**, **Back to account type** — never faint `caption` text. Hover `linkHover`; focus-visible `linkFocus` (keep underline); pressed `linkPressed`. |
 | Calm | No neon, no gradient hero, no social buttons. |
 
 ## Data display: table vs rows
@@ -343,7 +360,10 @@ Reduce-motion: no underline grow/slide; hover is color + weight only.
 | Primary | Submit / create | `buttonPrimary`; hover `buttonPrimaryHover`; pressed `buttonPrimaryPressed`; disabled `buttonDisabled`; focus `buttonFocus` |
 | Secondary | Cancel / back | `buttonSecondary` + `buttonSecondaryHover` |
 | Danger | Disable login / turn off TOTP / hard-delete confirm | `buttonDanger` + `buttonDangerHover` |
-| Ghost / icon | Header overflow, tab icons | `buttonGhost` / `buttonIcon` — still `min-h-hit` `w-hit` |
+| Ghost / icon | Header overflow, tab icons, notification bell | `buttonGhost` / `buttonIcon` — still `min-h-hit` `w-hit` |
+| Global Header | OA shared chrome (US-68) | `globalHeader` + lockup + `notifButton`; menu [global-header.md](global-header.md) |
+| Notification badge | Count on bell when ≥1 alerts | `notifBadge` — digits + `danger` fill; not color-only |
+| Notification menu | Compliance alert list | Web `notifMenuPopover`; mobile `notifMenuSheet`; rows `notifMenuItem` |
 | KPI tile | Home counts | `kpi` + `kpiCaption` + `kpiValue`. Whole tile is a control, 44pt min. |
 | Table | Web lists | `tableWrap` / `tableHeader` / `tableRow` / `tableCell` |
 | List row | Mobile driver/vehicle/admin | `listRow`; chevron optional `text-text-secondary` |
@@ -354,11 +374,12 @@ Reduce-motion: no underline grow/slide; hover is color + weight only.
 | Banner error | Page-level | `bannerDanger` |
 | Banner offline | “You are offline.” | `bannerWarning` |
 | Skeleton | Loading | `skeleton` bars matching final layout (KPI row / table rows / form fields). Instant if reduce-motion. |
-| Sheet | Confirm disable / turn off TOTP / **any delete** | Overlay `bg-surface-overlay` + `raised` `shadow-overlay` panel. Actions 44pt. **Separate copy and confirm labels per flow** — never one sheet for disable and delete. **US-40 / A41:** every **delete** of a user-visible asset or record uses this sheet; first trigger opens confirm only. Hard-delete body stresses irreversible remove; side-image clear stresses photo removed from vehicle (re-upload possible); disable stresses profile kept. Detail: [drivers.md](drivers.md), [vehicles.md](vehicles.md). |
+| Sheet | Confirm disable / turn off TOTP / **any delete** | Overlay `bg-surface-overlay` + `raised` `shadow-overlay` panel. Actions 44pt. **Separate copy and confirm labels per flow** — never one sheet for disable and delete. **US-40 / A41 / rule 61:** every **delete** of a user-visible asset or record uses this sheet; first trigger opens confirm only. Hard-delete body stresses irreversible remove; side-image clear stresses photo removed from vehicle (re-upload possible); **custom expiration remove** stresses row removed (can add again); disable stresses profile kept. Detail: [drivers.md](drivers.md), [vehicles.md](vehicles.md). |
+| Labeled date row (custom expiration) | Repeatable label + expiration date on vehicle Details | Stack `gap-2`: `label`+`input` (text) → `label`+`input` (date) → optional `badgeWarning`/`badgeExpired` + `caption` under date → `errorText`. Row remove = `buttonIcon` → this Sheet (**Remove {label}?** / **Remove**). Cap Add with `buttonSecondary` + `buttonDisabled`. Empty section = calm `caption` only (not page `emptyState`). Full spec: [vehicles.md](vehicles.md#custom-expirations-us-86us-90). |
 | Image viewer | **View-only** side photo (US-42–US-44) | **Not** a confirm sheet and **not** the clear-photo dialog. Filled slot only. Web: centered `vehicleSideViewerDialog` over `vehicleSideViewerOverlay` (`bg-surface-overlay` + `shadow-overlay`). Mobile: **full-screen** `vehicleSideViewerScreen` (canvas), not a bottom sheet — reserved bottom sheet language for destructive confirm. Zoom +/− required; pinch optional on mobile. Dismiss: Close, Escape (web), backdrop (web). Zoom resets on open. No crop/edit/save. Detail: [vehicles.md](vehicles.md#side-image-viewer-us-42us-44). |
 | Inline link | Auth secondaries, in-copy actions | `link` (underline at rest); `linkHover`; `linkFocus` (ring **and** underline); `linkPressed`; `linkMuted`; `linkDisabled` |
 | Table cell link | Plate / name / email in a navigating row | `tableCellLink` + row `tableRowHover`. Identity cell only. |
-| Shielded plate | Auth, sidebar, mobile app bar | `brandMark` / `brandMarkAuth` + shielded SVG (`fill-mark-fill` `fill-mark-glyph` `fill-brand-accent`). Decorative: `aria-hidden`. |
+| Shielded plate | Auth, OA Global Header, mobile app bars (OA + driver) | `brandMark` / `brandMarkAuth` + shielded SVG (`fill-mark-fill` `fill-mark-glyph` `fill-brand-accent`). Decorative: `aria-hidden`. **Not** on OA sidebar (US-69). |
 | Public plate | Public landing header only | `brandMarkPublic` + unshielded SVG (`fill-mark-plate-face` `stroke-mark-fill` `fill-mark-fill` `fill-brand-accent`). Never on auth. |
 | Auth lockup | Auth cards only | `authLockup` + `authWordmark` + `authCaptionLockup`. **No** `publicHeader`. **No** landing hero. |
 | Public lockup | Public landing header only | `publicLockup` + `publicWordmark`. |
@@ -393,5 +414,5 @@ Button sizes: default compact height 44px (`min-h-hit`) for a11y. Horizontal pad
 - Status never color-only: badge text + (where needed) date name.
 
 ## Copy language
-
+, **custom expiration** (label + date)
 Fleet terms: company, Owner, Admin, driver, vehicle, license plate, insurance, inspection, country of registration, road tax. No dispatch / trip / **ops tracking map** / search / SMS MFA chrome in this slice. **Exception — public landing only:** a **static** street-map **image** in the hero (US-24). Not live tracking UI.

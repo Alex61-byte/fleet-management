@@ -21,7 +21,7 @@ No document storage. No legal engine. Save **allowed** when dates are past or in
 - `due_soon` if `date >= today_utc` AND `date <= today_utc + 30 days`
 - Else no warning for that field
 
-List and detail include `warnings: [{ field, state }]` with `field` ∈ `insurance_on` | `inspection_on` | `road_tax_on`. Home “due soon or expired” is vehicles where `warnings.length > 0`.
+List and detail include `warnings: [{ field, state }]` with `field` ∈ `insurance_on` | `inspection_on` | `road_tax_on` | `custom:<uuid>` (custom rows: [ADR-019](ADR-019-vehicle-custom-expirations.md)). Home “due soon or expired” is vehicles where `warnings.length > 0`.
 
 ## Alternatives
 
@@ -32,4 +32,4 @@ List and detail include `warnings: [{ field, state }]` with `field` ∈ `insuran
 
 Clients must not reimplement the 30-day rule for authorization; they may display API `warnings`. Timezone: **UTC date** until BA specifies company TZ.
 
-**Nav urgency (US-28):** Owner/Admin **Vehicles** chrome (web side nav + mobile tabs) may derive fleet-wide worst-wins bands from **insurance / inspection / road tax** dates (not `registration_on`) on `GET /v1/vehicles`, using UTC calendar `daysUntil`: **critical/red** if any `daysUntil < 7` (incl. overdue); **warning/orange** if no critical and any `daysUntil = 7`; else none. Display-only; do **not** encode nav bands in `warnings.state`.
+**Nav urgency (US-28 / US-89):** Owner/Admin **Vehicles** chrome (web side nav + mobile tabs) may derive fleet-wide worst-wins bands from **insurance / inspection / road tax** and **custom expiration `expires_on`** dates (not `registration_on`) on `GET /v1/vehicles`, using UTC calendar `daysUntil`: **critical/red** if any `daysUntil < 7` (incl. overdue); **warning/orange** if no critical and any `daysUntil = 7`; else none. Display-only; do **not** encode nav bands in `warnings.state`.

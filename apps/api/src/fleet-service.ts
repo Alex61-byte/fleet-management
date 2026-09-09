@@ -2,9 +2,11 @@ import { AppError, errors } from "./errors.ts";
 import { newId } from "./crypto.ts";
 import type {
   AccessClaims,
+  DriverDailyUsage,
   DriverTravelSelection,
   HandoverType,
   Vehicle,
+  VehicleCustomExpiration,
   VehicleHandover,
   VehicleHandoverImage,
   VehicleSide,
@@ -28,6 +30,12 @@ import {
   type VehicleImageStorage,
 } from "./vehicle-image-storage.ts";
 
+export type VehicleCustomExpirationWrite = {
+  id?: string | null;
+  label: string;
+  expires_on: string;
+};
+
 export type VehicleWrite = {
   make?: string;
   model?: string;
@@ -38,7 +46,82 @@ export type VehicleWrite = {
   inspection_on?: string | null;
   road_tax_on?: string | null;
   registration_on?: string | null;
+  /** When present on POST/PATCH: full replace. Omitted on PATCH: unchanged. `[]` clears. Parsed via parseCustomExpirations. */
+  custom_expirations?: unknown;
 };
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
+
+/** Full-replace parse for `custom_expirations` (ADR-019). Server mints id when omitted/null. */
+export function parseCustomExpirations(raw: unknown): VehicleCustomExpiration[] {
+  if (raw === undefined) {
+    throw errors.validation("custom_expirations must be an array");
+  }
+  if (!Array.isArray(raw)) {
+    throw errors.validation("custom_expirations must be an array");
+  }
+  if (raw.length > 10) {
+    throw errors.validation("At most 10 custom expirations");
+  }
+
+  const seenIds = new Set<string>();
+  const seenLabels = new Set<string>();
+  const out: VehicleCustomExpiration[] = [];
+
+  for (const item of raw) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      throw errors.validation("Each custom expiration must be an object");
+    }
+    const row = item as Record<string, unknown>;
+
+    let id: string | null = null;
+    if (row.id !== undefined && row.id !== null) {
+      if (typeof row.id !== "string" || !isUuid(row.id)) {
+        throw errors.validation("custom expiration id must be a UUID");
+      }
+      id = row.id;
+      if (seenIds.has(id)) {
+        throw errors.validation("Duplicate custom expiration id");
+      }
+      seenIds.add(id);
+    }
+
+    if (typeof row.label !== "string") {
+      throw errors.validation("Enter a label (1–80 characters).");
+    }
+    const label = row.label.trim();
+    if (!label) {
+      throw errors.validation("Enter a label (1–80 characters).");
+    }
+    if (label.length > 80) {
+      throw errors.validation("Label must be 80 characters or fewer.");
+    }
+    const labelKey = label.toLowerCase();
+    if (seenLabels.has(labelKey)) {
+      throw errors.validation("Label must be unique on this vehicle.");
+    }
+    seenLabels.add(labelKey);
+
+    if (typeof row.expires_on !== "string" || !ISO_DATE_RE.test(row.expires_on)) {
+      throw errors.validation("expires_on must be YYYY-MM-DD");
+    }
+    const expiresOn = row.expires_on;
+
+    out.push({
+      id: id ?? newId(),
+      label,
+      expiresOn,
+    });
+  }
+
+  return out;
+}
 
 function parseOptionalMileage(raw: unknown): number | null {
   if (raw === null) return null;
@@ -58,6 +141,13 @@ function assertDriver(claims: AccessClaims) {
   if (claims.role !== "driver") throw errors.forbidden();
 }
 
+/** Company-kind Owner/Admin only — Individual tenants cannot use driver-ops / image history surfaces. */
+async function assertCompanyTenantUser(store: Store, claims: AccessClaims) {
+  assertCompanyUser(claims);
+  const company = await store.findCompany(claims.company_id);
+  if (company?.accountKind !== "company") throw errors.forbidden();
+}
+
 function requireText(value: string | undefined, field: string): string {
   const v = value?.trim() ?? "";
   if (!v) throw errors.validation(`${field} is required`);
@@ -65,6 +155,10 @@ function requireText(value: string | undefined, field: string): string {
 }
 
 function applyWrite(target: Vehicle, body: VehicleWrite): Vehicle {
+  const customExpirations =
+    body.custom_expirations === undefined
+      ? target.customExpirations
+      : parseCustomExpirations(body.custom_expirations);
   return {
     ...target,
     make: body.make !== undefined ? body.make.trim() : target.make,
@@ -79,6 +173,7 @@ function applyWrite(target: Vehicle, body: VehicleWrite): Vehicle {
     inspectionOn: body.inspection_on === undefined ? target.inspectionOn : body.inspection_on,
     roadTaxOn: body.road_tax_on === undefined ? target.roadTaxOn : body.road_tax_on,
     registrationOn: body.registration_on === undefined ? target.registrationOn : body.registration_on,
+    customExpirations,
   };
 }
 
@@ -95,6 +190,7 @@ function emptyVehicle(companyId: string): Vehicle {
     inspectionOn: null,
     roadTaxOn: null,
     registrationOn: null,
+    customExpirations: [],
     imageFrontPath: null,
     imageLeftPath: null,
     imageRightPath: null,
@@ -210,7 +306,7 @@ export class FleetService {
     side: VehicleSide,
     bytes: Uint8Array,
   ) {
-    assertCompanyUser(claims);
+    await assertCompanyTenantUser(this.store, claims);
     if (bytes.byteLength === 0) throw errors.validation("file is required");
     if (bytes.byteLength > MAX_VEHICLE_IMAGE_BYTES) {
       throw errors.validation("Image must be 5 MB or smaller.");
@@ -252,7 +348,7 @@ export class FleetService {
    * Idempotent when the side is already empty.
    */
   async clearSideImage(claims: AccessClaims, id: string, side: VehicleSide) {
-    assertCompanyUser(claims);
+    await assertCompanyTenantUser(this.store, claims);
     const existing = await this.store.findVehicle(id, claims.company_id);
     if (!existing) throw errors.notFound();
 
@@ -653,7 +749,7 @@ export class FleetService {
   }
 
   async listVehicleHandovers(claims: AccessClaims, vehicleId: string) {
-    assertCompanyUser(claims);
+    await assertCompanyTenantUser(this.store, claims);
     const vehicle = await this.store.findVehicle(vehicleId, claims.company_id);
     if (!vehicle) throw errors.notFound();
     const rows = await this.store.listHandoversForVehicle(vehicleId, claims.company_id);
@@ -665,11 +761,129 @@ export class FleetService {
   }
 
   async getVehicleHandover(claims: AccessClaims, vehicleId: string, handoverId: string) {
-    assertCompanyUser(claims);
+    await assertCompanyTenantUser(this.store, claims);
     const vehicle = await this.store.findVehicle(vehicleId, claims.company_id);
     if (!vehicle) throw errors.notFound();
     const row = await this.store.findHandover(handoverId, claims.company_id);
     if (!row || row.vehicleId !== vehicleId) throw errors.notFound();
     return this.handoverDetail(row, { signImages: true, vehicle });
+  }
+
+  private dailyUsageJson(row: DriverDailyUsage, vehicle: Vehicle | undefined) {
+    return {
+      id: row.id,
+      vehicle_id: row.vehicleId,
+      usage_date: row.usageDate,
+      start_place: row.startPlace,
+      start_distance: row.startDistance,
+      end_place: row.endPlace,
+      end_distance: row.endDistance,
+      distance_unit: row.distanceUnit,
+      start_time: row.startTime,
+      end_time: row.endTime,
+      created_at: new Date(row.createdAt).toISOString(),
+      vehicle: vehicle ? this.vehicleSummary(vehicle) : null,
+    };
+  }
+
+  async listDriverDailyUsage(claims: AccessClaims) {
+    assertDriver(claims);
+    const rows = await this.store.listDailyUsageForDriver(claims.sub, claims.company_id);
+    const items = [];
+    for (const row of rows) {
+      const vehicle = await this.store.findVehicle(row.vehicleId, claims.company_id);
+      items.push(this.dailyUsageJson(row, vehicle));
+    }
+    return { items };
+  }
+
+  async createDriverDailyUsage(
+    claims: AccessClaims,
+    body: {
+      usage_date?: unknown;
+      start_place?: unknown;
+      start_distance?: unknown;
+      start_time?: unknown;
+      end_place?: unknown;
+      end_distance?: unknown;
+      end_time?: unknown;
+    },
+  ) {
+    assertDriver(claims);
+
+    const usageDate =
+      typeof body.usage_date === "string" ? body.usage_date.trim() : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(usageDate)) {
+      throw errors.validation("usage_date must be YYYY-MM-DD");
+    }
+
+    const startPlace =
+      typeof body.start_place === "string" ? body.start_place.trim() : "";
+    if (!startPlace) throw errors.validation("Enter a start place");
+
+    const endPlace = typeof body.end_place === "string" ? body.end_place.trim() : "";
+    if (!endPlace) throw errors.validation("Enter an end place");
+
+    const startTime =
+      typeof body.start_time === "string" ? body.start_time.trim() : "";
+    const endTime = typeof body.end_time === "string" ? body.end_time.trim() : "";
+    const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (!timeRe.test(startTime)) throw errors.validation("Enter a start time");
+    if (!timeRe.test(endTime)) throw errors.validation("Enter an end time");
+    if (endTime < startTime) {
+      throw errors.validation("End time must be at or after start time");
+    }
+
+    let startDistance: number;
+    let endDistance: number;
+    try {
+      startDistance = parseOdometer(body.start_distance);
+    } catch {
+      throw errors.validation(
+        "start_distance must be a number ≥ 0 with at most 1 decimal",
+      );
+    }
+    try {
+      endDistance = parseOdometer(body.end_distance);
+    } catch {
+      throw errors.validation(
+        "end_distance must be a number ≥ 0 with at most 1 decimal",
+      );
+    }
+    if (endDistance < startDistance) {
+      throw errors.validation("End distance must be at least the start distance");
+    }
+
+    const travel = await this.store.findActiveDriverTravel(claims.sub);
+    if (!travel || travel.companyId !== claims.company_id) {
+      throw errors.dailyUsageNoActiveTravel();
+    }
+    const vehicle = await this.store.findVehicle(travel.vehicleId, claims.company_id);
+    if (!vehicle) throw errors.dailyUsageNoActiveTravel();
+
+    if (vehicle.mileage != null && startDistance < vehicle.mileage) {
+      throw errors.validation(
+        "Start distance cannot be lower than the vehicle’s current reading",
+      );
+    }
+
+    const unit = odometerUnitForCountry(vehicle.countryOfRegistration);
+    const row: DriverDailyUsage = {
+      id: newId(),
+      companyId: claims.company_id,
+      driverId: claims.sub,
+      vehicleId: vehicle.id,
+      usageDate,
+      startPlace,
+      endPlace,
+      startDistance,
+      endDistance,
+      distanceUnit: unit,
+      startTime,
+      endTime,
+      createdAt: Date.now(),
+    };
+    await this.store.insertDailyUsage(row);
+    return this.dailyUsageJson(row, vehicle);
   }
 }

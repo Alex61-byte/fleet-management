@@ -22,3 +22,5 @@ Match `apps/api`: thin routes → services → persistence; JSON Schema; company
 6. Out of scope → hand off **Senior Frontend Specialist** when BE is done or no-op  
 
 Smallest vertical slice. No invented stories or second framework/ORM.
+
+**Token budget:** follow [.github/copilot-instructions.md](../copilot-instructions.md) § Token budget. Paths/Delta only in chat; write artifacts to files.

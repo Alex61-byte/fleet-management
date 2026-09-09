@@ -15,6 +15,7 @@ import {
   PrimaryButton,
   SecondaryButton,
   Skeleton,
+  SelectInput,
   TextInput,
 } from "../../../components/ui";
 import { themeClasses } from "../../../../../design/tailwind.theme";
@@ -148,8 +149,7 @@ export default function DriverTravelPage() {
             ) : (
               <form className="flex flex-col gap-2" onSubmit={(e) => void onSave(e)}>
                 <Field label="Vehicle for next travel">
-                  <select
-                    className={`${themeClasses.input} w-full`}
+                  <SelectInput
                     value={vehicleId}
                     onChange={(e) => setVehicleId(e.target.value)}
                     disabled={offline || busy}
@@ -168,7 +168,7 @@ export default function DriverTravelPage() {
                         </option>
                       );
                     })}
-                  </select>
+                  </SelectInput>
                 </Field>
                 <Field label={`Odometer (${unitLabel.toLowerCase()})`} hint={unitLabel}>
                   <TextInput

@@ -61,10 +61,10 @@ export default function PublicLandingPage() {
                 Sign in
               </Link>
               <Link
-                href="/sign-up"
+                href="/account-kind"
                 className={`${themeClasses.buttonPrimary} focus-visible:shadow-ring inline-flex items-center justify-center`}
               >
-                Create company
+                Create account
               </Link>
             </div>
           </>
@@ -95,8 +95,9 @@ export default function PublicLandingPage() {
         <div className={themeClasses.publicDescription}>
           <h2 className={themeClasses.publicDescriptionTitle}>What Fleet is for</h2>
           <p className={themeClasses.publicDescriptionBody}>
-            Create a company. The first person is the Owner. Owners and Admins manage drivers and
-            vehicles for that company. Drivers use mobile. Vehicles keep license plate, insurance,
+            Create a company or a personal account. A company Owner is first; Owners and Admins manage
+            drivers and vehicles for that company. An individual Owner manages their own vehicles
+            only. Drivers are invited by companies. Vehicles keep license plate, insurance,
             inspection, country of registration, and road tax dates. Fleet warns when those dates
             are due soon or expired.
           </p>

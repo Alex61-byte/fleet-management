@@ -1,10 +1,16 @@
 "use client";
 
 import { themeClasses } from "../../../design/tailwind.theme";
-import type { Warning } from "@fleet/sdk";
-import { WARNING_FIELD_LABEL } from "@fleet/sdk";
+import type { VehicleCustomExpiration, Warning } from "@fleet/sdk";
+import { warningFieldLabel } from "@fleet/sdk";
 import Link from "next/link";
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import {
+  forwardRef,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+} from "react";
 
 export function Field({
   label,
@@ -31,16 +37,61 @@ export function Field({
   );
 }
 
-export function TextInput({
-  error,
-  className,
-  ...props
-}: InputHTMLAttributes<HTMLInputElement> & { error?: boolean }) {
+export const TextInput = forwardRef<
+  HTMLInputElement,
+  InputHTMLAttributes<HTMLInputElement> & { error?: boolean }
+>(function TextInput({ error, className, ...props }, ref) {
   return (
     <input
+      ref={ref}
       className={`${themeClasses.input} ${error ? themeClasses.inputError : ""} focus:border-focus outline-none w-full ${className ?? ""}`}
       {...props}
     />
+  );
+});
+
+function SelectChevron() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 12 12"
+      className="h-2 w-2"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M3 4.5 6 7.5 9 4.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Native select with chevron inset `spacing.0.5` (4px) from the right edge. */
+export function SelectInput({
+  error,
+  className,
+  children,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & { error?: boolean }) {
+  return (
+    <span className="relative block w-full">
+      <select
+        className={`${themeClasses.input} ${themeClasses.selectInput} ${error ? themeClasses.inputError : ""} focus:border-focus outline-none w-full ${className ?? ""}`}
+        {...props}
+      >
+        {children}
+      </select>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 text-text-secondary"
+      >
+        <SelectChevron />
+      </span>
+    </span>
   );
 }
 
@@ -124,7 +175,13 @@ export function PrimaryLink({ href, children }: { href: string; children: ReactN
   );
 }
 
-export function ExpiryBadges({ warnings }: { warnings: Warning[] }) {
+export function ExpiryBadges({
+  warnings,
+  customExpirations,
+}: {
+  warnings: Warning[];
+  customExpirations?: Iterable<Pick<VehicleCustomExpiration, "id" | "label">>;
+}) {
   if (!warnings.length) return null;
   return (
     <span className="flex flex-wrap gap-0.5">
@@ -133,7 +190,8 @@ export function ExpiryBadges({ warnings }: { warnings: Warning[] }) {
           key={`${w.field}-${w.state}`}
           className={w.state === "expired" ? themeClasses.badgeExpired : themeClasses.badgeWarning}
         >
-          {WARNING_FIELD_LABEL[w.field]} {w.state === "expired" ? "Expired" : "Due soon"}
+          {warningFieldLabel(w.field, customExpirations)}{" "}
+          {w.state === "expired" ? "Expired" : "Due soon"}
         </span>
       ))}
     </span>

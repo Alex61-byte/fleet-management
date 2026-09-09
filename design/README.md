@@ -2,9 +2,75 @@
 
 BA sources: [docs/requirements.md](../docs/requirements.md), [docs/business-rules.md](../docs/business-rules.md), [docs/stories.md](../docs/stories.md). Architecture and HTTP contracts already exist under `docs/`. This pass is **visual only**.
 
-**Out of visual scope:** dispatch boards, **ops tracking maps** (live GPS / slippy / vehicle pins), trip UI, SMS MFA, document upload, country-law catalog, search/filters not in BA, two app store listings. **Exception — public landing only:** a **static** street-map **image** in the hero (US-24). Not a map product.
+**Out of visual scope:** dispatch boards, **ops tracking maps** (live GPS / slippy / vehicle pins), trip UI, SMS MFA, document upload, country-law catalog, search/filters not in BA, two app store listings, **account-kind conversion**, Individual drivers, CMS, billing, Individual driver-ops shell. **Exception — public landing only:** a **static** street-map **image** in the hero (US-24). Not a map product.
 
-## 0. This pass — Vehicle handovers (US-51–US-60)
+## 0. This pass — Custom expirations (US-86–US-90)
+
+**Did not** implement `apps/web` or `apps/mobile`. **Did not** invent contracts/ADRs. **Did not** add new hex or semantic color tokens.
+
+| Problem | Spec now |
+| --- | --- |
+| Extra label + date rows on vehicle Details | [pages/vehicles.md](pages/vehicles.md) — section **Custom expirations** after built-in dates |
+| Same A1 badges as insurance/inspection/road tax | Details **Must**; list chips **Should**; nav urgency **Should**; notifications **Could** |
+| Cap 10 + unique label CI + confirm remove | Add `buttonSecondary` disabled at 10; rule 61 ConfirmDelete / Sheet; validation copy in page |
+| Individual parity | Same Details section; still no Images/Handovers |
+| Reusable row pattern | [_patterns.md](pages/_patterns.md) — Labeled date row + Sheet note |
+
+**Classes / tokens:** layout aliases only (`vehicleCustomExpirations*`); reuse `label` `input*` `badgeWarning` `badgeExpired` `buttonSecondary` `buttonIcon` `buttonDanger` `caption` `errorText` `gap-2` form stack. **No** new color/spacing tokens.
+
+**Next specialist: Senior Software Architect** — custom expiration resource shape (`id`, `label`, `expires_on`), embed vs sub-routes, uniqueness/cap errors, urgency/list derivation, a11y id contract; then BE → FE.
+
+## 0-prior. Account kinds (US-77–US-85)
+
+**Did not** implement `apps/web` or `apps/mobile`. **Did not** invent contracts/ADRs. **Did not** add new hex or semantic color tokens.
+
+| Problem | Spec now |
+| --- | --- |
+| Choose Company vs Individual before fields | [pages/account-kind.md](pages/account-kind.md) |
+| Individual email+password only | [pages/individual-sign-up.md](pages/individual-sign-up.md) |
+| Company path after kind choice | [pages/sign-up.md](pages/sign-up.md) |
+| Landing dual create (Should) | [pages/landing.md](pages/landing.md) — header **Create account** → chooser |
+| Individual shell without Drivers/Admins | [_patterns.md](pages/_patterns.md), [owner-home.md](pages/owner-home.md), [nav-icons.md](pages/nav-icons.md) |
+| Deep-link deny | [pages/denied.md](pages/denied.md) E77 |
+| Sign-in / reset / TOTP parity | [sign-in.md](pages/sign-in.md), [password-reset.md](pages/password-reset.md), [totp-settings.md](pages/totp-settings.md) |
+
+**Classes / tokens:** reuse auth + shell only; optional FE alias `accountKindOption` from existing utilities — **no** new color/spacing tokens.
+
+**Next specialist: Senior Software Architect** — `account_kind` on tenant, sign-up split contracts, authz for Individual subset, grandfather company; then BE → FE.
+
+## 0-prior. Owner/Admin Global Header (US-68–US-76)
+
+**Did not** implement `apps/web` or `apps/mobile`. **Did not** invent contracts/ADRs. **Did not** add new hex or semantic color tokens.
+
+| Problem | Spec now |
+| --- | --- |
+| Shared OA chrome identity + alerts | [pages/global-header.md](pages/global-header.md) — sticky header; bell; compliance menu |
+| Dual lockup (sidebar + header) | **Single** lockup in Global Header; sidebar **role-only** ([_patterns.md](pages/_patterns.md), [mark.md](pages/mark.md)) |
+| Menu platform | Web popover / mobile bottom sheet; empty/loading/error; count badge not color-only |
+| Navigate | Item → `/vehicles/{id}` (existing OA vehicle edit/detail) |
+| MVP sources | insurance / inspection / road tax ≤30d or past; **not** registration; cap 50 |
+| Driver/public/auth | Unchanged — no OA notification chrome |
+
+**Classes / tokens:** `spacing.notif-menu`, `notif-badge-min`; `themeClasses.globalHeader*`, `sidebarRole`, `notif*`.
+
+**Next specialist: Senior Software Architect** — notification feed contract (or client derive), authz, ordering/cap; shell ownership; then BE → FE.
+
+## 0-prior. Driver Daily usage (US-61–US-67)
+
+**Did not** implement `apps/web` or `apps/mobile`. **Did not** invent contracts/ADRs. **Did not** add new hex or semantic color tokens.
+
+| Problem | Spec now |
+| --- | --- |
+| Hub entry (not auto-open) | [pages/driver-home.md](pages/driver-home.md) — third hub link **Daily usage**; IA routes web/mobile |
+| Create + own list; next-travel gate | [pages/daily-usage.md](pages/daily-usage.md) — seven required fields; gated CTA; newest-first immutable list |
+| Units / validation / offline | Miles/Kilometers from country (no picker); distance + time rules; `bannerWarning` + Submit disabled offline |
+| Token drift | Reuse `panel` `banner*` `input*` `button*` `emptyState` `listRow`/`tableWrap` `skeleton` only |
+
+**Classes / tokens:** none new — existing `themeClasses` only.
+
+**Next specialist: Senior Software Architect** — Daily usage create/list-own contracts, authz, next-travel gate, no mileage write-through, no edit/delete; then BE → FE.
+
+## 0-prior. Vehicle handovers (US-51–US-60)
 
 **Did not** implement `apps/web` or `apps/mobile`. **Did not** invent contracts/ADRs. **Did not** add new hex or semantic color tokens.
 

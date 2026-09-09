@@ -151,8 +151,8 @@ export default function SignInScreen() {
             <Link href="/password-forgot" className="text-brand text-label font-medium min-h-hit">
               Forgot password — Password reset is for Owners and Admins.
             </Link>
-            <Link href="/sign-up" className="text-brand text-label font-medium min-h-hit">
-              Create company
+            <Link href="/account-kind" className="text-brand text-label font-medium min-h-hit">
+              Create account
             </Link>
           </>
         )}

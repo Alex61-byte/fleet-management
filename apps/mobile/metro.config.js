@@ -34,4 +34,30 @@ config.resolver.extraNodeModules = {
   ...(reactPath ? { react: reactPath } : {}),
 };
 
+// @fleet/sdk is TypeScript source (NodeNext uses `.js` import specifiers).
+// Map those to the real `.ts` files so Metro can resolve monorepo SDK imports.
+const upstreamResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (
+    typeof moduleName === "string" &&
+    moduleName.startsWith(".") &&
+    moduleName.endsWith(".js")
+  ) {
+    const tsCandidate = path.resolve(
+      path.dirname(context.originModulePath),
+      moduleName.replace(/\.js$/, ".ts"),
+    );
+    if (fs.existsSync(tsCandidate)) {
+      return {
+        type: "sourceFile",
+        filePath: tsCandidate,
+      };
+    }
+  }
+  if (typeof upstreamResolveRequest === "function") {
+    return upstreamResolveRequest(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = withNativeWind(config, { input: "./global.css" });

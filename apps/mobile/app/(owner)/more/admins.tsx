@@ -32,8 +32,21 @@ export default function AdminsScreen() {
   }
 
   useEffect(() => {
+    if (me?.account_kind === "individual") return;
     void load();
-  }, []);
+  }, [me?.account_kind]);
+
+  if (me?.account_kind === "individual") {
+    return (
+      <View className="flex-1 bg-surface p-2 gap-2">
+        <Stack.Screen options={{ title: "Admins" }} />
+        <Text className="font-semibold text-title text-text-primary">Not available</Text>
+        <Text className="text-body text-text-secondary">
+          Admins are only available on company accounts.
+        </Text>
+      </View>
+    );
+  }
 
   if (me && me.role !== "owner") {
     return (

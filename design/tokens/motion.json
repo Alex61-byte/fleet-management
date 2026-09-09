@@ -11,7 +11,7 @@
     "reduce": {
       "$type": "boolean",
       "$value": true,
-      "$description": "Honor Reduce Motion: no entrance/sidebar collapse animation; badges, banners, and focus appear instantly. Image viewer zoom is stepped (no continuous scale spring); open/close instant under reduce-motion."
+      "$description": "Honor Reduce Motion: no entrance/sidebar collapse animation; badges, banners, and focus appear instantly. No notification badge pulse. Notification menu open/close instant under reduce-motion. Image viewer zoom is stepped (no continuous scale spring); open/close instant under reduce-motion."
     },
     "vehicle-side-zoom": {
       "min": { "$type": "number", "$value": 1, "$description": "US-43 view-only zoom minimum (100%). Reset to this on every viewer open." },

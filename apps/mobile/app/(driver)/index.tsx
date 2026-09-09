@@ -134,6 +134,36 @@ export default function DriverHome() {
               </View>
             </Pressable>
           </Link>
+
+          <Link href="/(driver)/daily-usage" asChild>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                travel
+                  ? "Daily usage. Log date, places, distances, and times for today’s use."
+                  : "Daily usage. Select next travel first, then log daily usage."
+              }
+              className="bg-surface-raised rounded-lg p-2 gap-1 border border-divider"
+            >
+              <View className="flex-row items-start justify-between gap-2">
+                <View className="flex-1 gap-0.5">
+                  <Text className="text-body font-medium text-text-primary">Daily usage</Text>
+                  <Text className="text-caption text-text-secondary">
+                    {travel
+                      ? "Log date, places, distances, and times for today’s use."
+                      : "Select next travel first, then log daily usage."}
+                  </Text>
+                </View>
+                {travel ? (
+                  <Text className="text-caption text-text-secondary">Ready</Text>
+                ) : (
+                  <Text className="text-caption text-text-secondary" accessibilityElementsHidden>
+                    →
+                  </Text>
+                )}
+              </View>
+            </Pressable>
+          </Link>
         </View>
       )}
 

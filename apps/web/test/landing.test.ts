@@ -19,9 +19,9 @@ test("public landing uses identity chrome, not ops records", () => {
   assert.match(landing, /themeClasses\.pagePublic/);
   assert.match(landing, /themeClasses\.publicBody/);
   assert.match(landing, /Sign in/);
-  assert.match(landing, /Create company/);
+  assert.match(landing, /Create account/);
   assert.match(landing, /href="\/sign-in"/);
-  assert.match(landing, /href="\/sign-up"/);
+  assert.match(landing, /href="\/account-kind"/);
   assert.match(landing, /Fleet operations/);
   assert.match(landing, /<BrandMarkPublic/);
   assert.match(landing, /router\.replace\("\/home"\)/);
@@ -31,8 +31,10 @@ test("public landing uses identity chrome, not ops records", () => {
 
 test("Owner/Admin home lives under /home", () => {
   assert.match(home, /api\.home\(/);
-  assert.match(home, /<AppShell title="Fleet">/);
+  assert.match(home, /<AppShell/);
+  assert.match(home, /title="Home"/);
   assert.match(home, /Due soon or expired/);
+  assert.match(home, /Add vehicle/);
 });
 
 test("AppShell Home href is /home and unsigned-in redirects to sign-in", () => {
@@ -47,13 +49,31 @@ test("sign-in branches by role; sign-up goes to /home", () => {
   assert.match(signIn, /router\.replace\("\/home"\)/);
   assert.match(signIn, /router\.replace\("\/driver"\)/);
   assert.doesNotMatch(signIn, /change-password/);
+  assert.match(signIn, /href="\/account-kind"/);
+  assert.match(signIn, /Create account/);
   assert.match(signUp, /router\.replace\("\/home"\)/);
   assert.match(signUp, /registration_number/);
   assert.match(signUp, /vat_number/);
   assert.match(signUp, /address/);
+  assert.match(signUp, /Back to account type/);
+  assert.match(signUp, /href="\/account-kind"/);
   assert.doesNotMatch(signIn, /router\.replace\("\/"\)/);
   assert.doesNotMatch(signUp, /router\.replace\("\/"\)/);
   assert.doesNotMatch(signIn, /driver_web_not_allowed/);
+});
+
+test("account kind chooser and individual sign-up", () => {
+  const accountKind = readFileSync(join(root, "app/account-kind/page.tsx"), "utf8");
+  const individual = readFileSync(join(root, "app/individual-sign-up/page.tsx"), "utf8");
+  assert.match(accountKind, /Create account/);
+  assert.match(accountKind, /Choose how you will use Fleet\./);
+  assert.match(accountKind, /href="\/sign-up"/);
+  assert.match(accountKind, /href="\/individual-sign-up"/);
+  assert.match(individual, /registerIndividual/);
+  assert.match(individual, /Create individual account/);
+  assert.doesNotMatch(individual, /registration_number/);
+  assert.match(shell, /account_kind === "individual"/);
+  assert.match(home, /account_kind === "individual"/);
 });
 
 test("AppShell driver on Owner routes is E8 denied with back to driver home", () => {

@@ -13,7 +13,7 @@ export default function MoreHome() {
           <Text className="font-medium text-label text-text-primary">Security</Text>
         </Pressable>
       </Link>
-      {me?.role === "owner" ? (
+      {me?.account_kind !== "individual" && me?.role === "owner" ? (
         <Link href="/(owner)/more/admins" asChild>
           <Pressable className="bg-surface-raised border border-border rounded-md p-2 min-h-hit">
             <Text className="font-medium text-label text-text-primary">Admins</Text>

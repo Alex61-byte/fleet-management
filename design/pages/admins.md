@@ -1,9 +1,10 @@
 # Create Admin
 
-**Stories:** US-06  
-**Density:** Web compact table; mobile comfortable rows. Owner only.  
-**Purpose:** Owner adds an Admin for the company.  
-**Chrome:** Authenticated shell. Sidebar **Admins** selected (Owner). Admin user: [denied.md](denied.md), no form.
+**Stories:** US-06; **US-82** Individual cannot create Admins (E76)  
+**Rules:** 23, 123; A10, A84  
+**Density:** Web compact table; mobile comfortable rows. **Company Owner** only.  
+**Purpose:** Company Owner adds an Admin for the company.  
+**Chrome:** Authenticated **Company** management shell. Sidebar **Admins** selected (Company Owner). Company Admin user: [denied.md](denied.md) US-06, no form. **Individual Owner:** no nav entry; deep link → [denied.md](denied.md) E77 / E76 — no form.
 
 ## Layout — list (web)
 

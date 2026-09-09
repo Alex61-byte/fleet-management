@@ -50,6 +50,16 @@ const emailPassword = {
   },
 } as const;
 
+const registerIndividualBody = {
+  type: "object",
+  required: ["email", "password"],
+  additionalProperties: false,
+  properties: {
+    email: { type: "string", format: "email" },
+    password: { type: "string", minLength: 1 },
+  },
+} as const;
+
 const loginBody = {
   type: "object",
   required: ["email", "password", "client"],
@@ -77,6 +87,11 @@ const vehicleWrite = {
     inspection_on: { type: ["string", "null"] },
     road_tax_on: { type: ["string", "null"] },
     registration_on: { type: ["string", "null"] },
+    // Shape validated in FleetService (full replace / cap / labels); array|absent only here.
+    custom_expirations: {
+      type: "array",
+      items: { type: "object" },
+    },
   },
 } as const;
 
@@ -107,7 +122,11 @@ function bearer(req: FastifyRequest): string {
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+  const app = Fastify({
+    logger: false,
+    // Keep additionalProperties: false as hard fail (do not silently strip legal fields on individual register).
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: "array", useDefaults: true } },
+  });
   const identity = new IdentityService(deps.store, deps.jwtSecret, deps.mailer ?? mailerFromEnv());
   let vehicleImages: VehicleImageStorage | null;
   if (deps.vehicleImages !== undefined) {
@@ -162,6 +181,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         address: string;
       };
       const result = await identity.register(body);
+      return reply.status(201).send(result);
+    },
+  );
+
+  app.post(
+    "/v1/auth/register/individual",
+    { schema: { body: registerIndividualBody } },
+    async (req, reply) => {
+      const body = req.body as { email: string; password: string };
+      const result = await identity.registerIndividual(body);
       return reply.status(201).send(result);
     },
   );
@@ -572,6 +601,60 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return fleet.getVehicleHandover(req.claims!, id, handoverId);
   });
 
+  app.get("/v1/driver/daily-usage", { preHandler: requireSession }, async (req) => {
+    return fleet.listDriverDailyUsage(req.claims!);
+  });
+
+  app.post(
+    "/v1/driver/daily-usage",
+    {
+      preHandler: requireSession,
+      schema: {
+        body: {
+          type: "object",
+          required: [
+            "usage_date",
+            "start_place",
+            "start_distance",
+            "start_time",
+            "end_place",
+            "end_distance",
+            "end_time",
+          ],
+          additionalProperties: false,
+          properties: {
+            usage_date: { type: "string", minLength: 1 },
+            start_place: { type: "string", minLength: 1 },
+            start_distance: {
+              anyOf: [{ type: "number" }, { type: "string", minLength: 1 }],
+            },
+            start_time: { type: "string", minLength: 1 },
+            end_place: { type: "string", minLength: 1 },
+            end_distance: {
+              anyOf: [{ type: "number" }, { type: "string", minLength: 1 }],
+            },
+            end_time: { type: "string", minLength: 1 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const created = await fleet.createDriverDailyUsage(
+        req.claims!,
+        req.body as {
+          usage_date?: unknown;
+          start_place?: unknown;
+          start_distance?: unknown;
+          start_time?: unknown;
+          end_place?: unknown;
+          end_distance?: unknown;
+          end_time?: unknown;
+        },
+      );
+      return reply.code(201).send(created);
+    },
+  );
+
   return app;
 }
 
@@ -585,4 +668,6 @@ type VehicleWriteBody = {
   inspection_on?: string | null;
   road_tax_on?: string | null;
   registration_on?: string | null;
+  /** Runtime shape checked in FleetService.parseCustomExpirations. */
+  custom_expirations?: unknown;
 };

@@ -3,19 +3,30 @@
 import { FleetApiError, mapAuthError } from "@fleet/sdk";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { AppShell } from "../../../components/app-shell";
+import { AppShell, Denied } from "../../../components/app-shell";
 import { Banner, Field, PrimaryButton, TextInput } from "../../../components/ui";
 import { themeClasses } from "../../../../../design/tailwind.theme";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth-context";
 
 export default function NewDriverPage() {
-  const { offline } = useAuth();
+  const { offline, me } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [banner, setBanner] = useState("");
+
+  if (me?.account_kind === "individual") {
+    return (
+      <AppShell title="Add driver">
+        <Denied
+          title="Not available"
+          body="Driver management is only available on company accounts."
+        />
+      </AppShell>
+    );
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();

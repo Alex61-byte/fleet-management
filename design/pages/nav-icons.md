@@ -5,8 +5,9 @@
 **Chrome base:** [_patterns.md](_patterns.md) authenticated shell.  
 **Preserve:** [US-28 Vehicles urgency](_patterns.md#vehicles-nav--tab-urgency-us-28--states--stacking) fills, stacking, and accessible names.
 
-**In scope:** Owner/Admin web sidebar items + Owner/Admin mobile tabs.  
-**Out of scope:** Driver chrome, public/auth, landing, page-body icons, icon-only nav (except **collapsed** web sidebar, already specified).
+**In scope:** Management web sidebar items + mobile tabs (**Company** Owner/Admin and **Individual** Owner); **plus** chrome glyph **bell** for Global Header notifications (US-70) — not a nav destination.  
+**Out of scope:** Driver chrome, public/auth, landing, page-body icons (except notification control), icon-only nav (except **collapsed** web sidebar, already specified).  
+**Account kind:** **Individual Owner** never shows **Drivers** or **Admins** destinations (US-82) — omit icons entirely, do not gray-out.
 
 ## 1. Inventory & metaphor map
 
@@ -15,15 +16,28 @@ Same **metaphor** on web and mobile wherever both surfaces show the destination.
 | Destination | Surfaces | Visible label | Metaphor (name) | Reads as | Do not use |
 | --- | --- | --- | --- | --- | --- |
 | Home | Web + mobile tab | Home | **home** | House outline — post-login entry | Grid/dashboard “apps” glyph; brand plate |
-| Drivers | Web + mobile tab | Drivers | **users** | Two-person outline — roster | Single user only; steering wheel |
-| Vehicles | Web + mobile tab | Vehicles | **truck** | Simple truck / light commercial side outline — fleet assets | License plate (reserved for product mark); sports car; map pin |
-| Security | Web sidebar; mobile via **More** only | Security | **shield** | Shield outline — MFA / account protection | Fingerprint; QR; plain lock alone (optional lock *inside* shield is OK if one path stays legible at 20px) |
-| Admins | Web sidebar (Owner); mobile via **More** only | Admins | **user-cog** | Single user + small cog — elevated company admins | Crown; star; shield-user that collides with Security |
-| More | Mobile tab only | More | **more** | Three dots **horizontal** — overflow to Security / Admins | Hamburger that implies a drawer; gear (Security owns protection metaphor) |
+| Drivers | Web + mobile tab — **Company only** | Drivers | **users** | Two-person outline — roster | Single user only; steering wheel; **Individual shell** |
+| Vehicles | Web + mobile tab — Company + Individual | Vehicles | **truck** | Simple truck / light commercial side outline — fleet assets | License plate (reserved for product mark); sports car; map pin |
+| Security | Web sidebar; mobile via **More** only — Company + Individual | Security | **shield** | Shield outline — MFA / account protection | Fingerprint; QR; plain lock alone (optional lock *inside* shield is OK if one path stays legible at 20px) |
+| Admins | Web sidebar (**Company Owner**); mobile via **More** only | Admins | **user-cog** | Single user + small cog — elevated company admins | Crown; star; shield-user that collides with Security; **Individual / Company Admin** |
+| More | Mobile tab only | More | **more** | Three dots **horizontal** — overflow to Security / (Company Owner) Admins | Hamburger that implies a drawer; gear (Security owns protection metaphor) |
 
-**Web order (unchanged):** Home → Drivers → Vehicles → Security → Admins (Owner only).  
-**Mobile tabs (unchanged):** Home → Drivers → Vehicles → More.  
-Icons **do not** reorder items or add destinations.
+**Web order — Company Owner:** Home → Drivers → Vehicles → Security → Admins.  
+**Web order — Company Admin:** Home → Drivers → Vehicles → Security.  
+**Web order — Individual Owner:** Home → Vehicles → Security.  
+**Mobile tabs — Company:** Home → Drivers → Vehicles → More.  
+**Mobile tabs — Individual:** Home → Vehicles → More (More → Security only).  
+Icons **do not** invent destinations; they **follow** which destinations the shell exposes.
+
+### Chrome glyphs (not nav destinations)
+
+| Control | Surfaces | Visible label | Metaphor (name) | Reads as | Do not use |
+| --- | --- | --- | --- | --- | --- |
+| Notifications (US-70) | OA Global Header web + mobile app bar | none (icon button; a11y name “Notifications…”) | **bell** | Outline bell — in-app compliance alerts menu | Solid filled bell as default; inbox tray; megaphone; red circle alone; brand plate |
+
+- Same stroke system as nav icons (`navIcon` 20px, outline, `currentColor`, `aria-hidden` on glyph).  
+- Unread **count** is a separate `notifBadge` on the **control**, not a second glyph — [global-header.md](global-header.md).  
+- **Not** placed on sidebar items or tab bar.
 
 ## 2. Composition — icon + label (not icon-only)
 
@@ -53,7 +67,7 @@ ViewBox for every glyph: **`0 0 24 24`**. Draw at 20×20 via `navIcon` (scale); 
 | Property | Spec |
 | --- | --- |
 | Style | **Outline only** (stroke, no fill) — calm ops console; works on navy rail and raised tab bar |
-| `stroke-width` | **1.75** at 24 viewBox (≈1.5px visual at 20px). If a platform rounds better at integer, **2** is acceptable — pick one and use it on **all six** |
+| `stroke-width` | **1.75** at 24 viewBox (≈1.5px visual at 20px). If a platform rounds better at integer, **2** is acceptable — pick one and use it on **all nav glyphs + bell** |
 | `stroke-linecap` / `linejoin` | `round` |
 | Fill | `none` (except tiny centers if a metaphor needs a dot — prefer pure stroke) |
 | Optical | Keep paths simple; avoid hairline interior detail that dies at 20px |
@@ -88,13 +102,13 @@ Icons use **`currentColor`** (web SVG `stroke="currentColor"`) or the parent **t
 
 | Option | Verdict |
 | --- | --- |
-| **Custom SVG set (6 glyphs)** | **Prefer.** Set is tiny and fixed; matches existing **BrandMark** inline-SVG pattern; zero icon-pack dependency; full control of 20px legibility and `currentColor`. |
-| `lucide-react` + `lucide-react-native` | Acceptable **only** if FE rejects hand-maintained paths. Pin both to the **same lucide version**. Tree-shake to the six names aligned to the metaphor table (`Home`, `Users`, `Truck`, `Shield`, `UserCog`, `MoreHorizontal`). Still outline + `currentColor`. Heavier surface area for six icons. |
+| **Custom SVG set (6 nav + 1 bell)** | **Prefer.** Set is tiny and fixed; matches existing **BrandMark** inline-SVG pattern; zero icon-pack dependency; full control of 20px legibility and `currentColor`. |
+| `lucide-react` + `lucide-react-native` | Acceptable **only** if FE rejects hand-maintained paths. Pin both to the **same lucide version**. Tree-shake to the six nav names (`Home`, `Users`, `Truck`, `Shield`, `UserCog`, `MoreHorizontal`) **plus** `Bell` for US-70. Still outline + `currentColor`. |
 | `@expo/vector-icons` / Font Awesome / etc. | **Avoid** for this slice — font glyphs, inconsistent stroke, harder token tint parity web↔mobile. |
 
 **Mobile drawing:** custom paths need **`react-native-svg`** (Expo-compatible pin) if not already direct; that is a **renderer**, not an icon library. Web: inline `<svg>` like `BrandMark`.
 
-**Shared geometry (custom path):** keep one canonical path list in a small shared module or duplicated identical paths in web `ui` + mobile `ui` — Architect may choose package placement; Design requires **identical metaphors and viewBoxes**.
+**Shared geometry (custom path):** keep one canonical path list in a small shared module or duplicated identical paths in web `ui` + mobile `ui` — Architect may choose package placement; Design requires **identical metaphors and viewBoxes** (nav six + bell).
 
 ## 6. themeClasses / tokens (this slice)
 

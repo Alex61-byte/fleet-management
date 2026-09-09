@@ -42,6 +42,17 @@ export default function AdminsPage() {
     if (ready && me) void load();
   }, [ready, me]);
 
+  if (me?.account_kind === "individual") {
+    return (
+      <AppShell title="Admins">
+        <Denied
+          title="Not available"
+          body="Admins are only available on company accounts."
+        />
+      </AppShell>
+    );
+  }
+
   if (me && me.role !== "owner") {
     return (
       <AppShell title="Admins">

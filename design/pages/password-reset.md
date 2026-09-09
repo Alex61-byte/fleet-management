@@ -1,8 +1,8 @@
-# Password reset (Owner/Admin)
+# Password reset (Owner/Admin + Individual Owner)
 
-**Stories:** US-03  
+**Stories:** US-03, **US-80** (Individual Owner same path)  
 **Density:** Web compact; mobile comfortable.  
-**Purpose:** Request reset, then set a new password. Drivers do not gain Owner/Admin access.  
+**Purpose:** Request reset, then set a new password for **Company Owner/Admin** and **Individual Owner**. Drivers do not gain management access.  
 **Chrome:** Unauthenticated [auth canvas](_patterns.md). No sidebar. **No public landing header** — lockup stays inside `authCard` (user lock: header is public landing only).
 
 ## Layout — request
@@ -11,7 +11,7 @@ Same `authCanvas` + `authCard` as sign-in.
 
 1. `authLockup` — same Fleet mark + wordmark + “Fleet operations”
 2. `authTitle` “Reset password”
-3. `authCaption` “Password reset is for Owners and Admins.”
+3. `authCaption` “Password reset is for Owners and Admins.” (Individual Owner is an Owner — same caption; no separate Individual-only reset screen.)
 4. Email `label` + `input`
 5. `buttonPrimary` “Send reset” full width
 6. `authLinks` + `link` “Back to sign in” (`min-h-hit`, underline at rest — not caption)
@@ -30,7 +30,7 @@ Same card chrome.
 | State | UI |
 | --- | --- |
 | Loading | Button busy (“Sending…” / “Updating…”); fields disabled |
-| Success request | Replace fields with `body` + `caption`: “If this email is an Owner or Admin, you can continue with the reset.” **Same message** whether or not the email exists (no enumeration). Keep `link` back to sign in. |
+| Success request | Replace fields with `body` + `caption`: “If this email is an Owner or Admin, you can continue with the reset.” **Same message** whether or not the email exists (no enumeration). Covers Company Owner/Admin and Individual Owner. Keep `link` back to sign in. |
 | Invalid/expired token | `bannerDanger` on set-password card; primary “Request a new reset” |
 | Password rule | Field `inputError` + `errorText` |
 | Driver or unknown | Same generic success on request; set-password does not sign them in as Owner/Admin |

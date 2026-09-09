@@ -148,7 +148,7 @@ export default function SignInPage() {
       </form>
       <div className={themeClasses.authLinks}>
         <TextLink href="/password/forgot">Forgot password</TextLink>
-        <TextLink href="/sign-up">Create company</TextLink>
+        <TextLink href="/account-kind">Create account</TextLink>
       </div>
     </AuthShell>
   );

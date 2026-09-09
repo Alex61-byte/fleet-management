@@ -36,6 +36,7 @@ export async function signAccessToken(
     company_id: claims.company_id,
     role: claims.role,
     must_change_password: claims.must_change_password,
+    ...(claims.account_kind ? { account_kind: claims.account_kind } : {}),
     token_use: "access",
   })
     .setProtectedHeader({ alg: "HS256" })
@@ -53,11 +54,15 @@ export async function verifyAccessToken(
   if (payload.token_use !== "access" || !payload.sub) {
     throw new Error("invalid access");
   }
+  const kindRaw = payload.account_kind;
+  const account_kind =
+    kindRaw === "individual" || kindRaw === "company" ? kindRaw : undefined;
   return {
     sub: payload.sub,
     company_id: String(payload.company_id),
     role: payload.role as Role,
     must_change_password: Boolean(payload.must_change_password),
+    account_kind,
     token_use: "access",
   };
 }

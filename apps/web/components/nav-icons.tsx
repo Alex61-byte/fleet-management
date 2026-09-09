@@ -1,7 +1,14 @@
 import { themeClasses } from "../../../design/tailwind.theme";
 import type { ReactNode } from "react";
 
-export type NavIconName = "home" | "users" | "truck" | "shield" | "user-cog" | "more";
+export type NavIconName =
+  | "home"
+  | "users"
+  | "truck"
+  | "shield"
+  | "user-cog"
+  | "more"
+  | "bell";
 
 const strokeProps = {
   fill: "none",
@@ -74,6 +81,18 @@ function MoreGlyph() {
   );
 }
 
+function BellGlyph() {
+  return (
+    <>
+      <path
+        {...strokeProps}
+        d="M6.5 17.5h11M8 17.5V11a4 4 0 0 1 8 0v6.5M10.25 17.5a1.75 1.75 0 0 0 3.5 0"
+      />
+      <path {...strokeProps} d="M12 4.5v1.25" />
+    </>
+  );
+}
+
 const glyphs: Record<NavIconName, () => ReactNode> = {
   home: HomeGlyph,
   users: UsersGlyph,
@@ -81,6 +100,7 @@ const glyphs: Record<NavIconName, () => ReactNode> = {
   shield: ShieldGlyph,
   "user-cog": UserCogGlyph,
   more: MoreGlyph,
+  bell: BellGlyph,
 };
 
 /** Decorative Owner/Admin nav glyph — color via currentColor / parent text class. */

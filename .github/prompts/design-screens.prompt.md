@@ -20,3 +20,5 @@ Extend [design/](../../design/), [design/pages/_patterns.md](../../design/pages/
 4. Engineering follow-ups → Senior Software Architect next  
 
 No feature logic, APIs, or ADRs. Cost: only screens in the BA slice.
+
+**Token budget:** follow [.github/copilot-instructions.md](../copilot-instructions.md) § Token budget. Paths/Delta only in chat; write artifacts to files.

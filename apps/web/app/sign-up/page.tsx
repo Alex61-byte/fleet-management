@@ -192,6 +192,7 @@ export default function SignUpPage() {
         </PrimaryButton>
       </form>
       <div className={themeClasses.authLinks}>
+        <TextLink href="/account-kind">Back to account type</TextLink>
         <TextLink href="/sign-in">Already have an account? Sign in</TextLink>
       </div>
     </AuthShell>

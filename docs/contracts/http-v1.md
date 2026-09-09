@@ -31,6 +31,7 @@ Authenticated routes: header `Authorization: Bearer <access_token>`.
 | 404 | `not_found` | Wrong id or other company |
 | 409 | `email_in_use` | Register, create admin, create/edit driver |
 | 409 | `invite_not_pending` | Resend when driver already accepted / has password set (E32) |
+| 409 | `daily_usage_no_active_travel` | Daily usage create without active next-travel (E59) |
 | 429 | `rate_limited` | Login/forgot/invite preview·accept (backend should apply) |
 | 502 or 503 | `storage_unavailable` | Supabase Storage upload/delete/sign failed (vehicle side images) |
 
@@ -45,7 +46,10 @@ Invite: `invite_invalid` for token problems; `email_not_invited` only when token
 
 ### `POST /v1/auth/register`
 
-**Story:** US-01
+**Story:** US-01  
+**Account kind:** always creates tenant `account_kind = "company"`.  
+**Backward compatible:** body and validation unchanged (ADR-010 / ADR-018).  
+**Must not** accept `account_kind` (kind fixed to company).
 
 ```json
 {
@@ -63,7 +67,13 @@ Trim legal fields before emptiness checks. Address text only (no lat/lon). Missi
 
 ```json
 {
-  "principal": { "id": "uuid", "email": "...", "role": "owner", "company_id": "uuid" },
+  "principal": {
+    "id": "uuid",
+    "email": "...",
+    "role": "owner",
+    "company_id": "uuid",
+    "account_kind": "company"
+  },
   "access_token": "...",
   "refresh_token": "...",
   "must_change_password": false
@@ -71,6 +81,46 @@ Trim legal fields before emptiness checks. Address text only (no lat/lon). Missi
 ```
 
 **409** `email_in_use`. **400** `password_too_short` | `validation_error`.
+
+### `POST /v1/auth/register/individual`
+
+**Stories:** US-78 (entry US-77)  
+**Account kind:** always creates tenant `account_kind = "individual"`.  
+**ADR:** [ADR-018](../adr/ADR-018-account-kinds.md).
+
+```json
+{
+  "email": "person@example.com",
+  "password": "string min 8"
+}
+```
+
+**Must not** require or persist registration number, VAT, or address (A83). Extra properties (including legal fields) → **400** `validation_error`.
+
+**201**
+
+```json
+{
+  "principal": {
+    "id": "uuid",
+    "email": "...",
+    "role": "owner",
+    "company_id": "uuid",
+    "account_kind": "individual"
+  },
+  "access_token": "...",
+  "refresh_token": "...",
+  "must_change_password": false
+}
+```
+
+| Failure | HTTP | code |
+| --- | --- | --- |
+| Password &lt; 8 | 400 | `password_too_short` |
+| Missing/invalid email or body | 400 | `validation_error` |
+| Email already a login identity | 409 | `email_in_use` |
+
+Same session issuance rules as company register (new refresh family, US-30).
 
 ### `POST /v1/auth/login`
 
@@ -170,16 +220,51 @@ Trim legal fields before emptiness checks. Address text only (no lat/lon). Missi
 
 ### `GET /v1/me`
 
-**200** `{ "id", "email", "role", "company_id", "must_change_password", "login_enabled", "totp_enabled" }`
-
-### `POST /v1/auth/logout`
+**200**
 
 ```json
-{ "refresh_token": "..." }
-```
+{
+  "id": "uuid",
+  "email": "...",
+  "role": "owner",
+  "company_id": "uuid",
+  "account_kind": "company",
+  "must_change_password": false,
+  "login_enabled": true,
+  "totp_enabled": false
+}register/individual`, `totp/verify`, `invite/accept` each issue a **new** refresh family (US-30).
 
-**204**. Revokes presented family only (US-30).
+Auth success `principal` objects (register*, login, totp/verify, invite/accept) include `account_kind`. Drivers are always `"company"` when present.
 
+### TOTP
+
+`GET /v1/auth/totp`, `POST setup|confirm|disable` — Owner/Admin as before (both account kinds).
+
+---
+
+## Admins
+
+### `GET /v1/admins` / `POST /v1/admins`
+
+Owner create rules unchanged for **company** tenants. Create: `{ email, password }`.
+
+| Caller | Result |
+| --- | --- |
+| Company Owner | Existing behavior |
+| Company Admin / Driver | **403** `forbidden` (existing) |
+| **Individual Owner** (any admin route) | **403** `forbidden` (E76, A84) |
+
+---
+
+## Drivers
+
+**Company tenants only.** Owner or Admin on `account_kind = company`. Drivers: **403**.
+
+| Caller | Result |
+| --- | --- |
+| Company Owner/Admin | Existing behavior |
+| Driver | **403** `forbidden` |
+| **Individual Owner** (list/create/patch/resend/delete) | **403** `forbidden` (E75, A85) |
 ### Session issuance
 
 `login`, `register`, `totp/verify`, `invite/accept` each issue a **new** refresh family (US-30).
@@ -224,6 +309,8 @@ Owner or Admin. Drivers: **403**.
 ```
 
 No `temporary_password`. Creates pending driver + invite (TTL 7 days, hash stored). Attempts Resend after commit.
+Owner/Admin of **either** account kind may use vehicle routes for **their** tenant. Individual has no drivers; vehicle isolation still `company_id` (A87).
+
 
 **201**
 
@@ -275,7 +362,12 @@ Allowed while login disabled (accept still blocked).
   "inspection_on": null,
   "road_tax_on": "2026-03-01",
   "registration_on": "2020-06-01",
-  "warnings": [],
+  "custom_expirations": [
+    { "id": "uuid", "label": "Fire extinguisher", "expires_on": "2026-09-20" }
+  ],
+  "warnings": [
+    { "field": "custom:<uuid>", "state": "due_soon" }
+  ],
   "has_side_images": true,
   "side_images": {
     "FRONT": {
@@ -300,21 +392,24 @@ Allowed while login disabled (accept still blocked).
 | `mileage` | Optional current odometer reading on the **vehicle** record. `null` = unknown. When set: number ≥ 0, max 1 decimal (same parse as driver travel odometer). **Not** driver_travel odometer. |
 | `mileage_unit` | Read-only on responses: `"mi"` \| `"km"` derived from `country_of_registration` (A34). **Not** accepted on write. Always present on Vehicle reads. |
 | dates / country | Optional; null allowed |
-| `warnings` | Server-computed on reads (insurance/inspection/road_tax only) |
+| `custom_expirations` | Always present on reads (min `[]`). Items: `{ id, label, expires_on }` with `expires_on` = `YYYY-MM-DD`. Max **10**. Labels unique per vehicle (trim, case-insensitive), length 1–80 after trim. [ADR-019](../adr/ADR-019-vehicle-custom-expirations.md). |
+| `warnings` | Server-computed on reads: insurance/inspection/road_tax **and** `custom:<uuid>` for each custom row in the A1 window. **`registration_on` never.** Same UTC 30-day rule (ADR-004). |
 | `has_side_images` | `true` if any side has a stored path (**Should** list presence cue) |
 | `side_images` | Always keys `FRONT` \| `LEFT` \| `RIGHT` \| `BACK`. Empty: `null`. Filled: `{ "path", "url" }` (`path` = Storage key; `url` = signed GET ~1h) |
 | Image bytes | **Not** on POST/PATCH vehicle. Upload only via side routes after vehicle exists |
 
-**Removed:** `car`. Storage: [ADR-013](../adr/ADR-013-vehicle-side-images.md). Mileage: [ADR-014](../adr/ADR-014-vehicle-mileage.md). Owner/Admin only; drivers **403** on fleet vehicle + image routes.
+**Removed:** `car`. Storage: [ADR-013](../adr/ADR-013-vehicle-side-images.md). Mileage: [ADR-014](../adr/ADR-014-vehicle-mileage.md). Custom expirations: [ADR-019](../adr/ADR-019-vehicle-custom-expirations.md). Owner/Admin only; drivers **403** on fleet vehicle + image routes.
 
 ### `GET /v1/vehicles` · `GET /v1/vehicles?expiring=true`
-`{ "items": Vehicle[] }` — each item includes `mileage`, `mileage_unit`, `has_side_images` and `side_images`.
+`{ "items": Vehicle[] }` — each item includes `mileage`, `mileage_unit`, `custom_expirations`, `has_side_images` and `side_images`. `expiring=true` filters `warnings.length > 0` (includes custom-only warnings).
+
+**Owner/Admin Global Header notifications (US-68–US-76 / ADR-017; custom **Could** US-89 / ADR-019):** **No** `GET /v1/notifications`. Clients project menu items from this list’s server `warnings[]` via `@fleet/sdk` (`complianceNotificationItems`). HTTP surface unchanged.
 
 ### `POST /v1/vehicles`
-Body: `make`, `model`, `license_plate` required; optional country, date fields, and `mileage` (`number` \| `string` \| `null`; omit or null = unknown). **No** image parts. **No** `mileage_unit` on write. **201** Vehicle with empty sides. **400** `validation_error` if make/model/plate missing or blank after trim, or mileage invalid (negative / non-numeric / >1 decimal).
+Body: `make`, `model`, `license_plate` required; optional country, date fields, `mileage` (`number` \| `string` \| `null`; omit or null = unknown), and optional `custom_expirations` array (full list; omit = `[]`). **No** image parts. **No** `mileage_unit` on write. **201** Vehicle with empty sides and `custom_expirations` (minted ids when omitted). **400** `validation_error` if make/model/plate missing or blank after trim, mileage invalid (negative / non-numeric / >1 decimal), or custom expirations invalid (not array, >10, bad label/date/id, duplicate labels/ids).
 
 ### `GET /v1/vehicles/:id` · `PATCH /v1/vehicles/:id`
-PATCH body: write fields only (make, model, plate, country, dates, `mileage`). Clear mileage with `null` or empty string. **Must not** accept `mileage_unit`, `side_images`, paths, or files. **200** Vehicle. **404** other company / missing.
+PATCH body: write fields only (make, model, plate, country, dates, `mileage`, `custom_expirations`). Clear mileage with `null` or empty string. **`custom_expirations` when present = full replace**; omit = leave unchanged; `[]` = clear. Item: `{ id?: string\|null, label, expires_on }`; server mints UUID when `id` omitted/null. **Must not** accept `mileage_unit`, `side_images`, paths, or files. **200** Vehicle. **404** other company / missing.
 
 ### `PUT /v1/vehicles/:id/sides/:side`
 
@@ -326,13 +421,13 @@ Upload or **replace** one side. `:side` = `FRONT` \| `LEFT` \| `RIGHT` \| `BACK`
 | Types | Any **image** detected by file magic (`image/*`); non-image → `validation_error` |
 | Max size | **5 MB** |
 
-**200** Vehicle. **400** `validation_error` (bad side/type/size/missing file). **403** driver. **404** other company. **502/503** `storage_unavailable` — prior side unchanged.
+**200** Vehicle. **400** `validation_error` (bad side/type/size/missing file). **403** driver **or** Individual Owner (`account_kind = individual`, E80). **404** other company. **502/503** `storage_unavailable` — prior side unchanged. Company Owner/Admin only.
 
 Object key: `{company_id}/{vehicle_id}/{side_lower}.{ext}` in bucket `vehicle-images`.
 
 ### `DELETE /v1/vehicles/:id/sides/:side`
 
-Clear **one** side: delete that side’s object from Supabase Storage (S3 `DeleteObject` on the stored path) and null the DB path. Other sides unchanged. Idempotent if already empty. **200** Vehicle (`side_images.<SIDE>` = `null`). Same authz as PUT. **502/503** `storage_unavailable` if the object could not be removed — DB path unchanged so the product does not claim empty while the blob may still exist.
+Clear **one** side: delete that side’s object from Supabase Storage (S3 `DeleteObject` on the stored path) and null the DB path. Other sides unchanged. Idempotent if already empty. **200** Vehicle (`side_images.<SIDE>` = `null`). Same authz as PUT (Company Owner/Admin only; Individual **403**). **502/503** `storage_unavailable` if the object could not be removed — DB path unchanged so the product does not claim empty while the blob may still exist.
 
 ### `GET /v1/home`
 ```json
@@ -526,10 +621,111 @@ Driver only. Owner/Admin → **403** `forbidden` (E54).
 
 ### `GET /v1/vehicles/:vehicleId/handovers`
 
-Owner/Admin same company. Driver → **403** (E55). Other company / missing vehicle → **404** (E56).
+Company Owner/Admin same tenant. Driver → **403** (E55). Individual Owner → **403** (E80). Other company / missing vehicle → **404** (E56).
 
 **200** `{ "items": HandoverListItem[] }` newest first (`created_at` DESC). Includes voided and closed.
 
 ### `GET /v1/vehicles/:vehicleId/handovers/:handoverId`
 
-Owner/Admin same company. **200** HandoverDetail with signed damage image URLs. **404** if handover not on that vehicle/company.
+Company Owner/Admin same tenant. Individual Owner → **403** (E80). **200** HandoverDetail with signed damage image URLs. **404** if handover not on that vehicle/company.
+
+## Driver Daily usage (US-61–US-67)
+
+Fleet. See [ADR-016](../adr/ADR-016-driver-daily-usage.md).  
+Day-use log against **active next-travel** vehicle. **Does not** update `vehicles.mileage` (A62). **Does not** create/close handovers (A57).
+
+### Error codes (daily usage)
+
+| BA | HTTP | `error.code` |
+| --- | --- | --- |
+| E59 | 409 | `daily_usage_no_active_travel` |
+| E60 / E64 | 403 | `forbidden` |
+| E61–E63 | 400 | `validation_error` |
+| E65 | — | No PATCH/DELETE routes |
+| E66 | 404 | `not_found` |
+| E67 | — | Client-only offline submit block |
+
+### Daily usage resource
+
+```json
+{
+  "id": "uuid",
+  "vehicle_id": "uuid",
+  "usage_date": "2026-09-07",
+  "start_place": "Depot A",
+  "start_distance": 12010.5,
+  "end_place": "Site B",
+  "end_distance": 12085.0,
+  "distance_unit": "km",
+  "start_time": "08:30",
+  "end_time": "17:15",
+  "created_at": "2026-09-07T10:00:00.000Z",
+  "vehicle": {
+    "id": "uuid",
+    "make": "Ford",
+    "model": "Transit",
+    "license_plate": "B-01-FLE",
+    "label": "Ford Transit"
+  }
+}
+```
+
+| Field | Notes |
+| --- | --- |
+| `usage_date` | Calendar day `YYYY-MM-DD` (local day as entered; no TZ field) |
+| `start_time` / `end_time` | Local wall-clock `HH:mm` (24h); `end_time >= start_time` |
+| `start_distance` / `end_distance` | ≥ 0, max 1 decimal; `end_distance >= start_distance`; if vehicle master mileage set, `start_distance >= mileage` at create |
+| `distance_unit` | `"mi"` \| `"km"` frozen at write from vehicle country (A34). **Not** accepted on write |
+| `vehicle` | Summary at read time (label = make + model). Row keeps `vehicle_id` even if travel selection later changes |
+| Places | Non-empty after trim |
+
+### `GET /v1/driver/daily-usage`
+
+Driver only. Owner/Admin → **403** `forbidden` (E64).
+
+**200** `{ "items": DailyUsage[] }` — **own** rows only, newest first (`created_at` DESC). Empty list → `{ "items": [] }`.
+
+### `POST /v1/driver/daily-usage`
+
+Driver only. Owner/Admin → **403** `forbidden` (E60).  
+`Content-Type: application/json`.
+
+```json
+{
+  "usage_date": "2026-09-07",
+  "start_place": "Depot A",
+  "start_distance": 12010.5,
+  "start_time": "08:30",
+  "end_place": "Site B",
+  "end_distance": 12085.0,
+  "end_time": "17:15"
+}
+```
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `usage_date` | yes | `YYYY-MM-DD` |
+| `start_place` | yes | non-empty string |
+| `start_distance` | yes | number \| numeric string; ≥ 0; max 1 decimal |
+| `start_time` | yes | `HH:mm` |
+| `end_place` | yes | non-empty string |
+| `end_distance` | yes | same parse as start; must be ≥ start |
+| `end_time` | yes | `HH:mm`; must be ≥ start_time |
+
+**Not accepted:** `vehicle_id`, `distance_unit`, `company_id`, `driver_id`.
+
+**Vehicle** = caller’s active next-travel selection only.
+
+**201** DailyUsage. Side effects: insert row only. **`vehicles.mileage` unchanged.**
+
+**Errors:**
+
+| Condition | HTTP | code |
+| --- | --- | --- |
+| No active next-travel | 409 | `daily_usage_no_active_travel` |
+| Missing/blank fields, bad date/time format | 400 | `validation_error` |
+| Distance negative / non-numeric / >1 decimal / end &lt; start / start &lt; vehicle.mileage | 400 | `validation_error` |
+| end_time &lt; start_time | 400 | `validation_error` |
+| Owner/Admin | 403 | `forbidden` |
+
+**Default “today”** is a **client** prefills concern; API does not inject date if omitted (omission → validation_error).

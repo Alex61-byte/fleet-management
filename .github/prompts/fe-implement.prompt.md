@@ -21,3 +21,5 @@ Follow page specs and semantic tokens / `themeClasses` — **no hex, no magic sp
 5. Verification (tests/typecheck)  
 
 Next App Router defaults; Expo = RN + NativeWind, 44pt targets. No mixed web/RN patterns in one file. No scope outside AC.
+
+**Token budget:** follow [.github/copilot-instructions.md](../copilot-instructions.md) § Token budget. Paths/Delta only in chat; write artifacts to files.

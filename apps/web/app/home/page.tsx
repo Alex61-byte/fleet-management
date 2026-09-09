@@ -31,8 +31,16 @@ export default function HomePage() {
     if (ready && me && me.role !== "driver") void load();
   }, [ready, me]);
 
+  const individual = me?.account_kind === "individual";
+
   return (
-    <AppShell title="Fleet">
+    <AppShell
+      title="Home"
+      action={<PrimaryLink href="/vehicles/new">Add vehicle</PrimaryLink>}
+    >
+      {individual ? (
+        <p className={`${themeClasses.caption} text-text-secondary -mt-1`}>Owner · personal vehicles</p>
+      ) : null}
       {loading ? (
         <div className="flex flex-col gap-2">
           <Skeleton className="h-20" />
@@ -45,15 +53,7 @@ export default function HomePage() {
         <ErrorRetry message={error} onRetry={() => void load()} />
       ) : home ? (
         <>
-          <div className="grid grid-cols-2 gap-2">
-            <Link
-              href="/drivers"
-              className={`${themeClasses.raised} p-2 min-h-hit`}
-              aria-label={`Drivers, ${home.driver_count}`}
-            >
-              <p className={themeClasses.caption}>Drivers</p>
-              <p className="font-sans text-display font-semibold">{home.driver_count}</p>
-            </Link>
+          {individual ? (
             <Link
               href="/vehicles"
               className={`${themeClasses.raised} p-2 min-h-hit`}
@@ -62,8 +62,27 @@ export default function HomePage() {
               <p className={themeClasses.caption}>Vehicles</p>
               <p className="font-sans text-display font-semibold">{home.vehicle_count}</p>
             </Link>
-          </div>
-          {me?.role === "owner" ? (
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href="/drivers"
+                className={`${themeClasses.raised} p-2 min-h-hit`}
+                aria-label={`Drivers, ${home.driver_count}`}
+              >
+                <p className={themeClasses.caption}>Drivers</p>
+                <p className="font-sans text-display font-semibold">{home.driver_count}</p>
+              </Link>
+              <Link
+                href="/vehicles"
+                className={`${themeClasses.raised} p-2 min-h-hit`}
+                aria-label={`Vehicles, ${home.vehicle_count}`}
+              >
+                <p className={themeClasses.caption}>Vehicles</p>
+                <p className="font-sans text-display font-semibold">{home.vehicle_count}</p>
+              </Link>
+            </div>
+          )}
+          {!individual && me?.role === "owner" ? (
             <Link href="/admins" className={`${themeClasses.raised} p-2 min-h-hit`}>
               <p className={themeClasses.title}>Admins</p>
               <p className={themeClasses.caption}>Create Admin</p>
@@ -74,7 +93,7 @@ export default function HomePage() {
             {home.expiring_vehicles.length === 0 ? (
               <div className="flex flex-col gap-2 mt-2">
                 <p className={themeClasses.body}>No vehicles due soon.</p>
-                <PrimaryLink href="/vehicles/new">Add vehicle</PrimaryLink>
+                {!individual ? <PrimaryLink href="/vehicles/new">Add vehicle</PrimaryLink> : null}
               </div>
             ) : (
               <ul className="flex flex-col gap-1 mt-2">
@@ -94,7 +113,7 @@ export default function HomePage() {
               </ul>
             )}
           </section>
-          {home.driver_count === 0 ? (
+          {!individual && home.driver_count === 0 ? (
             <PrimaryLink href="/drivers/new">Add driver</PrimaryLink>
           ) : null}
         </>

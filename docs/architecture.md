@@ -19,8 +19,8 @@ Specialist defaults already in-repo (not invented here): Fastify + TypeScript AP
 | Attribute | Target this slice |
 | --- | --- |
 | Security | Email/password hashed at rest; TOTP secrets encrypted; no session until TOTP if enabled; driver token cannot call Owner/Admin APIs (E8); drivers may hold usable web sessions for auth + minimal home only |
-| Tenancy | Every driver/vehicle/admin row scoped by `company_id`; cross-company reads/writes fail as not found or forbidden |
-| Consistency | Sign-up is one transaction (company + Owner). Vehicle save is allowed with expired dates. Expiry flags are derived, not stored as source of truth |
+| Tenancy | Every driver/vehicle/admin row scoped by `company_id` (tenant id). Tenant has `account_kind` `company` \| `individual` ([ADR-018](adr/ADR-018-account-kinds.md)). Drivers/Admins APIs require `company`. Cross-tenant fail closed |
+| Consistency | Sign-up is one transaction (tenant + Owner). Vehicle save is allowed with expired dates. Expiry flags are derived, not stored as source of truth |
 | Latency | Interactive CRUD; no async bus required |
 | Operability | Structured error codes; request id; single deployable API |
 | Evolution | `vehicle.id` stable for later GPS; no ingest API now |
@@ -63,8 +63,8 @@ One bounded context in-process: Identity, Fleet. HTTP `/v1`. Next.js and Expo ar
 
 **Option A.** One Fastify `/v1` API is the system of record. Next.js and Expo call it. Postgres owns data.
 
-- **Identity:** company, principals (Owner, Admin, Driver), credentials, TOTP, sessions, password reset.
-- **Fleet:** vehicles + compliance dates + optional **vehicle.mileage** + **vehicle handovers** (Out/In, damage images — [ADR-015](adr/ADR-015-vehicle-handovers.md)) (master odometer reading; unit derived from country — [ADR-014](adr/ADR-014-vehicle-mileage.md)); expiry computed on read; **optional side appearance images** (paths in Postgres, bytes in **Supabase Storage** via API **S3 gateway** / `OBJECT_STORAGE_*` — [ADR-013](adr/ADR-013-vehicle-side-images.md)).
+- **Identity:** tenant (`account_kind` company\|individual), principals (Owner, Admin, Driver), credentials, TOTP, sessions, password reset; company register + **individual register** ([ADR-018](adr/ADR-018-account-kinds.md)).
+- **Fleet:** vehicles + compliance dates + optional **vehicle.mileage** + **vehicle handovers** (Out/In, damage images — [ADR-015](adr/ADR-015-vehicle-handovers.md)) + **driver Daily usage** logs ([ADR-016](adr/ADR-016-driver-daily-usage.md)) (master odometer reading; unit derived from country — [ADR-014](adr/ADR-014-vehicle-mileage.md)); expiry computed on read; **optional side appearance images** (paths in Postgres, bytes in **Supabase Storage** via API **S3 gateway** / `OBJECT_STORAGE_*` — [ADR-013](adr/ADR-013-vehicle-side-images.md)).
 - **No event bus.** Reserve in-process hooks later for `vehicle.created` if tracking needs it.
 - **Auth:** opaque refresh + short-lived access token (see ADR-002). Same contract for web and mobile. Next.js may store refresh in httpOnly cookie as a **client** detail; API still Bearer-access.
 - **Clients:** Next.js = Owner/Admin management **+** driver minimal shell. Expo = role shells after login. API enforces; UI hides Owner nav for drivers (defense in depth). Local orchestration is Turborepo on npm workspaces; Expo Metro (`npm run dev:mobile`) runs in a dedicated TTY so the QR prints ([ADR-006](adr/ADR-006-turborepo-orchestration.md)).
@@ -96,13 +96,14 @@ flowchart LR
 
 | Entity | Owner module | Notes |
 | --- | --- | --- |
-| `company` | Identity | Created only via register |
+| `company` (tenant) | Identity | Created via `POST /v1/auth/register` (kind=company) or `POST /v1/auth/register/individual` (kind=individual); `account_kind` immutable; legacy rows company ([ADR-018](adr/ADR-018-account-kinds.md)) |
 | `principal` | Identity | `role`: `owner` \| `admin` \| `driver`; unique `email`. Hard delete (US-27) **removes** driver principal rows; not soft-delete. |
 | `credential` | Identity | password hash; driver flags `must_change_password`, `login_enabled` (disable only; US-16). Removed with principal on hard delete. |
 | `totp` | Identity | Owner/Admin only; enabled only after confirm |
-| `session` / refresh | Identity | Access token carries `principal_id`, `company_id`, `role`, `must_change_password`. Refresh rows carry absolute `expires_at` (**14 days** from family start; US-29 / [ADR-002](adr/ADR-002-auth-sessions.md)). **Multiple families per principal** allowed (US-30: web+mobile / multi-device). Logout revokes one family. On driver hard delete: revoke all refresh for that principal; auth **fail closed** if `sub` missing ([ADR-008](adr/ADR-008-driver-hard-delete.md)). Clients silent-refresh on access expiry; forced re-auth at absolute expiry or that family’s revoke. |
+| `session` / refresh | Identity | Access token carries `principal_id`, `company_id`, `role`, `must_change_password`, and `account_kind` on newly issued tokens ([ADR-018](adr/ADR-018-account-kinds.md)). Refresh rows carry absolute `expires_at` (**14 days** from family start; US-29 / [ADR-002](adr/ADR-002-auth-sessions.md)). **Multiple families per principal** allowed (US-30: web+mobile / multi-device). Logout revokes one family. On driver hard delete: revoke all refresh for that principal; auth **fail closed** if `sub` missing ([ADR-008](adr/ADR-008-driver-hard-delete.md)). Clients silent-refresh on access expiry; forced re-auth at absolute expiry or that family’s revoke. Drivers/Admins gates load tenant kind from DB (fail closed). |
 | `password_reset` | Identity | Owner/Admin only |
 | `vehicle` | Fleet | `company_id`; `id` UUID never recycled |
+| `driver_daily_usage` | Fleet | Driver-owned day-use log; vehicle from active travel at create; hard-delete **removes** rows (A69 / ADR-016). No mileage write-through. |
 
 **Control flow — sign-in**
 
@@ -124,9 +125,11 @@ flowchart TD
 
 **Vehicle mileage (US-45–US-50):** Optional `mileage` on vehicle row; `mileage_unit` derived on read via same country rules as driver odometer (A34). Not auto-synced from `driver_travel_selections`. Details: [ADR-014](adr/ADR-014-vehicle-mileage.md), [contracts/http-v1.md](contracts/http-v1.md).
 
+**Driver Daily usage (US-61–US-67):** Fleet `driver_daily_usages`; `POST/GET /v1/driver/daily-usage`; gate on active next-travel; unit A34; no edit/delete; no Owner API; hard-delete removes rows. Details: [ADR-016](adr/ADR-016-driver-daily-usage.md), [contracts/http-v1.md](contracts/http-v1.md).
+
 **Sync:** All this slice is request/response. No consumers. Driver hard delete is Identity request/response only (no outbox).
 
-**Driver hard delete (US-27):** `DELETE /v1/drivers/:id` in Identity. Owner/Admin, same company. Physical remove of driver principal; Fleet **no-op** (vehicles unchanged). Distinct from `PATCH` `login_enabled`. Details: [ADR-008](adr/ADR-008-driver-hard-delete.md), [contracts/http-v1.md](contracts/http-v1.md).
+**Driver hard delete (US-27):** `DELETE /v1/drivers/:id` in Identity. Owner/Admin, same company. Physical remove of driver principal; Fleet participates in-process: clear travel, void open handovers (ADR-015), **delete daily usages** (ADR-016). Vehicles unchanged (A19). Distinct from `PATCH` `login_enabled`. Details: [ADR-008](adr/ADR-008-driver-hard-delete.md), [contracts/http-v1.md](contracts/http-v1.md).
 
 ## 6. Risks & open questions
 
@@ -153,6 +156,7 @@ flowchart TD
 | [adr/ADR-005-clients.md](adr/ADR-005-clients.md) | Next.js vs Expo |
 | [adr/ADR-006-turborepo-orchestration.md](adr/ADR-006-turborepo-orchestration.md) | npm workspaces + Turbo; Expo QR on its own TTY |
 | [adr/ADR-008-driver-hard-delete.md](adr/ADR-008-driver-hard-delete.md) | Driver hard delete vs disable; session revoke |
+| [adr/ADR-016-driver-daily-usage.md](adr/ADR-016-driver-daily-usage.md) | Driver Daily usage create/list; hard-delete cascade |
 | [contracts/http-v1.md](contracts/http-v1.md) | Routes, bodies, error codes |
 
 **Next specialist (US-27):** Senior Backend Specialist — Identity `DELETE /v1/drivers/:id` + session fail-closed against contract and BA AC. Fleet no-op. Do not start Next.js/Expo until that slice passes tests. Then Senior Frontend Specialist per [design/pages/drivers.md](../design/pages/drivers.md).

@@ -1,12 +1,14 @@
 # Driver home (start)
 
-**Stories:** US-10, US-14, **US-33**, **US-34**, **US-51–US-54**, **US-58–US-60**  
+**Stories:** US-10, US-14, **US-33**, **US-34**, **US-51–US-54**, **US-58–US-60**, **US-61–US-67**  
 **Density:** Web compact content; mobile comfortable. **Both surfaces** after invite accept (or subsequent login).  
-**Purpose:** Calm **post-auth start / hub**: identity, navigation to **Next travel** and **Vehicle handover**, sign out. Login and invite land here — **not** on the handover form. **No** fleet admin create/edit, **no** driver management, **no** create Admin, **no** Owner expiry inbox, **no** TOTP settings, **no** Owner/Admin chrome, **no** Owner/Admin Handovers history tab (E55).  
+**Purpose:** Calm **post-auth start / hub**: identity, navigation to **Next travel**, **Vehicle handover**, and **Daily usage**, sign out. Login and invite land here — **not** on handover or Daily usage forms. **No** fleet admin create/edit, **no** driver management, **no** create Admin, **no** Owner expiry inbox, **no** TOTP settings, **no** Owner/Admin chrome, **no** Owner/Admin Handovers history tab (E55), **no** Owner Daily usage reporting (A65).  
 **Chrome:** Driver-only shell — see [_patterns.md](_patterns.md) **Driver shell (web + mobile)**.  
 - **Mobile:** `appBarMobile` only — **no** tab bar, **no** sidebar.  
 - **Web:** top driver header strip only — **no** Owner `sidebar`.  
-**Handover shared spec:** [handover.md](handover.md) (fields, damage grid, validation, viewer). Task screens own forms; this page owns **start placement** and hub cues.
+**Handover shared spec:** [handover.md](handover.md) (fields, damage grid, validation, viewer).  
+**Daily usage shared spec:** [daily-usage.md](daily-usage.md) (create + own list, gate, offline).  
+Task screens own forms; this page owns **start placement** and hub cues.
 
 ## Information architecture
 
@@ -15,8 +17,9 @@
 | `/driver` | `/(driver)` | **Start / Home** — identity + hub links + Sign out |
 | `/driver/travel` | `/(driver)/travel` | **Next travel** — vehicle + odometer form |
 | `/driver/handover` | `/(driver)/handover` | **Handover Out/In** — form when next-travel exists; else CTA to travel |
+| `/driver/daily-usage` | `/(driver)/daily-usage` | **Daily usage** — create + own list when next-travel exists; else CTA to travel |
 
-Auth redirects (`sign-in`, invite accept, root) always go to **Start**, never directly to `/driver/handover` or `/(driver)/handover`.
+Auth redirects (`sign-in`, invite accept, root) always go to **Start**, never directly to `/driver/handover`, `/driver/daily-usage`, or mobile equivalents (A67).
 
 ## Layout — Start (Home)
 
@@ -29,7 +32,7 @@ canvas contentPadComfortable gap-2
   panel (identity)
     overline Driver
     label {email}
-    caption Choose what you need. Handover is not opened until you start it.
+    caption Choose what you need. Task screens open only when you start them.
   nav aria-label Driver start
     hubLink Next travel
       label Next travel
@@ -39,6 +42,10 @@ canvas contentPadComfortable gap-2
       label Vehicle handover
       caption {guidance / Out open cue}
       badge Out open | Ready | (chevron)
+    hubLink Daily usage
+      label Daily usage
+      caption {guidance / ready cue}
+      badge Ready | (chevron)
   buttonSecondary Sign out
 ```
 
@@ -53,7 +60,7 @@ contentPadCompact max-w-auth-card mx-auto flex flex-col gap-2
   buttonSecondary Sign out
 ```
 
-**No** next-travel form and **no** handover form on Start. Status badges only (Selected / Ready / Out open).
+**No** next-travel, handover, or Daily usage **forms** on Start. Status badges only (Selected / Ready / Out open). Daily usage does **not** use Out open.
 
 ## Layout — Next travel screen
 
@@ -79,6 +86,20 @@ Back to Home
 [else]
   handover panel per [handover.md](handover.md)
 ```
+
+## Layout — Daily usage screen
+
+```
+Back to Home
+[if no next-travel]
+  panel: body Select next travel first before logging daily usage.
+  buttonPrimary Go to Next travel
+  [optional] own list read-only if rows exist
+[else]
+  create + own list per [daily-usage.md](daily-usage.md)
+```
+
+Not auto-opened after login or after saving next-travel. Independent of open Out (rule 100).
 
 ## Next travel panel (task screen)
 
@@ -141,17 +162,31 @@ Full field inventory, damage attach, validation copy, and viewer: **[handover.md
 | Non-image / >5 MB / >10 | Attach rejected (E53); handover not created for that fault set |
 | Offline | `bannerWarning`; Submit + Add disabled |
 
+## Daily usage hub (US-61–US-67)
+
+Full field inventory, list, validation, gated/offline states: **[daily-usage.md](daily-usage.md)**.
+
+| Hub card | Caption / badge |
+| --- | --- |
+| No next-travel | Caption: select next travel first; chevron only (no Ready) |
+| Next-travel active | Caption: log places and distances for the selected vehicle; **Should** `badgeNeutral` **Ready** |
+| Offline on start | No special hub lock; task screen disables submit |
+
+Daily usage hub never shows **Out open** (that cue is handover-only).
+
 ## States
 
 | State | UI |
 | --- | --- |
 | Loading start | App bar real; skeleton identity + hub cards |
 | Start default | Identity + hub links (no forms) + Sign out |
-| Start, travel selected | Next travel badge **Selected**; handover **Ready** or **Out open** |
-| Start, no travel | Handover card explains select travel first |
+| Start, travel selected | Next travel badge **Selected**; handover **Ready** or **Out open**; Daily usage **Ready** (Should) |
+| Start, no travel | Handover + Daily usage cards explain select travel first |
 | Travel screen empty / form / error | As prior next-travel states |
 | Handover screen no travel | CTA to Next travel only |
 | Handover eligible Out / open Out / success | Per [handover.md](handover.md) |
+| Daily usage screen no travel | CTA to Next travel; optional own list | 
+| Daily usage eligible / list / offline | Per [daily-usage.md](daily-usage.md) |
 | Offline | `bannerWarning`; primary actions disabled on task screens |
 | Owner deep link | [denied.md](denied.md) |
 
@@ -163,6 +198,7 @@ Full field inventory, damage attach, validation copy, and viewer: **[handover.md
 | Hub nav | Driver start |
 | Hub Next travel | Next travel. {badge}. {description} |
 | Hub Handover | Vehicle handover. {badge}. {description} |
+| Hub Daily usage | Daily usage. {badge}. {description} |
 | Travel screen | Next travel |
 | Vehicle | Vehicle for next travel |
 | Odometer | Odometer in {miles\|kilometres} |
@@ -178,10 +214,12 @@ Full field inventory, damage attach, validation copy, and viewer: **[handover.md
 | Add photos | Add damage photos |
 | Submit Out | Submit Handover Out |
 | Submit In | Submit Handover In |
+| Daily usage screen | Daily usage |
+| Daily usage submit | Submit daily usage |
 | Back | Back to Home |
 | Sign out | Sign out |
 
-Unit must be in the odometer **and** handover mileage / next-service-distance accessible names/hints, not colour alone. Full damage thumb/viewer names: [handover.md](handover.md).
+Unit must be in the odometer, handover mileage / next-service-distance, **and** Daily usage start/end distance accessible names/hints, not colour alone. Full damage thumb/viewer names: [handover.md](handover.md). Full Daily usage field names: [daily-usage.md](daily-usage.md).
 
 ## Token usage
 
@@ -194,6 +232,7 @@ Unit must be in the odometer **and** handover mileage / next-service-distance ac
 | Actions | `buttonPrimary` `buttonSecondary` `buttonDisabled` `buttonIcon` |
 | Damage | `handoverDamageGrid` `handoverDamageThumb` `handoverDamageThumbFocus` `handoverDamageThumbRemove` |
 | Viewer | `vehicleSideViewer*` (reuse from vehicles) |
+| Daily usage list | `tableWrap` / `listRow` `emptyState` (task screen) |
 | Loading | `skeleton` |
 
-No Owner table chrome. No third “Handovers history” surface on driver start.
+No Owner table chrome on start. No Owner “Handovers history” or Daily usage reporting on driver start.

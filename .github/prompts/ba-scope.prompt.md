@@ -22,3 +22,5 @@ Ground in [docs/requirements.md](../../docs/requirements.md), [docs/business-rul
 8. Handoff note → Design Specialist  
 
 No application code, ADRs, tokens, or UI specs. Tables over prose. Update product docs when this slice changes shared requirements/rules/stories.
+
+**Token budget:** follow [.github/copilot-instructions.md](../copilot-instructions.md) § Token budget. Paths/Delta only in chat; write artifacts to files.
