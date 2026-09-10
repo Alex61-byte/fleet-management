@@ -139,13 +139,17 @@ flowchart TD
 
 Account-kind split at signup (**Company** | **Individual**); Individual self-register + personal workspace; Individual own-vehicle management (compliance-lite); Company-only driver invite/admin; grandfather existing tenants as Company. Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin users, driver **invite via Resend**, driver **self-set password** on accept (web + mobile), subsequent driver login, minimal home, hard delete of driver profiles, vehicle records with compliance dates, optional **current vehicle mileage**, and expiry warnings, optional vehicle side appearance images (FRONT/LEFT/RIGHT/BACK) via Supabase Storage references, driver **Handover Out/In** (mileage, next service days/distance, optional damages text + images), Owner/Admin **Handovers** history tab on vehicle (read-only), driver **Daily usage** create + own list (gated on active next-travel).
 
+### Commercial catalog (definition only)
+
+Paid **pricing plans** (2 Individual + 2 Company) are defined in [pricing-plans.md](pricing-plans.md) for packaging and competitive positioning. **Metering, checkout, entitlements enforcement, and Stripe (or equivalent) are not in the current engineering slice** until a dedicated billing feature is scheduled.
+
 ### Out of scope
 
 - Individual inviting or managing drivers; Admins on Individual workspaces
 - Converting Individual ↔ Company; multi-Owner Individual workspaces
 - Individual-as-driver operational shell (next-travel / handover / daily usage) in lieu of Owner vehicle admin
 - Individual KYC, tax IDs, or required display name
-- Billing/plans; marketing CMS
+- **Billing implementation** (payment provider, invoices, entitlement hard-blocks in API); marketing CMS. **Plan catalog** lives in [pricing-plans.md](pricing-plans.md). **Public pricing page** (`/pricing`, US-91–US-92) is in scope as static catalog UI only—not checkout
 - Dispatch, live tracking, geofence, multi-stop trip planning. **Exception:** structured **Handover Out/In** (US-51+) and **Daily usage** day logs (US-61+) are in scope (not full dispatch)
 - Edit/delete historical handovers; Owner/Admin-created handovers; driver access to Owner Handovers admin tab
 - Owner/Admin Daily usage reporting/export; edit/delete of Daily usage; GPS auto-fill of places; photos on Daily usage; auto write-through of Daily usage distances to `vehicle.mileage`

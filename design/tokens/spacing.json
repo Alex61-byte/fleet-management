@@ -21,6 +21,7 @@
     "table-row": { "$type": "dimension", "$value": "44px", "$description": "Compact table row min height" },
     "list-row": { "$type": "dimension", "$value": "56px", "$description": "Comfortable mobile list row min height" },
     "auth-card": { "$type": "dimension", "$value": "420px", "$description": "Auth card max width" },
+    "public-content-max": { "$type": "dimension", "$value": "1200px", "$description": "Public landing/pricing content column max width on large web viewports; header bar may stay full-bleed with centered inner row" },
     "content-gutter-compact": { "$type": "dimension", "$value": "24px" },
     "content-gutter-comfortable": { "$type": "dimension", "$value": "16px" },
     "mark": { "$type": "dimension", "$value": "24px", "$description": "Product mark in sidebar and mobile app bar (shielded square)" },

@@ -6,6 +6,7 @@
 ## Decision
 
 - **`/`** is the **public landing** for a person who is not signed in (identity + Sign in + Create company). No fleet or driver records.
+- **`/pricing`** is the **public plan catalog** (static; [ADR-021](ADR-021-public-pricing-page.md)). Same session redirects as `/`.
 - **`/home`** is **Owner/Admin operational home** (`GET /v1/home`). Sidebar Home points here.
 - Signed-in Owner/Admin hitting `/` **redirects to `/home`**. No signed-in marketing view.
 - Signed-in **driver** on `/` **redirects** to `/change-password` if `must_change_password`, else **minimal driver home** (`/driver`). Not marketing landing; not Owner KPIs.
