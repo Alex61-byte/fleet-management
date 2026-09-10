@@ -113,6 +113,7 @@ export const fleetTheme = {
     "table-row": "44px",
     "list-row": "56px",
     "auth-card": "420px",
+    "public-content-max": "1200px",
     "content-gutter-compact": "24px",
     "content-gutter-comfortable": "16px",
   },
@@ -167,29 +168,60 @@ export const themeClasses = {
   pageAuth: "bg-canvas text-text-primary font-sans min-h-full",
   pagePublic: "bg-canvas text-text-primary font-sans min-h-full",
   publicHeader:
-    "sticky top-0 z-20 h-app-bar w-full bg-surface-raised border-b border-divider border-t-brand-bar border-t-brand-accent px-content-gutter-compact flex flex-row items-center justify-between gap-2",
+    "sticky top-0 z-20 h-app-bar w-full bg-surface-raised border-b border-divider border-t-brand-bar border-t-brand-accent",
+  publicHeaderInner:
+    "mx-auto w-full max-w-public-content px-content-gutter-compact h-app-bar flex flex-row items-center justify-between gap-2",
   publicLockup: "flex flex-row items-center gap-1.5 min-h-hit",
   publicWordmark: "text-title font-semibold text-text-primary tracking-tight",
   publicHeaderActions: "flex flex-row items-center gap-1",
   publicBody:
-    "flex-1 bg-canvas px-content-gutter-compact py-3 flex flex-col gap-3",
+    "flex-1 bg-canvas mx-auto w-full max-w-public-content px-content-gutter-compact py-3 flex flex-col gap-3",
   publicHero: "flex flex-col gap-3 items-stretch",
   publicHeroWide: "flex flex-row gap-3 items-stretch",
-  publicHeroCopy: "flex flex-col gap-1 justify-center flex-1 min-w-0",
+  publicHeroCopy: "flex flex-col gap-1.5 justify-center flex-1 min-w-0",
   publicHeroTitle:
     "font-sans text-page font-semibold text-text-primary tracking-tight",
   publicHeroCaption: "font-sans text-body font-regular text-text-secondary",
+  publicHeroLead: "font-sans text-body font-regular text-text-primary max-w-prose",
   publicHeroMapStack: "flex-1 min-w-0 flex flex-col gap-1",
   publicHeroMap:
     "w-full max-h-hero-map bg-surface-raised border border-border rounded-lg shadow-raised overflow-hidden",
-  publicHeroMapImage: "w-full h-full max-h-hero-map",
+  publicHeroMapImage: "w-full h-full max-h-hero-map object-cover object-center",
   publicHeroMapSkeleton: "w-full h-hero-map max-h-hero-map bg-disabled-surface",
   publicHeroMapCaption:
     "font-sans text-caption font-regular text-text-secondary",
+  publicValueGrid: "grid grid-cols-1 sm:grid-cols-3 gap-3 w-full",
+  publicValueCard:
+    "bg-surface-raised border border-border rounded-lg shadow-raised p-3 flex flex-col gap-1 h-full",
+  publicValueTitle: "font-sans text-section font-semibold text-text-primary",
+  publicValueBody: "font-sans text-label font-regular text-text-secondary",
+  publicPathRow: "flex flex-col sm:flex-row gap-2 w-full",
+  publicPathCard:
+    "bg-surface-raised border border-border rounded-lg shadow-raised p-3 flex flex-col gap-1 flex-1 min-w-0",
+  publicPathCardAccent:
+    "bg-surface-raised border-2 border-brand rounded-lg shadow-raised p-3 flex flex-col gap-1 flex-1 min-w-0",
   publicDescription:
-    "bg-surface-raised border border-border rounded-lg shadow-raised p-3 flex flex-col gap-1",
+    "bg-surface-raised border border-border rounded-lg shadow-raised p-3 flex flex-col gap-1.5",
   publicDescriptionTitle: "font-sans text-section font-semibold text-text-primary",
   publicDescriptionBody: "font-sans text-body font-regular text-text-primary",
+  publicDescriptionMeta: "font-sans text-caption font-regular text-text-secondary",
+  pricingKindToggle: "flex flex-row flex-wrap gap-1 items-center",
+  pricingKindOption:
+    "min-h-hit px-2 rounded-md text-label font-medium border border-border bg-surface-raised text-text-primary inline-flex items-center justify-center",
+  pricingKindOptionSelected:
+    "min-h-hit px-2 rounded-md text-label font-semibold border border-brand bg-brand-subtle text-text-primary inline-flex items-center justify-center",
+  pricingGrid: "grid grid-cols-1 md:grid-cols-2 gap-3 w-full",
+  pricingCard:
+    "bg-surface-raised border border-border rounded-lg shadow-raised p-3 flex flex-col gap-2 h-full",
+  pricingCardPopular:
+    "bg-surface-raised border-2 border-brand rounded-lg shadow-raised p-3 flex flex-col gap-2 h-full",
+  pricingCardName: "font-sans text-section font-semibold text-text-primary",
+  pricingCardPrice: "font-sans text-page font-semibold text-text-primary font-tabular tabular-nums tracking-tight",
+  pricingCardMeter: "font-sans text-caption font-regular text-text-secondary",
+  pricingFeatureList: "flex flex-col gap-1 flex-1 list-none m-0 p-0",
+  pricingFeatureItem: "font-sans text-label font-regular text-text-primary",
+  pricingFeatureMuted: "font-sans text-label font-regular text-text-secondary",
+  pricingFootnote: "font-sans text-caption font-regular text-text-secondary",
   publicIdentity:
     "max-w-auth-card px-content-gutter-compact py-8 flex flex-col gap-1",
   publicIdentityTitle:

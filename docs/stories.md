@@ -1699,3 +1699,47 @@ Spec: account-kind choice; Individual sign-up; Company sign-up via choice; landi
   **When** I manage custom expirations on Details  
   **Then** allowed (same as other Details fields); Images/Handovers still denied.
 
+
+## US-91 — Public pricing page **(Must)**
+
+**As** an unsigned-in person  
+**I need** to see Individual and Company plan prices and feature differences  
+**So that** I can choose a path before creating an account.
+
+**Acceptance**
+
+- **Given** I am not signed in  
+  **When** I open `/pricing`  
+  **Then** I see four plans from [pricing-plans.md](pricing-plans.md): Personal, Personal Plus, Team, Fleet with list prices, meters, and key entitlements (including custom expirations on Plus/Fleet only: 3/vehicle included, +$0.70 overage).
+
+- **Given** I am on `/pricing`  
+  **When** I use a plan primary action  
+  **Then** Individual plans go to Individual sign-up (or account-kind with individual intent) and Company plans go to Company sign-up (or account-kind with company intent); no payment checkout this slice.
+
+- **Given** I am signed in as Owner/Admin  
+  **When** I open `/pricing`  
+  **Then** I am redirected to `/home` (same as public landing).
+
+- **Given** I am signed in as driver  
+  **When** I open `/pricing`  
+  **Then** I am redirected to driver home (not marketing, not Owner shell).
+
+- **Given** `/pricing`  
+  **When** the page loads  
+  **Then** no fleet records, no `GET /v1` billing/plans API, no Stripe; copy matches catalog; public chrome (header with Sign in + Create account + link from landing).
+
+## US-92 — Landing link to pricing **(Should)**
+
+**As** an unsigned-in person on the public landing  
+**I need** a clear path to pricing  
+**So that** I do not hunt for plan details.
+
+**Acceptance**
+
+- **Given** I am on `/` unsigned-in  
+  **When** the page is ready  
+  **Then** I can open **Pricing** (header secondary text link or description link to `/pricing`).
+
+## Design Specialist handoff — Pricing (US-91–US-92)
+
+Public web only. Catalog: [pricing-plans.md](pricing-plans.md). Spec: [design/pages/pricing.md](../design/pages/pricing.md).

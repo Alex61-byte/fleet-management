@@ -16,12 +16,22 @@ const passwordReset = readFileSync(join(root, "app/password/reset/page.tsx"), "u
 
 test("public landing uses identity chrome, not ops records", () => {
   assert.match(landing, /themeClasses\.publicHeader/);
+  assert.match(landing, /themeClasses\.publicHeaderInner/);
   assert.match(landing, /themeClasses\.pagePublic/);
   assert.match(landing, /themeClasses\.publicBody/);
+  assert.match(
+    readFileSync(join(root, "../../design/tailwind.theme.ts"), "utf8"),
+    /max-w-public-content/,
+  );
+  assert.match(
+    readFileSync(join(root, "../../design/tokens/spacing.json"), "utf8"),
+    /"public-content-max".*1200px/,
+  );
   assert.match(landing, /Sign in/);
   assert.match(landing, /Create account/);
   assert.match(landing, /href="\/sign-in"/);
   assert.match(landing, /href="\/account-kind"/);
+  assert.match(landing, /href="\/pricing"/);
   assert.match(landing, /Fleet operations/);
   assert.match(landing, /<BrandMarkPublic/);
   assert.match(landing, /router\.replace\("\/home"\)/);
@@ -96,7 +106,15 @@ test("auth canvas and root layout do not include publicHeader", () => {
 test("public landing uses hero, description, and static map image", () => {
   assert.match(landing, /themeClasses\.publicHero/);
   assert.match(landing, /themeClasses\.publicDescription/);
+  assert.match(landing, /themeClasses\.publicValueGrid/);
+  assert.match(landing, /themeClasses\.publicPathRow/);
   assert.match(landing, /What Fleet is for/);
+  assert.match(landing, /Compliance dates/);
+  assert.match(landing, /View pricing/);
+  assert.match(landing, /Create company/);
+  assert.match(landing, /Create personal account/);
+  assert.match(landing, /href="\/sign-up"/);
+  assert.match(landing, /href="\/individual-sign-up"/);
   assert.match(landing, /\/landing\/hero-map\.svg/);
   assert.match(landing, /alt="Static street map"/);
   assert.match(landing, /onError/);
@@ -106,6 +124,7 @@ test("public landing uses hero, description, and static map image", () => {
   assert.doesNotMatch(landing, /<iframe/i);
   assert.doesNotMatch(landing, /api\.home\(/);
   assert.doesNotMatch(landing, /AppShell/);
+  assert.doesNotMatch(landing, /testimonial/i);
   assert.ok(existsSync(join(root, "public/landing/hero-map.svg")));
 });
 

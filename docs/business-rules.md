@@ -342,3 +342,25 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | A98 | Notification menu Could |
 | A99 | No new image/handover/driver coupling |
 
+
+## Pricing catalog (public web)
+
+146. **Public pricing page (Must):** Unsigned-in users may view plan catalog on web `/pricing` with four plans (Personal, Plus, Team, Fleet) matching [pricing-plans.md](pricing-plans.md) **(A100)**.
+147. **No checkout this slice:** Plan CTAs navigate to account-kind / sign-up only. No payment provider, invoices, or entitlement enforcement **(A101)**.
+148. **Signed-in redirect:** Owner/Admin on `/pricing` → operational `/home`. Driver → driver home. Same pattern as public landing **(A102)**.
+149. **Catalog source:** Prices and entitlements on the page must match [pricing-plans.md](pricing-plans.md); custom expirations only on Plus and Fleet (3 included/vehicle, +$0.70/mo per extra row) **(A103)**.
+150. **No mobile marketing pricing:** No Expo marketing pricing screen this slice **(A104)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E84 | Signed-in Owner/Admin opens `/pricing` | Client redirect `/home`; no marketing stay |
+| E85 | Signed-in driver opens `/pricing` | Client redirect driver home |
+| E86 | User expects paywall on CTA | No charge; sign-up only this slice |
+
+| ID | Assumption |
+| --- | --- |
+| A100 | Static catalog UI; no `/v1/plans` required |
+| A101 | Billing/entitlements deferred |
+| A102 | Pricing uses public chrome + session redirect like `/` |
+| A103 | Copy locked to pricing-plans.md |
+| A104 | Web-only public pricing |

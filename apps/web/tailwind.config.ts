@@ -20,6 +20,7 @@ const config: Config = {
       underlineOffset: fleetTheme.underlineOffset,
       maxWidth: {
         "auth-card": fleetTheme.spacing["auth-card"],
+        "public-content": fleetTheme.spacing["public-content-max"],
         "vehicle-side-slot": fleetTheme.spacing["vehicle-side-slot"],
         "vehicle-side-grid-max": fleetTheme.spacing["vehicle-side-grid-max"],
       },
