@@ -3,7 +3,7 @@
 **Stories:** US-01 (after **US-77** chooses Company; landing **US-85** may deep-link)  
 **Rules:** 1, 49–51, 117–119, 121; E1, E33, E34  
 **Surfaces:** Web compact; mobile comfortable if creating the company on phone. Same IA.  
-**Purpose:** Create **`account_kind = company`** tenant + first Owner with email, password, **registration number**, **VAT number**, and **address**. No company display name.  
+**Purpose:** Create **`account_kind = company`** tenant + first Owner with email, password, **company name**, **registration number**, **VAT number**, and **address**.  
 **Chrome:** Unauthenticated [auth canvas](_patterns.md). No sidebar. **No public landing header** — lockup stays inside `authCard`.
 
 **Entry:** Default from [account-kind.md](account-kind.md) → **Company**. Direct Company route allowed (Architect). **Individual** registration is a **separate** screen — [individual-sign-up.md](individual-sign-up.md). Do not merge both forms onto one page.
@@ -19,7 +19,7 @@ flowchart TB
     lockup[authLockup Fleet + Fleet operations]
     title[authTitle Create company]
     caption[authCaption]
-    form[Email Password Confirm Reg VAT Address]
+    form[Email Password Confirm Name Reg VAT Address]
     submit[buttonPrimary Create company]
     back[authLinks Back to account type]
     alt[authLinks link Already have an account? Sign in]
@@ -28,7 +28,7 @@ flowchart TB
 
 - Web: vertically centered `authCanvas`; card `max-w-auth-card`. Longer form: card scrolls inside the canvas; primary stays reachable (scroll, do not cover with keyboard).
 - Mobile: safe-area top, card full width inside `px-2`, not a second nested card.
-- **No** company display-name field (BA). Legal + address fields are required with Owner credentials.
+- Company **name** + legal + address fields are required with Owner credentials.
 - **Back to account type** in `authLinks` (`link`, `min-h-hit`) → [account-kind.md](account-kind.md). Include by default when user can still change kind before submit.
 
 ## Fields
@@ -38,6 +38,7 @@ flowchart TB
 | Email | `label` + `input` | Email keyboard |
 | Password | `label` + `input` | Secure; `caption` “At least 8 characters.” |
 | Confirm password | `label` + `input` | Mismatch → `inputError` + `errorText` |
+| Company name | `label` + `input` | Required non-empty (E33); max 120 |
 | Registration number | `label` + `input` | Required non-empty (E33) |
 | VAT number | `label` + `input` | Required non-empty (E33) |
 | Address | `label` + `input` (multiline OK if product uses textarea styled as `input`) | Required formatted text (E33). **Manual entry always allowed.** |
@@ -64,7 +65,7 @@ Assistive only — does not replace the Address field.
 | --- | --- |
 | Default | Empty fields in `authCard` |
 | Loading (submit) | Submit busy “Creating…”; fields disabled; form stays (no skeleton swap) |
-| Missing required (E33) | Empty registration / VAT / address → that field `inputError` + `errorText` (e.g. “Registration number is required.”). Company **not** created |
+| Missing required (E33) | Empty name / registration / VAT / address → that field `inputError` + `errorText` (e.g. “Company name is required.”). Company **not** created |
 | Password &lt; 8 | Password `inputError` + `errorText` “Password must be at least 8 characters.” Company not created |
 | Confirm mismatch | Confirm `inputError` + `errorText` “Passwords do not match.” |
 | Duplicate email (E1) | `bannerDanger` in card + email `inputError`: “This email cannot be used.” Company not created |
@@ -88,13 +89,14 @@ Assistive only — does not replace the Address field.
 | Link | link | `authLinks` + `link` / `linkHover` / `linkFocus` / `linkPressed` — `min-h-hit`, underline at rest |
 | Lookup fail | warning | `bannerWarning` or `caption` only (not danger) |
 
-No new tokens. No hex. No company name field.
+No new tokens. No hex.
 
 ## A11y
 
 | Control | Name |
 | --- | --- |
 | Screen | Create company |
+| Company name | Company name |
 | Registration number | Registration number |
 | VAT number | VAT number |
 | Address | Address |

@@ -175,7 +175,9 @@ Decorative / public-entry visual. **Not** live GPS. **Not** an interactive map p
 - Hero h1: **Fleet**
 - Hero supporting line: **Fleet operations**
 - Description h2: **What Fleet is for**
-- Description body (first-slice facts only — not slogans): **Create a company or a personal account. A company Owner is first; Owners and Admins manage drivers and vehicles for that company. An individual Owner manages their own vehicles only. Drivers are invited by companies. Vehicles keep license plate, insurance, inspection, country of registration, and road tax dates. Fleet warns when those dates are due soon or expired.**
+- Description body (first-slice facts only — not slogans): **Choose a company workspace or a personal account. With a company, you start as Owner; you and your Admins manage vehicles and invite drivers. With a personal account, you manage only your own vehicles—no drivers. For each vehicle, track plate, insurance, inspection, registration country, and road tax. Fleet flags dates that are coming due or already expired so nothing slips.**
+- Path card **Company** body: **Built for fleets with people and vehicles to coordinate. You create the company as Owner, add Admins when you need help, and invite drivers by email. Keep every vehicle’s plate, insurance, inspection, registration country, and road tax in one place. Drivers can log next travel, complete vehicle handovers, and record daily usage so you always know who had the vehicle and what was driven. Fleet flags dates that are due soon or already expired.**
+- Path card **Individual** body: **Built for you and the vehicles you own—no company setup and no driver roster. Track each vehicle’s plate, insurance, inspection, registration country, and road tax, plus optional custom expiration dates when you need them. Fleet warns before dates lapse and after they expire so renewals stay on your radar. You manage only your own vehicles; invites, handovers, and daily usage stay on the company path.**
 - Map alt: **Static street map**
 - Map credit (Should, OSM-derived): **Map data © OpenStreetMap**
 - Do **not** mention live tracking, maps as a product, dispatch, trips, or geofence.

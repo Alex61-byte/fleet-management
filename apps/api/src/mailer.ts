@@ -5,8 +5,23 @@ export type InviteMail = {
   companyName?: string;
 };
 
+export type ComplianceDigestItem = {
+  vehicleLabel: string;
+  licensePlate: string;
+  field: string;
+  state: "expired" | "due_soon";
+};
+
+export type ComplianceDigestMail = {
+  to: string;
+  companyName?: string;
+  items: ComplianceDigestItem[];
+  sentOn: string;
+};
+
 export interface Mailer {
   sendDriverInvite(mail: InviteMail): Promise<boolean>;
+  sendComplianceDigest(mail: ComplianceDigestMail): Promise<boolean>;
 }
 
 /** Escape text for safe HTML email bodies. */
@@ -161,12 +176,66 @@ export function driverInviteHtml(mail: InviteMail): string {
 </html>`;
 }
 
+
+export function complianceDigestText(mail: ComplianceDigestMail): string {
+  const product = mail.companyName?.trim() || "Fleet";
+  const lines = [
+    `${product} — compliance digest (${mail.sentOn} UTC)`,
+    "",
+    "Items needing attention:",
+    "",
+  ];
+  for (const item of mail.items) {
+    const state = item.state === "expired" ? "EXPIRED" : "due soon";
+    lines.push(`- ${item.vehicleLabel} (${item.licensePlate}): ${item.field} — ${state}`);
+  }
+  lines.push("", "Open the app to update dates or documents.", "", `—`, `${product} operations`);
+  return lines.join("\n");
+}
+
+export function complianceDigestHtml(mail: ComplianceDigestMail): string {
+  const product = escapeHtml(mail.companyName?.trim() || "Fleet");
+  const rows = mail.items
+    .map((item) => {
+      const state = item.state === "expired" ? "Expired" : "Due soon";
+      const color = item.state === "expired" ? "#b42318" : "#b54708";
+      return `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#0c1219;">${escapeHtml(item.vehicleLabel)} <span style="color:#4b5968;">(${escapeHtml(item.licensePlate)})</span></td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#0c1219;">${escapeHtml(item.field)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;color:${color};">${state}</td>
+      </tr>`;
+    })
+    .join("");
+  return `<!DOCTYPE html><html lang="en"><body style="margin:0;padding:0;background:#f6f8fb;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f8fb;"><tr><td align="center" style="padding:28px 16px;">
+  <table role="presentation" width="560" style="max-width:560px;width:100%;background:#fff;border:1px solid #e2e8ef;border-radius:8px;">
+    <tr><td style="background:#0a1b30;padding:20px 24px;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:18px;font-weight:600;">${product} · Compliance digest</td></tr>
+    <tr><td style="padding:20px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#4b5968;">UTC day ${escapeHtml(mail.sentOn)} · up to 50 items</td></tr>
+    <tr><td style="padding:0 16px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <th align="left" style="padding:8px 12px;font-size:12px;color:#6b7a8c;text-transform:uppercase;">Vehicle</th>
+          <th align="left" style="padding:8px 12px;font-size:12px;color:#6b7a8c;text-transform:uppercase;">Field</th>
+          <th align="left" style="padding:8px 12px;font-size:12px;color:#6b7a8c;text-transform:uppercase;">State</th>
+        </tr>
+        ${rows}
+      </table>
+    </td></tr>
+  </table>
+  </td></tr></table></body></html>`;
+}
+
 /** No-op mailer for tests / missing config — reports not sent. */
 export class NullMailer implements Mailer {
   constructor(private readonly reason = "RESEND_API_KEY and RESEND_FROM are required") {}
 
   async sendDriverInvite(_mail: InviteMail): Promise<boolean> {
     console.warn(`@fleet/api invite email not sent (${this.reason})`);
+    return false;
+  }
+
+  async sendComplianceDigest(_mail: ComplianceDigestMail): Promise<boolean> {
+    console.warn(`@fleet/api compliance digest not sent (${this.reason})`);
     return false;
   }
 }
@@ -205,6 +274,38 @@ export class ResendMailer implements Mailer {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`@fleet/api Resend invite error to=${mail.to}: ${msg}`);
+      return false;
+    }
+  }
+
+  async sendComplianceDigest(mail: ComplianceDigestMail): Promise<boolean> {
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: this.from,
+          to: [mail.to],
+          subject: `Compliance digest · ${mail.sentOn} UTC`,
+          text: complianceDigestText(mail),
+          html: complianceDigestHtml(mail),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error(
+          `@fleet/api Resend digest failed status=${res.status} to=${mail.to} body=${body.slice(0, 500)}`,
+        );
+        return false;
+      }
+      console.log(`@fleet/api compliance digest sent to=${mail.to}`);
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`@fleet/api Resend digest error to=${mail.to}: ${msg}`);
       return false;
     }
   }

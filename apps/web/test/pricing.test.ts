@@ -39,26 +39,28 @@ test("catalog has four plans and kind split", () => {
 });
 
 test("prices match pricing-plans.md", () => {
-  assert.match(catalogDoc, /\*\*\$1\.50\*\*\/active vehicle\/mo/);
-  assert.match(catalogDoc, /\*\*\$9\*\*\/mo workspace/);
-  assert.match(catalogDoc, /\*\*\$5\*\*\/active vehicle\/mo/);
-  assert.match(catalogDoc, /\*\*\$8\*\*\/active vehicle\/mo/);
-  assert.match(catalogDoc, /\*\*\$0\.70\*\*/);
+  assert.match(catalogDoc, /\*\*\$2\.00\*\*\/active vehicle\/mo/);
+  assert.match(catalogDoc, /\*\*\$14\*\*\/mo workspace/);
+  assert.match(catalogDoc, /\*\*\$7\*\*\/active vehicle\/mo/);
+  assert.match(catalogDoc, /\*\*\$11\*\*\/active vehicle\/mo/);
+  assert.match(catalogDoc, /\*\*\$0\.80\*\*/);
 
   const personal = PRICING_PLANS.find((p) => p.code === "individual_personal")!;
   const plus = PRICING_PLANS.find((p) => p.code === "individual_plus")!;
   const team = PRICING_PLANS.find((p) => p.code === "company_team")!;
   const fleet = PRICING_PLANS.find((p) => p.code === "company_fleet")!;
-  assert.equal(personal.priceLabel, "$1.50");
-  assert.equal(plus.priceLabel, "$9");
-  assert.equal(team.priceLabel, "$5");
-  assert.equal(fleet.priceLabel, "$8");
+  assert.equal(personal.priceLabel, "$2");
+  assert.equal(plus.priceLabel, "$14");
+  assert.equal(team.priceLabel, "$7");
+  assert.equal(fleet.priceLabel, "$11");
   assert.equal(personal.ctaHref, "/individual-sign-up");
   assert.equal(plus.ctaHref, "/individual-sign-up");
   assert.equal(team.ctaHref, "/sign-up");
   assert.equal(fleet.ctaHref, "/sign-up");
-  assert.ok(plus.features.some((f) => f.included && /\$0\.70/.test(f.text)));
-  assert.ok(fleet.features.some((f) => f.included && /\$0\.70/.test(f.text)));
-  assert.ok(personal.features.some((f) => !f.included && /Custom expirations/.test(f.text)));
+  assert.ok(plus.features.some((f) => f.included && /\$0\.80/.test(f.text)));
+  assert.ok(fleet.features.some((f) => f.included && /\$0\.80/.test(f.text)));
+  assert.ok(plus.features.some((f) => f.included && /document vault/i.test(f.text)));
+  assert.ok(team.features.some((f) => f.included && /usage report/i.test(f.text)));
+  assert.ok(personal.features.some((f) => !f.included && /docs|digests|issues/i.test(f.text)));
   assert.ok(team.features.some((f) => !f.included && /Custom expirations/.test(f.text)));
 });

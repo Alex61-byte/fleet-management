@@ -20,7 +20,9 @@ import {
 } from "@fleet/sdk";
 import { FormEvent, useCallback, useId, useMemo, useRef, useState } from "react";
 import { ConfirmDeleteDialog, TrashIcon } from "./confirm-delete-dialog";
+import { VehicleDocumentsTab } from "./vehicle-documents-tab";
 import { VehicleHandoversTab } from "./vehicle-handovers-tab";
+import { VehicleIssuesTab } from "./vehicle-issues-tab";
 import { VehicleSideImageViewer } from "./vehicle-side-image-viewer";
 import { Field, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "./ui";
 import { themeClasses } from "../../../design/tailwind.theme";
@@ -39,7 +41,7 @@ const CUSTOM_EXPIRATION_MAX = 10;
 const CUSTOM_LABEL_MAX = 80;
 const DATE_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-type VehicleFormTab = "details" | "images" | "handovers";
+type VehicleFormTab = "details" | "images" | "handovers" | "documents" | "issues";
 
 type CustomExpirationDraft = {
   /** Server id when known; omitted on write for new rows. */
@@ -236,9 +238,13 @@ export function VehicleForm({
   const detailsTabId = useId();
   const imagesTabId = useId();
   const handoversTabId = useId();
+  const documentsTabId = useId();
+  const issuesTabId = useId();
   const detailsPanelId = useId();
   const imagesPanelId = useId();
   const handoversPanelId = useId();
+  const documentsPanelId = useId();
+  const issuesPanelId = useId();
 
   const removeCustomTarget = useMemo(
     () => customExpirations.find((row) => row.key === removeCustomKey) ?? null,
@@ -463,6 +469,42 @@ export function VehicleForm({
             onClick={() => setTab("handovers")}
           >
             Handovers
+          </button>
+        ) : null}
+        {vehicle?.id ? (
+          <button
+            id={documentsTabId}
+            type="button"
+            role="tab"
+            aria-selected={tab === "documents"}
+            aria-controls={documentsPanelId}
+            tabIndex={tab === "documents" ? 0 : -1}
+            className={
+              tab === "documents"
+                ? themeClasses.vehicleFormTabSelected
+                : themeClasses.vehicleFormTab
+            }
+            onClick={() => setTab("documents")}
+          >
+            Documents
+          </button>
+        ) : null}
+        {vehicle?.id ? (
+          <button
+            id={issuesTabId}
+            type="button"
+            role="tab"
+            aria-selected={tab === "issues"}
+            aria-controls={issuesPanelId}
+            tabIndex={tab === "issues" ? 0 : -1}
+            className={
+              tab === "issues"
+                ? themeClasses.vehicleFormTabSelected
+                : themeClasses.vehicleFormTab
+            }
+            onClick={() => setTab("issues")}
+          >
+            Issues
           </button>
         ) : null}
       </div>
@@ -857,7 +899,29 @@ export function VehicleForm({
         </div>
       ) : null}
 
-      {tab !== "handovers" ? (
+      {vehicle?.id && tab === "documents" ? (
+        <div
+          id={documentsPanelId}
+          role="tabpanel"
+          aria-labelledby={documentsTabId}
+          className={themeClasses.vehicleFormTabPanel}
+        >
+          <VehicleDocumentsTab vehicleId={vehicle.id} offline={offline} />
+        </div>
+      ) : null}
+
+      {vehicle?.id && tab === "issues" ? (
+        <div
+          id={issuesPanelId}
+          role="tabpanel"
+          aria-labelledby={issuesTabId}
+          className={themeClasses.vehicleFormTabPanel}
+        >
+          <VehicleIssuesTab vehicleId={vehicle.id} offline={offline} />
+        </div>
+      ) : null}
+
+      {tab === "details" || tab === "images" ? (
         <div className={themeClasses.vehicleFormDetails}>
           <PrimaryButton type="submit" busy={busy || Boolean(sideBusy)} disabled={offline}>
             {submitLabel}

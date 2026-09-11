@@ -62,6 +62,7 @@ test("sign-in branches by role; sign-up goes to /home", () => {
   assert.match(signIn, /href="\/account-kind"/);
   assert.match(signIn, /Create account/);
   assert.match(signUp, /router\.replace\("\/home"\)/);
+  assert.match(signUp, /Company name/);
   assert.match(signUp, /registration_number/);
   assert.match(signUp, /vat_number/);
   assert.match(signUp, /address/);

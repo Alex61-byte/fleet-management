@@ -41,6 +41,10 @@ export type Me = Principal & {
   must_change_password: boolean;
   login_enabled: boolean;
   totp_enabled: boolean;
+  /** Company display name when account_kind is company; null for individual. */
+  company_name: string | null;
+  /** True when company Owner must set a missing display name (legacy tenants). */
+  company_name_required: boolean;
 };
 
 export type AuthSuccess = {
@@ -802,6 +806,78 @@ export type CreateDailyUsageInput = {
   end_time: string;
 };
 
+export type ComplianceDocType =
+  | "insurance"
+  | "inspection"
+  | "road_tax"
+  | "registration"
+  | "other";
+
+export type ComplianceDocument = {
+  id: string;
+  vehicle_id: string;
+  company_id: string;
+  doc_type: ComplianceDocType;
+  label: string;
+  content_type: string;
+  byte_size: number;
+  path: string;
+  url: string;
+  created_at: string;
+};
+
+export type IssueSource = "manual" | "handover";
+export type IssueStatus = "open" | "closed";
+
+export type VehicleIssue = {
+  id: string;
+  vehicle_id: string;
+  company_id: string;
+  created_by_principal_id: string | null;
+  source: IssueSource;
+  handover_id: string | null;
+  title: string;
+  description: string;
+  status: IssueStatus;
+  created_at: string;
+  closed_at: string | null;
+};
+
+export type CompanyDailyUsage = {
+  id: string;
+  company_id: string;
+  driver_id: string;
+  driver_email: string | null;
+  vehicle_id: string;
+  usage_date: string;
+  start_place: string;
+  start_distance: number;
+  end_place: string;
+  end_distance: number;
+  distance_unit: OdometerUnit;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  vehicle: DailyUsageVehicleSummary | null;
+};
+
+export type ServiceDueItem = {
+  vehicle_id: string;
+  vehicle: DailyUsageVehicleSummary | null;
+  handover_id: string;
+  handover_created_at: string;
+  next_service_days: number;
+  next_service_distance: number;
+  next_service_distance_unit: OdometerUnit;
+  days_elapsed: number;
+  days_overdue: number | null;
+  vehicle_mileage: number | null;
+  handover_mileage: number;
+  distance_remaining: number | null;
+  due_by_days: boolean;
+  due_by_distance: boolean;
+};
+
 export function odometerUnitLabel(unit: OdometerUnit): string {
   return unit === "mi" ? "Miles" : "Kilometers";
 }
@@ -972,6 +1048,34 @@ export class FleetClient {
     return data as T;
   }
 
+  /** Text/CSV (or other non-JSON) authenticated GET. */
+  private async requestText(
+    method: string,
+    path: string,
+    opts?: { auth?: boolean; _skipRefresh?: boolean; _retried?: boolean },
+  ): Promise<string> {
+    const headers: Record<string, string> = { accept: "*/*" };
+    if (opts?.auth !== false) {
+      const access = this.tokens.getAccess();
+      if (access) headers.authorization = `Bearer ${access}`;
+    }
+    const res = await fetch(`${this.baseUrl}${path}`, { method, headers });
+    if (
+      res.status === 401 &&
+      opts?.auth !== false &&
+      !opts?._skipRefresh &&
+      !opts?._retried
+    ) {
+      const renewed = await this.tryRefresh();
+      if (renewed) {
+        return this.requestText(method, path, { ...opts, _retried: true });
+      }
+      throw await readError(res);
+    }
+    if (!res.ok) throw await readError(res);
+    return res.text();
+  }
+
   /** Conditional GET helper (ADR-020). */
   private conditionalGet<T>(path: string, etag?: string | null) {
     const headers: Record<string, string> = {};
@@ -985,6 +1089,7 @@ export class FleetClient {
   register(input: {
     email: string;
     password: string;
+    name: string;
     registration_number: string;
     vat_number: string;
     address: string;
@@ -993,6 +1098,11 @@ export class FleetClient {
       body: input,
       auth: false,
     });
+  }
+
+  /** Owner — set company display name (register required; legacy backfill). */
+  setCompanyName(input: { name: string }) {
+    return this.request<Me>("PATCH", "/v1/company/name", { body: input });
   }
 
   registerIndividual(input: { email: string; password: string }) {
@@ -1233,6 +1343,7 @@ export class FleetClient {
     );
   }
 
+
   /** US-63 — list own Daily usage (newest first). */
   listDriverDailyUsage() {
     return this.request<{ items: DailyUsage[] }>("GET", "/v1/driver/daily-usage");
@@ -1241,6 +1352,88 @@ export class FleetClient {
   /** US-61 — create Daily usage against active next-travel vehicle. */
   createDriverDailyUsage(input: CreateDailyUsageInput) {
     return this.request<DailyUsage>("POST", "/v1/driver/daily-usage", { body: input });
+  }
+
+  /** US-93/94 — list compliance documents for a vehicle. */
+  listVehicleDocuments(vehicleId: string) {
+    return this.request<{ items: ComplianceDocument[] }>(
+      "GET",
+      `/v1/vehicles/${vehicleId}/documents`,
+    );
+  }
+
+  /** US-93 — upload compliance PDF/image. */
+  uploadVehicleDocument(
+    vehicleId: string,
+    input: { doc_type: ComplianceDocType; label?: string; file: SideImageUploadFile },
+  ) {
+    const form = new FormData();
+    form.append("doc_type", input.doc_type);
+    if (input.label !== undefined) form.append("label", input.label);
+    appendImageFormPart(form, "file", input.file, "document");
+    return this.request<ComplianceDocument>("POST", `/v1/vehicles/${vehicleId}/documents`, {
+      formData: form,
+    });
+  }
+
+  /** US-94 — delete compliance document. */
+  deleteVehicleDocument(vehicleId: string, docId: string) {
+    return this.request<void>("DELETE", `/v1/vehicles/${vehicleId}/documents/${docId}`);
+  }
+
+  /** US-96 — company daily usage report. */
+  listCompanyDailyUsage(opts?: { from?: string; to?: string }) {
+    const q = new URLSearchParams();
+    if (opts?.from) q.set("from", opts.from);
+    if (opts?.to) q.set("to", opts.to);
+    const qs = q.toString();
+    return this.request<{ items: CompanyDailyUsage[] }>(
+      "GET",
+      `/v1/reports/daily-usage${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  /** US-96 — company daily usage CSV as blob/text via low-level fetch. */
+  async downloadCompanyDailyUsageCsv(opts?: { from?: string; to?: string }): Promise<string> {
+    const q = new URLSearchParams();
+    if (opts?.from) q.set("from", opts.from);
+    if (opts?.to) q.set("to", opts.to);
+    const qs = q.toString();
+    const path = `/v1/reports/daily-usage.csv${qs ? `?${qs}` : ""}`;
+    return this.requestText("GET", path);
+  }
+
+  /** US-97 — service-due board. */
+  listServiceDue() {
+    return this.request<{ items: ServiceDueItem[] }>("GET", "/v1/service-due");
+  }
+
+  /** US-98 — list issues for vehicle. */
+  listVehicleIssues(vehicleId: string) {
+    return this.request<{ items: VehicleIssue[] }>("GET", `/v1/vehicles/${vehicleId}/issues`);
+  }
+
+  /** US-98 — create manual issue. */
+  createVehicleIssue(vehicleId: string, input: { title: string; description?: string }) {
+    return this.request<VehicleIssue>("POST", `/v1/vehicles/${vehicleId}/issues`, { body: input });
+  }
+
+  /** US-98 — close issue (Owner/Admin). */
+  closeVehicleIssue(vehicleId: string, issueId: string) {
+    return this.request<VehicleIssue>(
+      "POST",
+      `/v1/vehicles/${vehicleId}/issues/${issueId}/close`,
+    );
+  }
+
+  /** US-95 — trigger compliance digest send for tenant Owners/Admins. */
+  sendComplianceDigest() {
+    return this.request<{
+      sent: number;
+      skipped: number;
+      reason: string;
+      item_count?: number;
+    }>("POST", "/v1/compliance-digest/send");
   }
 }
 

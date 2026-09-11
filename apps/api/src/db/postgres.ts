@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import type {
   DriverDailyUsage,
+  VehicleComplianceDocument,
+  VehicleIssue,
   DriverTravelSelection,
   OdometerUnit,
   Principal,
@@ -265,11 +267,28 @@ export class PostgresStore implements Store {
 
   async insertCompany(company: CompanyInsert): Promise<void> {
     await this.q(
-      `INSERT INTO companies (id, account_kind, registration_number, vat_number, address)
-       VALUES ($1,$2,$3,$4,$5)`,
+      `INSERT INTO companies (id, account_kind, name, registration_number, vat_number, address)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
       [
         company.id,
         company.accountKind,
+        company.name,
+        company.registrationNumber,
+        company.vatNumber,
+        company.address,
+      ],
+    );
+  }
+
+  async updateCompany(company: CompanyInsert): Promise<void> {
+    await this.q(
+      `UPDATE companies
+       SET account_kind = $2, name = $3, registration_number = $4, vat_number = $5, address = $6
+       WHERE id = $1`,
+      [
+        company.id,
+        company.accountKind,
+        company.name,
         company.registrationNumber,
         company.vatNumber,
         company.address,
@@ -279,7 +298,7 @@ export class PostgresStore implements Store {
 
   async findCompany(id: string): Promise<CompanyInsert | undefined> {
     const { rows } = await this.q(
-      `SELECT id, account_kind, registration_number, vat_number, address
+      `SELECT id, account_kind, name, registration_number, vat_number, address
        FROM companies WHERE id = $1`,
       [id],
     );
@@ -287,6 +306,7 @@ export class PostgresStore implements Store {
       | {
           id: string;
           account_kind: string;
+          name: string | null;
           registration_number: string;
           vat_number: string;
           address: string;
@@ -296,6 +316,7 @@ export class PostgresStore implements Store {
     return {
       id: row.id,
       accountKind: row.account_kind === "individual" ? "individual" : "company",
+      name: row.name ?? "",
       registrationNumber: row.registration_number ?? "",
       vatNumber: row.vat_number ?? "",
       address: row.address ?? "",
@@ -780,6 +801,182 @@ export class PostgresStore implements Store {
   async deleteDailyUsageForDriver(driverId: string): Promise<void> {
     await this.q("DELETE FROM driver_daily_usages WHERE driver_id=$1", [driverId]);
   }
+
+  async listDailyUsageForCompany(
+    companyId: string,
+    opts?: { from?: string; to?: string },
+  ): Promise<DriverDailyUsage[]> {
+    const params: unknown[] = [companyId];
+    let sql = `SELECT id, company_id, driver_id, vehicle_id,
+              to_char(usage_date, 'YYYY-MM-DD') AS usage_date,
+              start_place, end_place, start_distance, end_distance, distance_unit,
+              start_time, end_time, created_at
+       FROM driver_daily_usages
+       WHERE company_id=$1`;
+    if (opts?.from) {
+      params.push(opts.from);
+      sql += ` AND usage_date >= $${params.length}`;
+    }
+    if (opts?.to) {
+      params.push(opts.to);
+      sql += ` AND usage_date <= $${params.length}`;
+    }
+    sql += ` ORDER BY created_at DESC`;
+    const { rows } = await this.q(sql, params);
+    return rows.map(mapDailyUsage);
+  }
+
+  async insertComplianceDocument(row: VehicleComplianceDocument): Promise<void> {
+    await this.q(
+      `INSERT INTO vehicle_compliance_documents
+        (id, company_id, vehicle_id, doc_type, label, storage_path, content_type, byte_size, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,to_timestamp($9/1000.0))`,
+      [
+        row.id,
+        row.companyId,
+        row.vehicleId,
+        row.docType,
+        row.label,
+        row.storagePath,
+        row.contentType,
+        row.byteSize,
+        row.createdAt,
+      ],
+    );
+  }
+
+  async listComplianceDocuments(
+    vehicleId: string,
+    companyId: string,
+  ): Promise<VehicleComplianceDocument[]> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_compliance_documents
+       WHERE vehicle_id=$1 AND company_id=$2
+       ORDER BY created_at DESC`,
+      [vehicleId, companyId],
+    );
+    return rows.map(mapComplianceDoc);
+  }
+
+  async findComplianceDocument(
+    id: string,
+    companyId: string,
+  ): Promise<VehicleComplianceDocument | undefined> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_compliance_documents WHERE id=$1 AND company_id=$2`,
+      [id, companyId],
+    );
+    return rows[0] ? mapComplianceDoc(rows[0]) : undefined;
+  }
+
+  async deleteComplianceDocument(id: string, companyId: string): Promise<void> {
+    await this.q(`DELETE FROM vehicle_compliance_documents WHERE id=$1 AND company_id=$2`, [
+      id,
+      companyId,
+    ]);
+  }
+
+  async countComplianceDocuments(vehicleId: string, companyId: string): Promise<number> {
+    const { rows } = await this.q(
+      `SELECT count(*)::int AS n FROM vehicle_compliance_documents WHERE vehicle_id=$1 AND company_id=$2`,
+      [vehicleId, companyId],
+    );
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  async insertIssue(row: VehicleIssue): Promise<void> {
+    await this.q(
+      `INSERT INTO vehicle_issues
+        (id, company_id, vehicle_id, created_by_principal_id, source, handover_id, title, description, status, created_at, closed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,to_timestamp($10/1000.0),$11)`,
+      [
+        row.id,
+        row.companyId,
+        row.vehicleId,
+        row.createdByPrincipalId,
+        row.source,
+        row.handoverId,
+        row.title,
+        row.description,
+        row.status,
+        row.createdAt,
+        row.closedAt != null ? new Date(row.closedAt).toISOString() : null,
+      ],
+    );
+  }
+
+  async updateIssue(row: VehicleIssue): Promise<void> {
+    await this.q(
+      `UPDATE vehicle_issues SET status=$3, closed_at=$4
+       WHERE id=$1 AND company_id=$2`,
+      [
+        row.id,
+        row.companyId,
+        row.status,
+        row.closedAt != null ? new Date(row.closedAt).toISOString() : null,
+      ],
+    );
+  }
+
+  async listIssuesForVehicle(vehicleId: string, companyId: string): Promise<VehicleIssue[]> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_issues WHERE vehicle_id=$1 AND company_id=$2
+       ORDER BY created_at DESC`,
+      [vehicleId, companyId],
+    );
+    return rows.map(mapIssue);
+  }
+
+  async findIssue(id: string, companyId: string): Promise<VehicleIssue | undefined> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_issues WHERE id=$1 AND company_id=$2`,
+      [id, companyId],
+    );
+    return rows[0] ? mapIssue(rows[0]) : undefined;
+  }
+
+  async listLatestHandoversForCompany(companyId: string): Promise<VehicleHandover[]> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_handovers WHERE company_id=$1 AND status <> 'voided'
+       ORDER BY created_at DESC`,
+      [companyId],
+    );
+    return rows.map(mapHandover);
+  }
+
+  async hasComplianceDigestSend(
+    companyId: string,
+    principalId: string,
+    sentOn: string,
+  ): Promise<boolean> {
+    const { rows } = await this.q(
+      `SELECT 1 FROM compliance_digest_sends
+       WHERE company_id=$1 AND principal_id=$2 AND sent_on=$3 LIMIT 1`,
+      [companyId, principalId, sentOn],
+    );
+    return rows.length > 0;
+  }
+
+  async recordComplianceDigestSend(
+    companyId: string,
+    principalId: string,
+    sentOn: string,
+  ): Promise<void> {
+    await this.q(
+      `INSERT INTO compliance_digest_sends (company_id, principal_id, sent_on)
+       VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+      [companyId, principalId, sentOn],
+    );
+  }
+
+  async listOwnerAdminPrincipals(companyId: string): Promise<Principal[]> {
+    const { rows } = await this.q(
+      `SELECT * FROM principals WHERE company_id=$1 AND role IN ('owner','admin')`,
+      [companyId],
+    );
+    return rows.map(mapPrincipal);
+  }
+
 }
 
 function mapDailyUsage(row: pg.QueryResultRow): DriverDailyUsage {
@@ -797,5 +994,36 @@ function mapDailyUsage(row: pg.QueryResultRow): DriverDailyUsage {
     startTime: row.start_time,
     endTime: row.end_time,
     createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  };
+}
+
+
+function mapComplianceDoc(row: pg.QueryResultRow): VehicleComplianceDocument {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    vehicleId: row.vehicle_id,
+    docType: row.doc_type,
+    label: row.label ?? "",
+    storagePath: row.storage_path,
+    contentType: row.content_type,
+    byteSize: Number(row.byte_size),
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  };
+}
+
+function mapIssue(row: pg.QueryResultRow): VehicleIssue {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    vehicleId: row.vehicle_id,
+    createdByPrincipalId: row.created_by_principal_id ?? null,
+    source: row.source,
+    handoverId: row.handover_id ?? null,
+    title: row.title,
+    description: row.description ?? "",
+    status: row.status,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    closedAt: row.closed_at ? new Date(row.closed_at).getTime() : null,
   };
 }

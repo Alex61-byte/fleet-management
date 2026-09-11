@@ -1,12 +1,14 @@
 CREATE TABLE IF NOT EXISTS companies (
   id UUID PRIMARY KEY,
   account_kind TEXT NOT NULL DEFAULT 'company' CHECK (account_kind IN ('company', 'individual')),
+  name TEXT NOT NULL DEFAULT '',
   registration_number TEXT NOT NULL DEFAULT '',
   vat_number TEXT NOT NULL DEFAULT '',
   address TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS registration_number TEXT NOT NULL DEFAULT '';
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS vat_number TEXT NOT NULL DEFAULT '';
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT '';
@@ -192,3 +194,47 @@ CREATE INDEX IF NOT EXISTS driver_daily_usages_driver_created
 CREATE INDEX IF NOT EXISTS driver_daily_usages_company
   ON driver_daily_usages (company_id);
 
+
+
+CREATE TABLE IF NOT EXISTS vehicle_compliance_documents (
+  id UUID PRIMARY KEY,
+  company_id UUID NOT NULL REFERENCES companies (id),
+  vehicle_id UUID NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+  doc_type TEXT NOT NULL CHECK (doc_type IN ('insurance', 'inspection', 'road_tax', 'registration', 'other')),
+  label TEXT NOT NULL DEFAULT '',
+  storage_path TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  byte_size INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS vehicle_compliance_documents_vehicle
+  ON vehicle_compliance_documents (vehicle_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS vehicle_compliance_documents_company
+  ON vehicle_compliance_documents (company_id);
+
+CREATE TABLE IF NOT EXISTS vehicle_issues (
+  id UUID PRIMARY KEY,
+  company_id UUID NOT NULL REFERENCES companies (id),
+  vehicle_id UUID NOT NULL REFERENCES vehicles (id) ON DELETE CASCADE,
+  created_by_principal_id UUID REFERENCES principals (id) ON DELETE SET NULL,
+  source TEXT NOT NULL CHECK (source IN ('manual', 'handover')),
+  handover_id UUID REFERENCES vehicle_handovers (id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS vehicle_issues_vehicle_status
+  ON vehicle_issues (vehicle_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS vehicle_issues_company
+  ON vehicle_issues (company_id);
+
+CREATE TABLE IF NOT EXISTS compliance_digest_sends (
+  company_id UUID NOT NULL REFERENCES companies (id),
+  principal_id UUID NOT NULL REFERENCES principals (id) ON DELETE CASCADE,
+  sent_on DATE NOT NULL,
+  PRIMARY KEY (company_id, principal_id, sent_on)
+);

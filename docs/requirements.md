@@ -137,6 +137,8 @@ flowchart TD
 
 ### In scope
 
+Web **application footer** chrome on public, auth, Owner/Admin, and driver shells: product name + copyright; secondary links to existing public routes including **Terms** (`/terms`) and **Privacy** (`/privacy`) (US-100–US-103, US-106, US-108). Signed-in OA footer uses **Billing** (`/billing`) instead of **Pricing** (US-104). Public **Terms and Conditions** at `/terms` (US-105) and **Privacy** notice at `/privacy` (US-107)—static product copy, public chrome like `/pricing`; no API. Global operations: Privacy covers personal-data processing at a product-draft level (not lawyer-certified CMS).
+
 Account-kind split at signup (**Company** | **Individual**); Individual self-register + personal workspace; Individual own-vehicle management (compliance-lite); Company-only driver invite/admin; grandfather existing tenants as Company. Auth + company (reg number, VAT, address + free lookup assist), Owner/Admin users, driver **invite via Resend**, driver **self-set password** on accept (web + mobile), subsequent driver login, minimal home, hard delete of driver profiles, vehicle records with compliance dates, optional **current vehicle mileage**, and expiry warnings, optional vehicle side appearance images (FRONT/LEFT/RIGHT/BACK) via Supabase Storage references, driver **Handover Out/In** (mileage, next service days/distance, optional damages text + images), Owner/Admin **Handovers** history tab on vehicle (read-only), driver **Daily usage** create + own list (gated on active next-travel).
 
 ### Commercial catalog (definition only)
@@ -144,6 +146,12 @@ Account-kind split at signup (**Company** | **Individual**); Individual self-reg
 Paid **pricing plans** (2 Individual + 2 Company) are defined in [pricing-plans.md](pricing-plans.md) for packaging and competitive positioning. **Metering, checkout, entitlements enforcement, and Stripe (or equivalent) are not in the current engineering slice** until a dedicated billing feature is scheduled.
 
 ### Out of scope
+
+- Expo / mobile native footer or tab-bar footer
+- Other legal pages beyond approved **Terms** (`/terms`) and **Privacy** (`/privacy`); lawyer-certified legal CMS; in-product DSAR workflow / rights portal
+- Footer app version / environment badge
+- Footer PII or tenant branding
+- Terms or Privacy clickwrap / must-accept gate before sign-up or use
 
 - Individual inviting or managing drivers; Admins on Individual workspaces
 - Converting Individual ↔ Company; multi-Owner Individual workspaces
@@ -174,6 +182,14 @@ Paid **pricing plans** (2 Individual + 2 Company) are defined in [pricing-plans.
 
 | Priority | Item |
 | --- | --- |
+| **Must** | Signed-in OA footer **Billing** replaces **Pricing**; web `/billing` placeholder without checkout (US-104) |
+| **Must** | Web footer on public, auth, OA shell, driver shell with **© year Fleet** (US-100–US-102) |
+| **Must** | Public **Terms and Conditions** at `/terms` with required section set (US-105); no acceptance gate this slice |
+| **Must** | **Terms** footer link on **all** web footer variants (public, auth, OA, driver) (US-106) |
+| **Must** | Public **Privacy** notice at `/privacy` with required section set for global ops (US-107); no acceptance gate |
+| **Must** | **Privacy** footer link on **all** web footer variants (US-108) |
+| **Should** | Footer other secondaries: Home/Landing and Pricing or Billing per session (US-103, US-104) |
+| **Won't** | Mobile/Expo footer; version badge; legal CMS; Terms/Privacy clickwrap; in-product DSAR portal |
 | **Must** | Signup entry offers **Company** vs **Individual** account kind |
 | **Must** | Company signup unchanged (email, password ≥8, reg, VAT, address) → company tenant + Owner |
 | **Must** | Individual signup: email + password ≥8 only (no reg/VAT/company address) → personal tenant + Owner |
@@ -247,7 +263,7 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 | ID | Assumption |
 | --- | --- |
 | A1 | Expiry warning window is **30 days** for **insurance, inspection, and road tax** only. |
-| A2 | Compliance **documents** (insurance/inspection/tax/registration files) remain **out of scope**. **Vehicle side appearance images** (FRONT/LEFT/RIGHT/BACK) are **in scope** and are **not** compliance documents **(A35–A40)**. |
+| A2 | Compliance **documents** (insurance/inspection/tax/registration/other files) are **in scope** (vault US-93/94; product hard cap). **Vehicle side appearance images** (FRONT/LEFT/RIGHT/BACK) remain separate and are **not** compliance documents **(A35–A40)**. |
 | A3 | *(Retired)* Temp-password reuse rule. Superseded by invite + self-set password; no Admin temp password to reuse. |
 | A4 | Minimum password length is **8** for all passwords in this slice (Owner/Admin, driver on invite accept). |
 | A5 | Last Owner cannot be deleted/removed. |
@@ -274,7 +290,8 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 | A26 | **Create-time invite send is Must.** If Resend fails after the driver profile is created, **keep the profile** in pending-invite state (`must_change_password` true) and **surface send failure** to Owner/Admin so they can retry (**Should** resend). Do not roll back the driver solely because email failed. |
 | A27 | Invitation delivery channel is **email via Resend** only in this slice (no SMS). |
 | A28 | No temporary password is set or shown to Admin for new drivers. |
-| A29 | Company **registration number**, **VAT number**, and **address** are **required** strings on sign-up (reasonable max length; exact caps are implementation detail within product limits). |
+| A29 | Company **name**, **registration number**, **VAT number**, and **address** are **required** strings on sign-up (name max 120; other caps as product limits). |
+| A29a | Existing **company** tenants with empty name: **Owner** must set name via prompt; Admin not required. |
 | A30 | Address **lookup** is client-side free Nominatim/OSM-style assist; user may also type free-text. Stored value is **formatted address text**; **lat/lon optional**, not required. |
 | A31 | Paid geocoding / Google Places is **out of scope**. Product does not require server-side paid maps. |
 | A32 | Access token is **short-lived** (product default **~15 minutes**). Absolute **refresh-family** lifetime is **14 days** from family start; refresh rotation **does not** extend `expires_at`. |
@@ -322,7 +339,7 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 7. One date each for insurance / inspection / road tax / registration, or start and end?
 8. Where must the warning appear (list, vehicle detail, both)? Any count of “expiring soon”?
 9. Exact meaning of “car inspections needed based on country regulations” if not a catalog—free-text note plus date, or dates only?
-10. ~~Sign-up company fields~~ **Resolved this slice:** registration number, VAT, address required; company **display name** still not required unless added later.
+10. ~~Sign-up company fields~~ **Resolved:** company **name**, registration number, VAT, address required; legacy empty name → Owner prompt (A29a).
 11. ~~Session: stay signed in?~~ **Resolved (US-29, US-30):** Stay signed in across app restarts. Short-lived access tokens renew silently via refresh. Forced re-auth only after **14 days** absolute session lifetime **per refresh-token family**, or on **that client’s** explicit sign-out / family revoke / disabled or deleted principal. **Parallel sessions allowed**. No sign-out-everywhere in this slice.
 12. If TOTP enable is interrupted mid-setup, is TOTP off until confirmed?
 13. Disable driver: who may re-enable (Owner only vs Admin too)? Stories assume Owner or Admin.

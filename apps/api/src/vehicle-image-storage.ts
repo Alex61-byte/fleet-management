@@ -180,6 +180,28 @@ export function handoverDamageObjectKey(
 
 export const MAX_HANDOVER_DAMAGE_IMAGES = 10;
 
+export const MAX_COMPLIANCE_DOC_BYTES = 10 * 1024 * 1024;
+/** Product hard cap per vehicle (Fleet max); plan included slots are commercial. */
+export const MAX_COMPLIANCE_DOCS_PER_VEHICLE = 40;
+
+export function complianceDocObjectKey(
+  companyId: string,
+  vehicleId: string,
+  docId: string,
+  ext: string,
+): string {
+  return `${companyId}/${vehicleId}/docs/${docId}.${ext}`;
+}
+
+/** Detect PDF or image for compliance vault. */
+export function detectComplianceUpload(bytes: Uint8Array): { mime: string; ext: string } | null {
+  if (bytes.length >= 5 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+    return { mime: "application/pdf", ext: "pdf" };
+  }
+  return detectImage(bytes);
+}
+
+
 export function parseVehicleSide(raw: string): VehicleSide {
   const side = raw.trim().toUpperCase();
   if (side === "FRONT" || side === "LEFT" || side === "RIGHT" || side === "BACK") {

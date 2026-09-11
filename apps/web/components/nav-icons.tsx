@@ -8,7 +8,9 @@ export type NavIconName =
   | "shield"
   | "user-cog"
   | "more"
-  | "bell";
+  | "bell"
+  | "wrench"
+  | "report";
 
 const strokeProps = {
   fill: "none",
@@ -93,6 +95,24 @@ function BellGlyph() {
   );
 }
 
+function WrenchGlyph() {
+  return (
+    <path
+      {...strokeProps}
+      d="M14.7 6.3a4 4 0 0 0-5.6 5.6L4 17v3h3l5.1-5.1a4 4 0 0 0 5.6-5.6l-2.2 2.2-1.8-1.8 2-2.1Z"
+    />
+  );
+}
+
+function ReportGlyph() {
+  return (
+    <>
+      <path {...strokeProps} d="M7 4.5h7.5L17.5 7.5V19.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1Z" />
+      <path {...strokeProps} d="M14.5 4.5V8h3.5M9 12h6M9 15.5h6" />
+    </>
+  );
+}
+
 const glyphs: Record<NavIconName, () => ReactNode> = {
   home: HomeGlyph,
   users: UsersGlyph,
@@ -101,6 +121,8 @@ const glyphs: Record<NavIconName, () => ReactNode> = {
   "user-cog": UserCogGlyph,
   more: MoreGlyph,
   bell: BellGlyph,
+  wrench: WrenchGlyph,
+  report: ReportGlyph,
 };
 
 /** Decorative Owner/Admin nav glyph — color via currentColor / parent text class. */
@@ -128,6 +150,10 @@ export function navIconForHref(href: string): NavIconName {
       return "users";
     case "/vehicles":
       return "truck";
+    case "/service-due":
+      return "wrench";
+    case "/reports/daily-usage":
+      return "report";
     case "/security":
       return "shield";
     case "/admins":

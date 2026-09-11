@@ -1,6 +1,7 @@
 import { vehiclesNavA11yLabel } from "@fleet/sdk";
 import { Redirect, Tabs, useRouter } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
+import { CompanyNameDialog } from "../../components/company-name-dialog";
 import { NavIcon, tabBarIconForName } from "../../components/nav-icons";
 import {
   OwnerHeaderNotifications,
@@ -42,6 +43,8 @@ export default function OwnerLayout() {
 
   return (
     <OwnerNotificationsProvider>
+    <>
+    <CompanyNameDialog />
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: TAB_BAR_BG, height: 44 },
@@ -144,6 +147,7 @@ export default function OwnerLayout() {
         }}
       />
     </Tabs>
+    </>
     </OwnerNotificationsProvider>
   );
 }

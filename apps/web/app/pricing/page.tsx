@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AppFooter } from "../../components/app-footer";
 import { BrandMarkPublic, OfflineBanner, Skeleton } from "../../components/ui";
 import { themeClasses } from "../../../../design/tailwind.theme";
 import { useAuth } from "../../lib/auth-context";
@@ -186,6 +187,7 @@ export default function PublicPricingPage() {
           a card.
         </p>
       </div>
+      <AppFooter variant="public" />
     </div>
   );
 }

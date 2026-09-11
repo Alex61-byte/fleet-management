@@ -4,7 +4,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 
 ## Rules
 
-1. **Company creation (Company path):** Completing **Company** sign-up with **email**, **password**, **company registration number**, **VAT number**, and **address** creates one **company** tenant (`account_kind = company`, with those company fields stored) and one **Owner** who can sign in with that email and password **(A29)**. See also **117–120** for account kinds and Individual create.
+1. **Company creation (Company path):** Completing **Company** sign-up with **email**, **password**, **company name**, **company registration number**, **VAT number**, and **address** creates one **company** tenant (`account_kind = company`, with those company fields stored) and one **Owner** who can sign in with that email and password **(A29)**. See also **117–120** for account kinds and Individual create.
 2. **Roles this slice:** **Owner** and **Admin** (company users), **Driver** (company driver profile), and **Individual Owner** (Owner on `account_kind = individual`). Admin and Driver **only** on Company tenants. No dispatcher, no mechanic.
 3. **Who creates whom:** **Company** sign-up creates first Company Owner. **Individual** sign-up creates sole Individual Owner. **Company Owner** creates Admins. **Company Owner and Admin** create/manage drivers and company fleet. **Individual Owner** manages **own** vehicles only—**not** drivers or Admins **(A84–A86)**.
 4. **Surfaces:** Owner/Admin may use **web** and **mobile**. **Drivers** may use **web and mobile** for **invite accept / set password**, subsequent login, and **minimal driver home** (including **next-travel vehicle selection + odometer**, **Handover Out/In**, and **Daily usage**). Drivers still do **not** use Owner/Admin management UI (fleet create/edit, driver admin, Admins, TOTP settings).
@@ -56,7 +56,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 46. **Invite email match:** Accept flow may collect or display email; continuation is allowed only when the email matches the pending invited driver bound to the valid token **(A25)**.
 47. **Expired or invalid invite:** Expired, unknown, reused, or revoked invite tokens **cannot** be used to set a password **(E27)**.
 48. **Resend invitation (Should):** Owner/Admin **should** be able to resend invite for a company driver who is still pending accept (`must_change_password` true, no password set). Resend **rotates** token and **restarts** 7-day TTL; attempts Resend email again **(A24, A26)**.
-49. **Company legal fields:** **Registration number** and **VAT number** are required non-empty strings on company create **(A29)**.
+49. **Company legal fields:** **Company name**, **registration number**, and **VAT number** are required non-empty strings on company create **(A29)**. Existing company tenants with an empty name must be completed by the **Owner** via a one-time prompt **(A29a)**.
 50. **Company address:** **Address** is required on company create as formatted text (and optional structured parts only if needed for lookup UX). Lat/lon optional **(A30)**.
 51. **Address lookup:** Clients **may** use free OpenStreetMap/Nominatim-style lookup to assist address entry. Lookup is **assistive**, not a paid API requirement. Failure of lookup must not block typing a valid address manually **(A30, A31)**.
 
@@ -104,7 +104,8 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | E30 | Resend fails on create (or resend) after profile exists | Driver profile **remains** pending invite; Owner/Admin **sees send failure**; can retry resend (**Should**). Not a silent success. |
 | E31 | Pending driver tries normal email/password sign-in before accept | Access denied; must use invite accept **(rule 44)**. |
 | E32 | Resend invite for driver who already accepted (password set) | No new invite required for onboarding; resend pending-only (no re-open of accepted invite as temp-password substitute). |
-| E33 | Sign-up missing registration number, VAT, or address (or password &lt; 8) | Company/Owner **not** created. |
+| E33 | Sign-up missing company name, registration number, VAT, or address (or password &lt; 8) | Company/Owner **not** created. |
+| E33a | Company Owner session with empty company name | Blocking prompt until name saved; Admin not required to set. |
 | E34 | Address lookup unavailable or returns no results | User may still enter address as free text; sign-up not blocked solely by lookup failure **(rule 51)**. |
 | E35 | Side image is not an image type (non-image file) | Upload rejected for that side; no new reference; other vehicle fields unchanged if saved separately. |
 | E36 | Side image larger than 5 MB | Upload rejected for that side; prior image for that side kept if any. |
@@ -186,7 +187,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 91. **Distance values (Must):** Start and end distance ≥ 0, max **1** decimal. **end_distance ≥ start_distance**. If `vehicle.mileage` is set, **start_distance ≥ vehicle.mileage** **(A61, E62)**. Daily usage **must not** update `vehicle.mileage` **(A62, 69 extended)**.
 92. **Date and times (Must):** `usage_date` is a **local calendar date** (default **today** local on new form). `start_time` / `end_time` are **local wall-clock** times on that date; **end_time ≥ start_time** **(A63, E63)**. Product does not require a timezone control this slice.
 93. **Multiplicity (Must):** **Multiple** Daily usage rows per driver per date are **allowed** **(A64)**.
-94. **Who reads (Must):** Driver may **list own** Daily usage only (newest first). **No** Owner/Admin Daily usage history UI this slice **(A65, E64)**. Drivers do not see other drivers’ entries.
+94. **Who reads (Must):** Driver may **list own** Daily usage only (newest first). **Company** Owner/Admin may list company-wide Daily usage report + CSV (**US-96**); Individual Owner/Admin → forbidden. Drivers do not see other drivers’ entries.
 95. **Immutability (Must):** No edit or delete of Daily usage after successful create this slice **(A66, E65)**.
 96. **Company isolation (Must):** Create/list scoped to caller’s company and principal **(A8, E66)**.
 97. **Surfaces (Must):** Driver Daily usage on **web and mobile** minimal driver experience; entry from driver **home hub** (opt-in task screen; not auto-opened on login) **(A67)**.
@@ -201,7 +202,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | E61 | Missing/invalid required fields | Rejected; no partial row |
 | E62 | Distance invalid, end &lt; start, or start below vehicle.mileage floor | Rejected |
 | E63 | end_time &lt; start_time same usage_date | Rejected |
-| E64 | Owner/Admin or other driver reads this driver’s usage APIs/UI | Denied / empty not-found as implemented |
+| E64 | Other driver reads this driver’s usage; Individual Owner/Admin company report | Denied; Company Owner/Admin use `/v1/reports/daily-usage` |
 | E65 | Edit/delete existing Daily usage | Not offered; rejected if attempted |
 | E66 | Cross-company vehicle/ids | Not found / no change |
 | E67 | Offline submit attempt | No create; client blocks submit |
@@ -216,7 +217,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | A62 | Daily usage **never** writes `vehicle.mileage` (handover remains the write-through path) |
 | A63 | Date = local calendar; times = local `HH:mm`; end ≥ start same date; default date = today local |
 | A64 | Multiple entries per day allowed |
-| A65 | Driver own create/list only; Owner reporting **out** |
+| A65 | Driver own create/list; Company Owner/Admin company report + CSV |
 | A66 | No edit/delete this slice |
 | A67 | Web + mobile driver hub task screen; no auto-open on login |
 | A68 | Offline consistent with handover forms |
@@ -270,7 +271,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 
 117. **Account kinds (Must):** Every tenant has exactly one **account kind**: **`company`** or **`individual`**, set at sign-up and **immutable** this slice **(A82, A89)**.
 118. **Who may self-register (Must):** An unsigned-in person may create **either** a Company account **or** an Individual account. Drivers still **cannot** self-register; they are invited by Company Owner/Admin only **(10, A85)**.
-119. **Company create (Must):** Choosing **Company** and completing sign-up with email, password (≥ 8), registration number, VAT, and address creates one **company** tenant (`account_kind = company`) with those legal/address fields and one **Owner** **(1, 49–51, A29)**. Missing legal fields → no tenant **(E33)**.
+119. **Company create (Must):** Choosing **Company** and completing sign-up with email, password (≥ 8), company name, registration number, VAT, and address creates one **company** tenant (`account_kind = company`) with those name/legal/address fields and one **Owner** **(1, 49–51, A29)**. Missing required fields → no tenant **(E33)**. Legacy empty name → Owner backfill **(A29a, E33a)**.
 120. **Individual create (Must):** Choosing **Individual** and completing sign-up with **email** and **password** (≥ 8) only creates one **individual** tenant (`account_kind = individual`) and one **Owner** for that workspace. **Must not** require registration number, VAT, or company address **(A83, E73)**.
 121. **Email uniqueness (Must):** Login email remains unique across **all** identities (Company Owner/Admin/Driver and Individual Owner) **(A6, E1, E74)**.
 122. **Driver invite Company-only (Must):** Only **Owner** or **Admin** of a **`company`** tenant may create, edit, resend-invite, disable, or hard-delete **drivers**. Individual Owners, drivers, and unsigned-in users cannot **(3, 10, 25, 31, A85, E75)**.
@@ -364,3 +365,98 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | A102 | Pricing uses public chrome + session redirect like `/` |
 | A103 | Copy locked to pricing-plans.md |
 | A104 | Web-only public pricing |
+
+## Web application footer (chrome)
+
+151. **Web footer surface (Must):** A calm product **footer** appears on **web only** for: **public** pages (`/`, `/pricing`, `/terms`, `/privacy`), **auth** canvas pages (sign-in, sign-up, password reset, TOTP challenge, invite accept, account-kind), **Owner/Admin** shell (Company and Individual), and **driver minimal shell**. **Not** Expo mobile chrome or mobile tab bar **(A105)**.
+152. **Footer content minimum (Must):** Footer shows product name **Fleet** and copyright **© {current calendar year} Fleet**. No tenant name, user email, or other PII **(A106)**.
+153. **Secondary links (Should/Must mix):** Footer secondary links **must** include **Terms** → `/terms` and **Privacy** → `/privacy` on **every** web footer variant (public, auth, Owner/Admin, driver). Other secondaries remain session-aware: unsigned/auth **Pricing** → `/pricing`; signed-in OA **Billing** → `/billing` (no Pricing); drivers omit Pricing/Billing. Home/Landing per 161. **Must not** invent other legal “coming soon” stubs **(A107)**.
+154. **No build/version chrome (Won't this slice):** Footer does **not** show app version, git SHA, or environment badge unless a later story requires it **(A108)**.
+155. **Placement (Must):** **Public** and **auth**: page-end footer using a standard sticky-footer pattern (footer at bottom of viewport when content is short; after content when long). **Owner/Admin** and **driver** shells: footer at the **bottom of the main content column** (under page body), not a second Global Header and not replacing side nav / driver hub chrome **(A109)**.
+156. **Chrome separation (Must):** Footer does **not** change role gating, nav destinations, Global Header rules (101–104), or public header CTAs. It is shared chrome only **(A110)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E87 | Visitor expects legal links from footer | Terms and Privacy links available; no other legal stubs |
+| E88 | Mobile user expects app footer | No Expo footer this slice |
+| E89 | Short public page content | Footer still sits at bottom of viewport (sticky-footer pattern) |
+
+| ID | Assumption |
+| --- | --- |
+| A105 | Web-only footer; public, auth, OA, and driver web chromes |
+| A106 | Year is calendar year at render; product name **Fleet** sentence case |
+| A107 | No legal CMS; link only live routes (includes `/terms`, `/privacy`) |
+| A108 | Version string out of scope |
+| A109 | OA/driver: main column end; public/auth: full-width under page chrome |
+| A110 | Footer is presentational; no new API |
+
+## Web billing page & signed-in footer (US-104)
+
+157. **Signed-in footer link (Must):** When a principal is **signed in on web**, the application footer **must not** offer **Pricing** (`/pricing`). It **must** offer **Billing** → `/billing` for **Owner/Admin** (Company and Individual). Unsigned-in and auth-canvas footers keep **Pricing** **(A111)**.
+158. **Driver footer (Must):** Signed-in **drivers** do **not** get Pricing or Billing in the footer this slice (Home to driver hub only, plus copyright) **(A112)**.
+159. **Billing page surface (Must):** Web **`/billing`** is an authenticated **Owner/Admin** page under the management shell. Drivers and unsigned-in users are redirected or denied like other OA routes **(A113)**.
+160. **No checkout this slice (Must):** `/billing` does **not** collect payment methods, call Stripe (or any PSP), change entitlements, or invent invoices. It may show calm placeholder status and a read-only pointer to public plan catalog for unsigned visitors only via existing `/pricing` rules—signed-in users stay on Billing **(A114, extends A101)**.
+161. **Home footer target (Should):** Signed-in footer **Home** goes to operational home (`/home` Owner/Admin, `/driver` driver), not public `/` **(A115)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E90 | Signed-in OA opens footer Pricing | Link absent; use Billing |
+| E91 | Driver opens `/billing` | Denied / redirect driver home |
+| E92 | Unsigned-in opens `/billing` | Sign-in redirect |
+| E93 | User expects pay wall on Billing | No charge; placeholder only |
+
+| ID | Assumption |
+| --- | --- |
+| A111 | Footer secondary link is session-aware |
+| A112 | Drivers are not billing actors this slice |
+| A113 | Billing uses AppShell like Security/Home |
+| A114 | No PSP / no `/v1/billing` required |
+| A115 | Footer Home respects role home |
+
+## Web Terms and Conditions (US-105, US-106)
+
+162. **Terms surface (Must):** Public web **`/terms`** shows **Terms and Conditions** for product **Fleet**. Uses **public chrome** (public header + public body + AppFooter `public`) like `/pricing`. **No** `/v1` or backend **(A116)**.
+163. **Terms audience (Must):** Page is readable **signed out**. Signed-in users may open `/terms` without forced sign-out; no role gate **(A117)**.
+164. **Required sections (Must):** Static copy **must** include distinct sections covering at least: (1) service description (SaaS fleet: vehicles, drivers, compliance, handovers, daily usage), (2) accounts & tenancy (high-level), (3) acceptable use, (4) data handling high-level (tenant separation; not a full privacy policy), (5) disclaimer / no-warranty style, (6) limitation of liability style, (7) changes to terms, (8) contact placeholder. Title: **Terms and Conditions** **(A118)**.
+165. **No acceptance gate (Must):** Viewing or using the product this slice **does not** require scroll-wrap, checkbox, or re-accept of Terms **(A119)**.
+166. **Static product copy (Must):** Terms body is **product-owned** static content (markdown/TSX), not a CMS and **not** lawyer-certified counsel output. No payment-processing terms beyond stating in-product checkout is not offered yet if mentioned **(A120)**.
+167. **Terms footer visibility (Must):** **Terms** link visible on public, auth, OA, and driver web footers; label **Terms**. Navigates to `/terms` **(A121)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E94 | User expects Privacy | Available at `/privacy` and footer (US-107/108) |
+| E95 | User expects must-accept before sign-up/use | No gate this slice |
+| E96 | Mobile user expects in-app Terms chrome | Web `/terms` only; no Expo footer requirement |
+
+| ID | Assumption |
+| --- | --- |
+| A116 | FE-only static page; no API contract |
+| A117 | Public route; optional session unchanged |
+| A118 | Section set is AC floor; calm enterprise tone in Design/FE |
+| A119 | Clickwrap / re-accept is out of this slice |
+| A120 | Copy is product draft static text, not certified legal advice |
+| A121 | Terms link on all web footer variants including driver |
+
+## Web Privacy notice (US-107, US-108)
+
+168. **Privacy surface (Must):** Public web **`/privacy`** shows a **Privacy** notice for product **Fleet** (global operations). Uses **public chrome** like `/terms` and `/pricing`. **No** `/v1` or backend **(A122)**.
+169. **Privacy audience (Must):** Readable signed out; signed-in users may open `/privacy` with no role gate and no acceptance checkbox **(A123)**.
+170. **Required sections (Must):** Static copy **must** include at least: (1) who we are / controller placeholder, (2) scope (global product users), (3) personal data categories, (4) purposes and legal bases (high-level), (5) how we share / processors (high-level), (6) international transfers (high-level), (7) retention (high-level), (8) security (high-level), (9) your rights (access, correction, deletion, objection, complaint — high-level), (10) cookies / similar tech (honest to product), (11) children, (12) changes, (13) contact / requests placeholder. Title: **Privacy** **(A124)**.
+171. **Not a DSAR portal (Must):** Page does **not** implement in-product data-subject request workflows, automated export, or counsel-certified regional schedules **(A125)**.
+172. **Static product copy (Must):** Privacy body is product-owned static content, not a CMS and **not** lawyer-certified. May reference tenant-scoped operational data and auth identifiers actually used by Fleet **(A126)**.
+173. **Privacy footer visibility (Must):** **Privacy** link on every web footer variant; label **Privacy**; navigates to `/privacy` **(A127)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E97 | User expects full GDPR Article schedule / counsel letter | Product draft notice only; not certified legal advice |
+| E98 | User expects in-app DSAR form | Contact placeholder only this slice |
+| E99 | Mobile user expects Expo Privacy chrome | Web `/privacy` only; no Expo footer requirement |
+
+| ID | Assumption |
+| --- | --- |
+| A122 | FE-only static page; no API contract |
+| A123 | Public route; no clickwrap |
+| A124 | Section set is AC floor for global-ops privacy notice |
+| A125 | DSAR automation out of scope |
+| A126 | Copy is product draft, not certified legal advice |
+| A127 | Privacy link on all web footer variants including driver |
