@@ -72,6 +72,11 @@ export function registerFleetRoutes(ctx: RouteContext): void {
     return fleet.getVehicleHandover(req.claims!, id, handoverId);
   });
 
+  // US-111 — Company OA open Outs for notification menu
+  app.get("/v1/handovers/open", { preHandler: requireSession }, async (req) => {
+    return fleet.listOpenHandovers(req.claims!);
+  });
+
   app.get("/v1/vehicles/:id/documents", { preHandler: requireSession }, async (req) => {
     const { id } = req.params as { id: string };
     return fleet.listComplianceDocuments(req.claims!, id);

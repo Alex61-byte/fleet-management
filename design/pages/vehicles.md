@@ -23,7 +23,7 @@ tableWrap sticky header
 | --- | --- | --- |
 | Vehicle | `tableCellLink` | Primary identity: **`{Make} {Model}`** (single space between make and model). No underline at rest; hover `tableCellLinkHover`. Plate stays `tableCellMuted` (not underlined). Empty make or model: still join with one space; trim ends (e.g. make-only shows make). **Should (US-39):** when the vehicle has **≥1** side image, show a compact **presence cue** immediately after the identity string in the same cell (not a new column). |
 | Plate | `tableCellMuted` | License plate — secondary |
-| Mileage | `tableCellNum` / `caption` | **US-49:** when `mileage` is set, show `{n}` + unit short (`km` / `mi`) or full label; `font-tabular`. When null/unknown: **em dash** or empty cell — **no** fabricated `0`. Unit from `mileage_unit` / country (not editable on list). |
+| Mileage | `tableCellNum` / `caption` | **US-49:** when `mileage` is set, show `{n}` + unit short (`km` / `mi`) or full label; `font-tabular`. When null/unknown: **em dash** or empty cell — **no** fabricated `0`. Unit from `mileage_unit` / country (not editable on list). Displayed value is the latest of admin Details edit, handover submit, or driver next-travel odometer save — **no** new list controls. |
 | Country | `tableCellMuted` | Free text |
 | Date columns | `tableCellNum` | Tabular date; if due/expired, `badgeWarning` / `badgeExpired` **and** the date. Built-in Insurance / Inspection / Road tax only in these columns (Registration never badges). |
 
@@ -124,7 +124,8 @@ Tab chrome: `vehicleFormTabList` + `vehicleFormTab` / `vehicleFormTabSelected` (
 | Empty | Valid; means unknown/null — do not coerce to `0` on save |
 | Validation | Inline `errorText` or form `bannerDanger`: required only if product shows parse fail — “Enter a non-negative number with at most one decimal” (E42) |
 | Country change | Unit label updates immediately from country field; **no** conversion of typed/stored number (E43); optional calm `caption` only if needed — prefer silent label swap |
-| Edit load | Prepopulate stored number as plain decimal string; empty if null |
+| Edit load | Prepopulate stored number as plain decimal string; empty if null — may already reflect handover or driver next-travel odometer write-through (same field; no extra chrome) |
+| Sources | Owner/Admin list + Details show one reading: latest of **admin edit**, **handover** submit, or **driver next-travel** odometer save. Daily usage does **not** update this value. No new controls. |
 | A11y | Accessible name is the unit label (e.g. “Kilometers” or “Miles”); not color-only |
 
 One date each for built-ins (BA Q7 — **single date per item**). Custom rows also carry **one** `expires_on` each (US-86).

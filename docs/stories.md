@@ -861,9 +861,13 @@ When page specs exist, next specialist is **Senior Software Architect**.
   **When** I try to set vehicle mileage  
   **Then** the write fails and mileage is unchanged (E44).
 
-- **Given** a driver saves next-travel odometer  
+- **Given** a driver tries fleet vehicle POST/PATCH to set mileage  
+  **When** the request is processed  
+  **Then** the write fails and mileage is unchanged via that path (E44).
+
+- **Given** a driver saves next-travel odometer successfully  
   **When** the travel selection is stored  
-  **Then** vehicle.mileage is **not** updated (A43).
+  **Then** vehicle.mileage is updated to that odometer (A43 write-through; see US-112).
 
 
 ## US-49 — Owner/Admin list shows mileage when present **(Must)**
@@ -1088,10 +1092,38 @@ When page specs exist, next specialist is **Senior Software Architect**.
   **Then** rejected (E51).
 
 - **Given** I only PUT next-travel selection (no handover)  
-  **When** selection saves  
-  **Then** vehicle.mileage is still not updated by that path (A43 unchanged).
+  **When** selection saves successfully  
+  **Then** vehicle.mileage is updated from travel odometer (A43 write-through; same monotonic family as handover).
 
-## US-60 — Driver open-Out awareness **(Should)**
+## US-112 — Next-travel odometer write-through to vehicle mileage **(Must)**
+
+**As** an Owner or Admin  
+**I need** driver next-travel odometer saves to update fleet vehicle mileage  
+**So that** list and detail show the driver’s latest reading without a separate admin edit.
+
+**Acceptance**
+
+- **Given** a company vehicle has null mileage  
+  **When** a driver successfully PUTs next-travel with odometer M  
+  **Then** vehicle.mileage = M on Owner/Admin vehicle GET/list.
+
+- **Given** vehicle.mileage is 1000  
+  **When** a driver successfully PUTs next-travel with odometer 1005.5  
+  **Then** vehicle.mileage = 1005.5.
+
+- **Given** vehicle.mileage is 1000  
+  **When** a driver PUTs next-travel with odometer 999  
+  **Then** the request is rejected, travel is not activated, and mileage stays 1000.
+
+- **Given** a driver  
+  **When** they POST/PATCH `/v1/vehicles` to set mileage  
+  **Then** they remain forbidden (403); write-through is travel/handover only.
+
+- **Given** Daily usage is saved  
+  **When** I inspect fleet vehicle mileage  
+  **Then** mileage is still unchanged by Daily usage (A62).
+
+## US-60 — Driver open-Out awareness **(Must)**
 
 **As** a signed-in driver  
 **I need** to see that I have an open Out on my vehicle  
@@ -1107,32 +1139,105 @@ When page specs exist, next specialist is **Senior Software Architect**.
   **When** I open driver home / start with a selection  
   **Then** I can open Handover and start Out (if eligible).
 
-- **Given** I sign in as a driver  
+- **Given** I sign in as a driver with an open Out  
   **When** the session lands on driver home / start  
+  **Then** the open-Out / need-In cue is visible without opening Owner/Admin chrome (drivers still have no OA header).
 
-## US-61 — Create Daily usage **(Must)**
+- **Given** my open Out was voided (e.g. hard-delete path) or closed by In  
+  **When** I open driver home / start  
+  **Then** the open-Out cue is absent.
+
+## US-61 — Daily usage Day Start + End of Day **(Must)**
 
 **As** a signed-in driver  
-**I need** to log Daily usage for my active next-travel vehicle  
-**So that** start/end places, distances, and times for that use are recorded.
+**I need** to log Daily usage as **Day Start** and **End of Day** independently  
+**So that** I can save morning start without waiting until evening close.
 
 **Acceptance**
 
-- **Given** I have an active next-travel vehicle  
-  **When** I submit Date, Start place, Start distance, Start time, End place, End distance, End time — all valid  
-  **Then** a Daily usage row is stored for **me** and that **vehicle**, and I can see it in my list.
+- **Given** I have an active next-travel vehicle and no open Daily usage  
+  **When** I submit valid Day Start (Date, Start place, Start distance, Start time)  
+  **Then** an **open** Daily usage row is stored for **me** and that **vehicle**.
 
-- **Given** the form is opened fresh  
+- **Given** I have an open Daily usage  
+  **When** I submit valid End of Day (End place, End distance, End time)  
+  **Then** that row becomes **closed** with end fields set; start fields unchanged.
+
+- **Given** Day Start form is opened fresh  
   **When** I view Date  
-  **Then** it defaults to **today (local)** and I may change it to another calendar date.
+  **Then** it defaults to **today (local)** and I may change it.
 
-- **Given** save succeeds  
+- **Given** Day Start or End of Day succeeds  
   **When** I inspect fleet vehicle mileage  
-  **Then** `vehicle.mileage` is **unchanged** by this save (A62).
+  **Then** `vehicle.mileage` is **unchanged** (A62).
 
-- **Given** I already saved one entry for today  
-  **When** I submit another valid entry the same date  
-  **Then** both exist (A64).
+- **Given** I already closed one entry for today  
+  **When** I Day Start and End of Day again the same date  
+  **Then** both closed rows exist (A64).
+
+## US-113 — Day Start open row **(Must)**
+
+**As** a signed-in driver  
+**I need** Day Start to create only an open log  
+**So that** end fields are not required in the morning.
+
+**Acceptance**
+
+- **Given** valid Day Start  
+  **When** save succeeds  
+  **Then** status is **open**; end_place/end_distance/end_time are null/absent.
+
+- **Given** I already have an open Daily usage  
+  **When** I attempt another Day Start  
+  **Then** rejected (E68); existing open unchanged.
+
+- **Given** no active next-travel  
+  **When** I attempt Day Start  
+  **Then** rejected (E59).
+
+## US-114 — End of Day close open row **(Must)**
+
+**As** a signed-in driver  
+**I need** End of Day to complete my open log  
+**So that** the day-use is closed for Admin/Owner review.
+
+**Acceptance**
+
+- **Given** I have an open Daily usage  
+  **When** I submit valid End of Day  
+  **Then** row status is **closed** and list shows end fields.
+
+- **Given** I have **no** open Daily usage  
+  **When** I attempt End of Day  
+  **Then** rejected (E69); no new row invented.
+
+- **Given** end_distance &lt; start_distance or end_time &lt; start_time  
+  **When** I submit End of Day  
+  **Then** rejected (E62/E63); open stays open.
+
+## US-115 — Optional refuel on Daily usage **(Must)**
+
+**As** a signed-in driver  
+**I need** optional refuel amount and refuel-at-mileage on Day Start or End of Day  
+**So that** fleet owners can see fuel events with the day log.
+
+**Acceptance**
+
+- **Given** I omit both refuel fields  
+  **When** I save Day Start or End of Day  
+  **Then** row stores without refuel data.
+
+- **Given** I supply valid `refuel_amount` and/or `refuel_at_mileage` (≥0, ≤1 decimal)  
+  **When** I save  
+  **Then** values are stored; amount unit is **L** or **gal** from vehicle country (A34).
+
+- **Given** invalid refuel values  
+  **When** I save  
+  **Then** rejected (E70); no partial bad write.
+
+- **Given** refuel is saved  
+  **When** I inspect `vehicle.mileage`  
+  **Then** mileage is **unchanged** by refuel (A62).
 
 ## US-62 — Daily usage field validation **(Must)**
 
@@ -1142,29 +1247,37 @@ When page specs exist, next specialist is **Senior Software Architect**.
 
 **Acceptance**
 
-- **Given** any required field is missing  
+- **Given** any required field for the active save (Day Start or End of Day) is missing  
   **When** I submit  
-  **Then** no row is created (E61).
+  **Then** no bad write (E61).
 
 - **Given** start/end distance negative, non-numeric, or &gt;1 decimal  
   **When** I submit  
   **Then** rejected (E62).
 
-- **Given** end_distance &lt; start_distance  
+- **Given** end_distance &lt; start_distance on End of Day  
   **When** I submit  
   **Then** rejected (E62).
 
-- **Given** vehicle.mileage is set and start_distance &lt; vehicle.mileage  
+- **Given** vehicle.mileage is set and start_distance &lt; vehicle.mileage on Day Start  
   **When** I submit  
   **Then** rejected (E62).
+
+- **Given** I already have a **closed** Daily usage ending at E on this vehicle and start_distance &lt; E  
+  **When** I Day Start  
+  **Then** rejected (E62 / A61). Open rows do not set the start floor.
+
+- **Given** my last **closed** end on this vehicle is E  
+  **When** I open Day Start  
+  **Then** start distance is prefilled to at least E (Should).
 
 - **Given** end_time &lt; start_time on the usage date  
-  **When** I submit  
+  **When** I End of Day  
   **Then** rejected (E63).
 
 - **Given** active vehicle country is miles vs kilometres jurisdiction  
-  **When** I enter distances  
-  **Then** labels/stored unit follow A34 (no unit picker).
+  **When** I enter distances or refuel amount  
+  **Then** labels/stored units follow A34 (no unit picker).
 
 ## US-63 — List own Daily usage **(Must)**
 
@@ -1176,7 +1289,7 @@ When page specs exist, next specialist is **Senior Software Architect**.
 
 - **Given** I have one or more Daily usage rows  
   **When** I open Daily usage list  
-  **Then** I see **my** entries (vehicle identity/plate, date, places, distances+unit, times), newest first.
+  **Then** I see **my** entries (vehicle identity/plate, date, **open/closed status**, places, distances+unit, times, refuel when set), newest first.
 
 - **Given** I have no entries  
   **When** I open the list  
@@ -1823,11 +1936,11 @@ Public web only. Catalog: [pricing-plans.md](pricing-plans.md). Spec: [design/pa
 
 - **Given** I am Company Owner/Admin  
   **When** I open Daily usage report (optional `from`/`to` dates)  
-  **Then** I see company-scoped rows (driver email, vehicle, places, distances, times), newest first.
+  **Then** I see company-scoped rows (driver email, vehicle, **status**, places, distances, times, **refuel amount/unit and refuel-at-mileage when set**), newest first.
 
 - **Given** I request CSV  
   **When** export runs  
-  **Then** I receive `text/csv` of the same scope.
+  **Then** I receive `text/csv` of the same scope including status + refuel columns.
 
 - **Given** I am Individual Owner or Driver  
   **When** I call owner daily-usage report  
@@ -1856,6 +1969,18 @@ Public web only. Catalog: [pricing-plans.md](pricing-plans.md). Spec: [design/pa
 - **Given** Individual Owner  
   **When** I open Service due  
   **Then** only my vehicles appear (from my handovers if any; company drivers N/A).
+
+- **Given** a vehicle with service baseline and `0 < distance_remaining ≤ 2000` (same unit as next_service_distance / odometer) and not yet due by days or distance  
+  **When** I open Service due  
+  **Then** the vehicle appears as **approaching** by distance (distinct from fully due/overdue).
+
+- **Given** a vehicle is due/overdue by days **or** by distance (`distance_remaining ≤ 0` or days elapsed ≥ next_service_days)  
+  **When** I open Service due  
+  **Then** it still appears as due/overdue (US-97 baseline unchanged; approaching does not hide due).
+
+- **Given** `distance_remaining` is null (no usable vehicle.mileage vs baseline) or `> 2000` and not due by days  
+  **When** I open Service due  
+  **Then** that vehicle is not listed solely for approaching.
 
 ## US-98 — Create and close vehicle issues **(Must)**
 
@@ -2104,6 +2229,74 @@ Contracts for docs, issues, owner daily-usage report/CSV, service-due list, dige
 - **Given** I view an **auth** canvas footer  
   **When** the footer renders  
   **Then** I see **Privacy** → `/privacy`.
+
+## US-109 — Service approaching / due in OA notification menu **(Must)**
+
+**As** an Owner or Admin  
+**I need** the notification menu to include vehicles approaching service (≤ 2000 remaining distance) and already due/overdue for service  
+**So that** I see maintenance risk without only relying on the Service due board.
+
+**Acceptance**
+
+- **Given** a company vehicle is **approaching** service (`0 < distance_remaining ≤ 2000`, unit from vehicle country) **or** **due/overdue** per US-97 (days and/or distance)  
+  **When** I open the OA notification menu  
+  **Then** I see a **service** item for that vehicle (identity + approaching vs due/overdue; distance unit label when distance-based).
+
+- **Given** only compliance dates qualify and service does not  
+  **When** I open the menu  
+  **Then** compliance items still appear (US-72); service items are absent for non-qualifying vehicles.
+
+- **Given** Individual Owner with own vehicles approaching or due  
+  **When** I open the menu  
+  **Then** service items may appear for **my** vehicles only.
+
+- **Given** I am a Driver  
+  **When** I use driver surfaces  
+  **Then** I do not get the OA notification menu for service (driver cues are US-60 / US-110 only).
+
+## US-110 — Open Out notify Driver **(Must)**
+
+**As** a signed-in driver  
+**I need** a clear in-app signal while I have an active Handover Out not completed (In)  
+**So that** I complete custody return.
+
+**Acceptance**
+
+- **Given** I hold an **open Out** (In not done; not voided)  
+  **When** I open driver home / start or the handover entry point  
+  **Then** I am notified via the open-Out / need-In cue (strengthens US-60); no OS push, email, or SMS required this slice.
+
+- **Given** I complete In (or Out is voided)  
+  **When** I return to driver home  
+  **Then** the open-Out notify cue is cleared.
+
+- **Given** another driver holds an open Out on a vehicle  
+  **When** I open my driver home  
+  **Then** I do **not** see their open Out as my notify cue.
+
+## US-111 — Open Out notify Owner/Admin **(Must)**
+
+**As** a Company Owner or Admin  
+**I need** in-app notice when a company vehicle has an active Handover Out not completed (In)  
+**So that** I can see incomplete custody without waiting for history tab browsing only.
+
+**Acceptance**
+
+- **Given** a company vehicle has an **open Out** (In not done; not voided)  
+  **When** I open the OA notification menu  
+  **Then** I see an **open_out** item (vehicle identity; driver identity when known) and may use an optional board/list cue if Design adds one; **no** OS push/email/SMS this slice.
+
+- **Given** the Out is closed by In or voided  
+  **When** I open the menu (refreshed)  
+  **Then** that open_out item is gone.
+
+- **Given** Individual Owner (no company drivers / handover ops)  
+  **When** I open the notification menu  
+  **Then** open_out items are **N/A** / absent.
+
+- **Given** open Outs exist only in another company  
+  **When** I open my menu  
+  **Then** I never see them (company isolation).
 
 - **Given** I am signed in as **Owner/Admin**  
   **When** the footer renders  

@@ -251,7 +251,15 @@ export class FleetHandovers {
         for (const img of imageRows) {
           await tx.insertHandoverImage(img);
         }
-        await tx.updateVehicle({ ...vehicle, mileage });
+        const applied = await tx.applyVehicleMileageMonotonic(
+          vehicle.id,
+          claims.company_id,
+          mileage,
+        );
+        if (applied.status === "not_found") throw errors.notFound();
+        if (applied.status === "below_floor") {
+          throw errors.validation("Mileage cannot be lower than the vehicle’s current reading.");
+        }
       });
     } catch (err) {
       if (uploadedPaths.length && this.ctx.images) {
@@ -313,6 +321,29 @@ export class FleetHandovers {
     const row = await this.ctx.store.findHandover(handoverId, claims.company_id);
     if (!row || row.vehicleId !== vehicleId) throw errors.notFound();
     return this.ctx.handoverDetail(row, { signImages: true, vehicle });
+  }
+
+  /** US-111 — Company OA open Out list for notification menu. */
+  async listOpenHandovers(claims: AccessClaims) {
+    await assertCompanyTenantUser(this.ctx.store, claims);
+    const rows = await this.ctx.store.listOpenOutsForCompany(claims.company_id);
+    const items = [];
+    for (const row of rows) {
+      const vehicle = await this.ctx.store.findVehicle(row.vehicleId, claims.company_id);
+      items.push({
+        id: row.id,
+        vehicle_id: row.vehicleId,
+        company_id: row.companyId,
+        type: "out" as const,
+        status: "open" as const,
+        driver: await this.ctx.driverRef(row.driverId),
+        mileage: row.mileage,
+        mileage_unit: row.mileageUnit,
+        created_at: new Date(row.createdAt).toISOString(),
+        vehicle: vehicle ? this.ctx.vehicleSummary(vehicle) : null,
+      });
+    }
+    return { items };
   }
 
 }

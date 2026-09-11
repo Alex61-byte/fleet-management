@@ -77,6 +77,11 @@ export default function DriverTravelPage() {
   );
   const unit = selected?.odometer_unit ?? travel?.odometer_unit ?? "km";
   const unitLabel = odometerUnitLabel(unit);
+  const floorMileage = selected?.mileage ?? null;
+  const odometerHint =
+    floorMileage != null
+      ? `Must be at least ${floorMileage} ${unit}`
+      : unitLabel;
   const emptyFleet = vehicles !== null && vehicles.length === 0;
   const loading = vehicles === null || travel === undefined;
 
@@ -96,6 +101,20 @@ export default function DriverTravelPage() {
       const saved = await api.putDriverTravel({ vehicle_id: vehicleId, odometer: odometer.trim() });
       setTravel(saved);
       setOdometer(String(saved.odometer));
+      // Travel write-through updates vehicle.mileage — refresh list for floor + labels.
+      setVehicles((prev) =>
+        prev
+          ? prev.map((v) =>
+              v.id === saved.vehicle_id
+                ? {
+                    ...v,
+                    mileage: saved.odometer,
+                    mileage_unit: saved.odometer_unit,
+                  }
+                : v,
+            )
+          : prev,
+      );
     } catch (err) {
       setFormError(err instanceof FleetApiError ? err.message : "Could not save selection.");
     } finally {
@@ -171,7 +190,7 @@ export default function DriverTravelPage() {
                     })}
                   </SelectInput>
                 </Field>
-                <Field label={`Odometer (${unitLabel.toLowerCase()})`} hint={unitLabel}>
+                <Field label={`Odometer (${unitLabel.toLowerCase()})`} hint={odometerHint}>
                   <TextInput
                     inputMode="decimal"
                     value={odometer}

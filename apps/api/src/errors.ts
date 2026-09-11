@@ -66,4 +66,16 @@ export const errors = {
       "daily_usage_no_active_travel",
       "Select a vehicle for next travel before logging daily usage.",
     ),
+  dailyUsageAlreadyOpen: () =>
+    new AppError(
+      409,
+      "daily_usage_already_open",
+      "Finish End of Day on your open daily usage before starting another.",
+    ),
+  dailyUsageNoOpen: () =>
+    new AppError(
+      409,
+      "daily_usage_no_open",
+      "Start the day before logging End of Day.",
+    ),
 };

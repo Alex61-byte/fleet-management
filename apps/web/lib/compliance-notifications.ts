@@ -1,16 +1,17 @@
 "use client";
 
 import {
-  complianceNotificationItems,
-  type ComplianceNotificationItem,
+  notificationMenuItems,
+  type NotificationMenuItem,
 } from "@fleet/sdk";
 import { useCallback, useEffect, useState } from "react";
+import { api } from "./api";
 import { useAuth } from "./auth-context";
 import { queryVehicles } from "./fleet-queries";
 import { VEHICLES_CHANGED_EVENT } from "./vehicles-changed";
 
 export type ComplianceNotificationsState = {
-  items: ComplianceNotificationItem[];
+  items: NotificationMenuItem[];
   truncated: boolean;
   count: number;
   loading: boolean;
@@ -19,13 +20,13 @@ export type ComplianceNotificationsState = {
   refresh: () => Promise<void>;
 };
 
-/** OA Global Header feed — same vehicles source as US-28 (ADR-017). */
+/** OA Global Header feed — compliance + service + open_out (ADR-017). */
 export function useComplianceNotifications(
   enabled: boolean,
   offline = false,
 ): ComplianceNotificationsState {
   const { me } = useAuth();
-  const [items, setItems] = useState<ComplianceNotificationItem[]>([]);
+  const [items, setItems] = useState<NotificationMenuItem[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(Boolean(enabled));
@@ -51,8 +52,19 @@ export function useComplianceNotifications(
     setLoading(true);
     setError(null);
     try {
-      const res = await queryVehicles(me.company_id);
-      const projected = complianceNotificationItems(res.data.items);
+      const isCompany = me.account_kind === "company";
+      const [vehRes, serviceRes, openRes] = await Promise.all([
+        queryVehicles(me.company_id),
+        api.listServiceDue().catch(() => ({ items: [] })),
+        isCompany
+          ? api.listOpenHandovers().catch(() => ({ items: [] }))
+          : Promise.resolve({ items: [] }),
+      ]);
+      const projected = notificationMenuItems({
+        vehicles: vehRes.data.items,
+        serviceDue: serviceRes.items,
+        openOuts: openRes.items,
+      });
       setItems(projected.items);
       setTruncated(projected.truncated);
       setCount(projected.items.length);
@@ -60,7 +72,7 @@ export function useComplianceNotifications(
       setItems([]);
       setTruncated(false);
       setCount(0);
-      setError("Could not load compliance alerts.");
+      setError("Could not load alerts.");
     } finally {
       setLoading(false);
     }

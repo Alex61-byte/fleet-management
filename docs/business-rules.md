@@ -138,14 +138,14 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 61. **Confirm before delete (Must, A41):** Any in-product action that **deletes** a **user-visible** asset or record **must** present a **confirmation modal or sheet** and perform the delete **only** after explicit confirm. **Cancel** or dismiss leaves data unchanged. Applies to **driver hard-delete (25–27, US-27)**, **vehicle side image clear (58, US-37)**, and **all future delete features**. One-tap delete without confirm is **not** allowed.
 62. **Clear control (side images):** On a **filled** side, clear is offered via an **icon** control whose first activation **opens** the confirm modal—it does **not** clear on that first activation **(US-37, A41)**. Surfaces: **web and mobile**.
 63. **Outside rule 61:** Flows that are not “delete asset/record” (e.g. **disable** driver login, TOTP turn-off) follow their own stories. **Replace** side image (53) is not governed as delete-confirm under 61 this slice. **Already-empty** side: no delete confirm required; clear remains **idempotent** **(E37)**.
-64. **Vehicle mileage (Must):** A company vehicle may store an optional **current odometer / mileage reading** on the **vehicle record** (fleet master data). This is **not** the driver next-travel odometer row **(A42, A43)**.
+64. **Vehicle mileage (Must):** A company vehicle may store an optional **current odometer / mileage reading** on the **vehicle record** (fleet master data). Driver next-travel still stores its own odometer on the selection row; successful travel save also write-throughs to master mileage **(A42, A43)**.
 65. **Optional:** Create/edit may omit mileage or set it null/empty (**unknown**). Mileage is **not** required to save the vehicle **(A42)**.
 66. **Value when provided:** Non-negative number; **at most 1 decimal place** (same parse rules as driver odometer, rule 44). Negative, non-numeric, or >1 decimal → reject that write; other valid fields unchanged if saved separately **(E42)**.
 67. **Unit from country (not selectable):** Display and API **`mileage_unit`** are **derived** from `country_of_registration` with the **same** miles vs kilometres rules as odometer unit **(43, A34)**. Clients must not choose or override unit. Product shows one control labeled **Miles** or **Kilometers** accordingly **(A42)**.
-68. **Who writes mileage:** **Owner and Admin** of the vehicle’s company may set, change, or clear mileage on create/PATCH (web + mobile fleet UI). **Drivers** and unsigned-in users **must not** write `vehicle.mileage` **(20, 21)**. Driver travel odometer write path is unchanged and separate **(41–44, A43)**.
-69. **No automatic overwrite from travel:** Saving driver next-travel selection **must not** update `vehicle.mileage` in this slice **(A43)**. Future link is out of scope / Could.
+68. **Who writes mileage:** **Owner and Admin** of the vehicle’s company may set, change, or clear mileage on create/PATCH (web + mobile fleet UI). **Drivers** and unsigned-in users **must not** call fleet vehicle POST/PATCH **(20, 21)**. Server **may** set `vehicle.mileage` from successful **driver travel PUT** and **handover** Out/In **(A43, A52)**.
+69. **Travel write-through (Must):** Saving driver next-travel selection **does** set `vehicle.mileage` to the parsed odometer in the **same transaction** as the travel row **(A43)**. If `vehicle.mileage` is already set, odometer must be **≥** that value or the travel save is rejected (no partial write). If mileage is null, any valid odometer (≥ 0, ≤ 1 decimal) sets it. Daily usage still does **not** write-through **(A62)**.
 70. **Country change and unit:** If `country_of_registration` changes so derived unit flips (mi↔km), the **stored number is not auto-converted**; only the unit label/`mileage_unit` changes. Operators may need to re-enter mileage after a country correction **(E43)**.
-71. **Read surfaces (Must / Should):** Owner/Admin vehicle **list, detail, create, edit** show mileage when present; edit **prepopulates** stored mileage (empty if null) **(33, A21)**. Driver vehicle list **may** show current vehicle mileage **read-only** (**Should, A44**); drivers still cannot edit vehicles **(45)**.
+71. **Read surfaces (Must / Should):** Owner/Admin vehicle **list, detail, create, edit** show mileage when present; edit **prepopulates** stored mileage (empty if null) **(33, A21)** — including values last set by travel or handover write-through. Driver vehicle list **may** show current vehicle mileage **read-only** (**Should, A44**); drivers still cannot edit vehicles via fleet UI **(45)**.
 
 72. **Handover types (Must):** A vehicle **handover** is either **Out** (vehicle taken into driver custody) or **In** (vehicle returned). Out starts an open custody period; In closes it on the same vehicle **(A45)**.
 73. **Eligibility (Must):** Only a signed-in **driver** with usable password (invite accepted) may create handovers. The vehicle must be that driver’s **active next-travel** vehicle and in the **same company** **(A46, 41–46)**. Owner/Admin and unsigned-in users **cannot** create handovers **(E54)**.
@@ -153,11 +153,11 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 75. **In constraints (Must):** In is allowed only if there is an **open Out** on that vehicle **created by this same driver**. Success stores In and **closes** the pair **(A47, E48, E49)**.
 76. **Required fields (Must):** On both Out and In: **mileage**, **next_service_days**, **next_service_distance**. **Damages text** optional. **Damage images** optional **(A48, A49)**. Missing/invalid required → reject; no partial row **(E50)**.
 77. **Units (Must):** Handover mileage and next_service_distance unit are derived from vehicle **country of registration** with the same miles/km rules as odometer **(43, A34, A51)**. Clients must not choose unit. Value + unit stored at write.
-78. **Mileage write-through (Must):** On successful Out or In, set **`vehicle.mileage`** to the handover mileage **(A52)**. Plain next-travel PUT still must **not** update `vehicle.mileage` **(A43, 69)**.
+78. **Mileage write-through (Must):** On successful Out or In, set **`vehicle.mileage`** to the handover mileage **(A52)**. Successful next-travel PUT also sets `vehicle.mileage` from odometer **(A43, 69)**. Daily usage does **not** **(A62)**.
 79. **Monotonic mileage (Must):** Handover mileage ≥ 0, max 1 decimal. If `vehicle.mileage` is set, handover mileage must be **≥ vehicle.mileage**. On In, mileage must be **≥** paired Out mileage **(A53, E51)**.
 80. **Next service values (Must):** `next_service_days` integer **≥ 1**. `next_service_distance` number **≥ 0**, max 1 decimal **(A54, E52)**.
 81. **Damage images (Must):** Up to **10** images per handover; **image** types only; max **5 MB** each. Bytes in object storage; DB stores references linked to **handover** and **vehicle**. Not side-appearance slots and not compliance documents **(A50, A56, E53)**. Prefer **fail closed** if submitted images cannot be stored **(E58)**.
-82. **Who reads history (Must):** **Owner and Admin** of the company may list and view handover **history and detail** for company vehicles (read-only). **Drivers** do **not** get the Owner/Admin Handovers tab or other drivers’ full history **(A55, E55)**. Drivers **may** see their **own open Out** / need-to-In cue on driver home **(US-60 Should)**.
+82. **Who reads history (Must):** **Owner and Admin** of the company may list and view handover **history and detail** for company vehicles (read-only). **Drivers** do **not** get the Owner/Admin Handovers tab or other drivers’ full history **(A55, E55)**. Drivers **must** see their **own open Out** / need-to-In cue on driver home **(US-60 Must, US-110)**.
 83. **History immutability (Must):** No edit or delete of handovers this slice (except closing an open Out via In). No post-submit damage-image remove **(A55, E57)**.
 84. **Company isolation (Must):** All handover read/write scoped to caller’s company **(A8, E56)**.
 85. **Driver hard-delete and open Out (Must):** If a driver with an **open Out** is hard-deleted, that open Out must be **voided/cancelled** so the vehicle is not stuck open with no completable In. Closed handover history may be retained with driver marked unavailable as implemented **(A19 extended for custody only)**.
@@ -180,47 +180,50 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | E57 | Edit/delete past handover | Not offered; rejected if attempted. |
 | E58 | Storage failure on damage image during create | Fail closed; no handover with missing/broken image refs for the submitted set. |
 
-87. **Daily usage (Must):** A **Daily usage** record is a driver-authored log of vehicle use for a **calendar day** against the driver’s **active next-travel** vehicle **(A57)**.
-88. **Eligibility (Must):** Only a signed-in **driver** with usable password and an **active next-travel** selection may **create** Daily usage. Vehicle = that selection’s vehicle, same company **(A58, 41–46)**. No next-travel → no create **(E59)**. Owner/Admin/unsigned-in cannot create **(E60)**.
-89. **Required fields (Must):** **usage_date**, **start_place**, **start_distance**, **start_time**, **end_place**, **end_distance**, **end_time**. All required. Missing/invalid → reject; no partial row **(A59, E61)**.
-90. **Units (Must):** Start/end distance unit from vehicle **country of registration** (rules **43 / A34**). No client unit choice. Store **value + unit** at write **(A60)**.
-91. **Distance values (Must):** Start and end distance ≥ 0, max **1** decimal. **end_distance ≥ start_distance**. If `vehicle.mileage` is set, **start_distance ≥ vehicle.mileage** **(A61, E62)**. Daily usage **must not** update `vehicle.mileage` **(A62, 69 extended)**.
-92. **Date and times (Must):** `usage_date` is a **local calendar date** (default **today** local on new form). `start_time` / `end_time` are **local wall-clock** times on that date; **end_time ≥ start_time** **(A63, E63)**. Product does not require a timezone control this slice.
-93. **Multiplicity (Must):** **Multiple** Daily usage rows per driver per date are **allowed** **(A64)**.
-94. **Who reads (Must):** Driver may **list own** Daily usage only (newest first). **Company** Owner/Admin may list company-wide Daily usage report + CSV (**US-96**); Individual Owner/Admin → forbidden. Drivers do not see other drivers’ entries.
-95. **Immutability (Must):** No edit or delete of Daily usage after successful create this slice **(A66, E65)**.
-96. **Company isolation (Must):** Create/list scoped to caller’s company and principal **(A8, E66)**.
-97. **Surfaces (Must):** Driver Daily usage on **web and mobile** minimal driver experience; entry from driver **home hub** (opt-in task screen; not auto-opened on login) **(A67)**.
-98. **Offline (Must):** When the client is offline, Daily usage **submit is not available** (warn; primary disabled)—same standing pattern as driver handover forms **(A68, E67)**.
-99. **Hard delete driver (Must):** Hard-deleting a driver **removes** that driver’s Daily usage records **(A69)**.
-100. **Not handover (Must):** Daily usage does **not** create/close Out/In and does **not** require an open Out **(A57)**.
+87. **Daily usage (Must):** A **Daily usage** record is a driver-authored **day-use log** against the driver’s **active next-travel** vehicle. One logical row: **open** after **Day Start**, **closed** after **End of Day** **(A57)**.
+88. **Eligibility (Must):** Only a signed-in **driver** with usable password and an **active next-travel** selection may **Day Start**. Vehicle is **frozen from that travel** at Day Start **(A58, 41–46)**. No next-travel → no Day Start **(E59)**. Owner/Admin/unsigned-in cannot Day Start or End of Day **(E60)**.
+89. **Day Start required (Must):** **usage_date**, **start_place**, **start_distance**, **start_time**. Creates an **open** row. Missing/invalid → reject **(A59, E61)**. At most **one open** per driver; Day Start while open exists → reject **(A64, E68)**.
+90. **End of Day required (Must):** **end_place**, **end_distance**, **end_time**. Completes the driver’s **open** row. Missing/invalid → reject; open stays open **(A59, E61)**. **No open** → reject **(E69)**. Does **not** change start fields **(A66)**.
+91. **Units (Must):** Distance unit from vehicle country (**43 / A34**); store value + unit **(A60)**. Optional **refuel_amount** unit is **L** (km countries) or **gal** (mi countries) per same A34 map **(A60)**.
+92. **Distance values (Must):** ≥ 0, max **1** decimal. On End of Day: **end_distance ≥ start_distance**. On Day Start: **start_distance** ≥ max(**a** `vehicle.mileage` when set, **b** latest **closed** end_distance on same vehicle) **(A61, E62)**. Clients **Should** prefill start from that floor. Daily usage **must not** update `vehicle.mileage` **(A62)**.
+93. **Date and times (Must):** `usage_date` local calendar (default **today** on Day Start). Times local `HH:mm`; on End of Day **end_time ≥ start_time** **(A63, E63)**.
+94. **Optional refuel (Must):** On **either** Day Start or End of Day, optional **`refuel_amount`** and/or **`refuel_at_mileage`**, independently. If present: ≥ 0, max 1 decimal **(E70)**. No fuel cost/type. Refuel does **not** write `vehicle.mileage` **(A62)**.
+95. **Multiplicity (Must):** Multiple **closed** rows per driver per date allowed; at most **one open** per driver **(A64)**.
+96. **Who reads (Must):** Driver lists **own** rows (open+closed, newest first) with status + refuel when set. **Company** Owner/Admin report + CSV include status + refuel (**US-96**); Individual → forbidden **(A65)**.
+97. **Immutability (Must):** **Closed** rows: no free-form edit/delete **(A66, E65)**. **Open** rows: complete **only** via End of Day; not general PATCH of start fields **(A66)**.
+98. **Company isolation (Must):** Day Start / End of Day / list scoped to caller company and principal **(A8, E66)**.
+99. **Surfaces (Must):** Day Start and End of Day on **web and mobile** driver experience; hub entry; not auto-opened on login **(A67)**.
+100. **Offline / hard delete / not handover (Must):** Offline → both submits blocked **(A68, E67)**. Hard-delete driver removes their Daily usage **(A69)**. Not handover; open Out not required **(A57)**.
 
 | ID | Situation | Outcome |
 | --- | --- | --- |
-| E59 | No active next-travel | Cannot create; no row |
-| E60 | Owner/Admin/unsigned-in create | Denied; no row |
-| E61 | Missing/invalid required fields | Rejected; no partial row |
-| E62 | Distance invalid, end &lt; start, or start below vehicle.mileage floor | Rejected |
+| E59 | No active next-travel | Cannot Day Start; no row |
+| E60 | Owner/Admin/unsigned-in Day Start / End of Day | Denied; no change |
+| E61 | Missing/invalid required fields for the save | Rejected; no partial bad write |
+| E62 | Distance invalid, end &lt; start, or start below max(vehicle.mileage, latest closed end on vehicle) | Rejected |
 | E63 | end_time &lt; start_time same usage_date | Rejected |
-| E64 | Other driver reads this driver’s usage; Individual Owner/Admin company report | Denied; Company Owner/Admin use `/v1/reports/daily-usage` |
-| E65 | Edit/delete existing Daily usage | Not offered; rejected if attempted |
+| E64 | Other driver reads this driver’s usage; Individual Owner/Admin company report | Denied; Company OA use `/v1/reports/daily-usage` |
+| E65 | Free-form edit/delete closed; general PATCH start on open | Not offered; rejected |
 | E66 | Cross-company vehicle/ids | Not found / no change |
-| E67 | Offline submit attempt | No create; client blocks submit |
+| E67 | Offline submit attempt | No Day Start / End of Day; client blocks |
+| E68 | Day Start while driver already has open Daily usage | Rejected; open unchanged |
+| E69 | End of Day with no open Daily usage | Rejected; no invent |
+| E70 | refuel_amount or refuel_at_mileage invalid (negative / non-numeric / &gt;1 decimal) | Rejected |
 
 | ID | Assumption |
 | --- | --- |
-| A57 | Daily usage = day-use **log**, distinct from handover custody and from next-travel selection row |
-| A58 | Create allowed only with **active next-travel**; vehicle frozen from that selection at save |
-| A59 | Seven fields all **required**; no optional subset this slice |
-| A60 | Distance unit = A34 from vehicle country; store value + unit |
-| A61 | Monotonic distances: end ≥ start; start ≥ vehicle.mileage when set; ≥0 max 1 decimal |
-| A62 | Daily usage **never** writes `vehicle.mileage` (handover remains the write-through path) |
-| A63 | Date = local calendar; times = local `HH:mm`; end ≥ start same date; default date = today local |
-| A64 | Multiple entries per day allowed |
-| A65 | Driver own create/list; Company Owner/Admin company report + CSV |
-| A66 | No edit/delete this slice |
-| A67 | Web + mobile driver hub task screen; no auto-open on login |
-| A68 | Offline consistent with handover forms |
+| A57 | Daily usage = day-use **log** with open→closed lifecycle; distinct from handover and next-travel |
+| A58 | Day Start only with **active next-travel**; vehicle frozen at Day Start |
+| A59 | Day Start: usage_date, start_place, start_distance, start_time; End of Day: end_place, end_distance, end_time; refuel fields optional independently |
+| A60 | Distance unit = A34; refuel_amount unit L/gal from same A34 map; store value + unit |
+| A61 | end ≥ start on close; start ≥ max(vehicle.mileage when set, latest **closed** end on vehicle); ≥0 max 1 decimal |
+| A62 | Daily usage **never** writes `vehicle.mileage` |
+| A63 | Date local calendar; times local HH:mm; end ≥ start same date on close; default date today on Day Start |
+| A64 | Multiple closed per day OK; at most one open per driver |
+| A65 | Driver own list; Company OA report + CSV include status + refuel |
+| A66 | Closed: no free-form edit/delete; open: complete only via End of Day (not general start PATCH) |
+| A67 | Web + mobile driver hub; Day Start and End of Day task surfaces; no auto-open on login |
+| A68 | Offline consistent with handover forms for both saves |
 | A69 | Driver hard-delete removes that driver’s Daily usage rows |
 
 
@@ -232,8 +235,8 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 103. **Fleet icon (Must):** Global Header includes the **Fleet** product mark/icon (same product identity language as existing lockup). Decorative vs named control is Design; product name remains **Fleet** **(A72)**.
 104. **Notification control (Must):** Global Header includes a **notification icon button** that is always visible in that chrome (enabled when signed in as Owner/Admin) **(A73)**.
 105. **Notification menu (Must):** Activating the button **opens** the notification menu; activating again, outside dismiss, or explicit close **closes** it. Only one menu instance **(A73)**.
-106. **MVP notification sources (Must):** Menu items in this slice are derived from **existing company vehicle compliance dates** only: **insurance_on**, **inspection_on**, **road_tax_on** when **within 30 days** of today or **already past** (same window as rule **19** / **A1**). **`registration_on` is not** a notification source **(A13, A74)**.
-107. **Item grain (Must):** One menu item per **vehicle + section** that meets rule 106 (e.g. plate/make-model + section + status soon/expired). No fabricated items for vehicles with all-null or all outside window **(A75)**.
+106. **MVP notification sources (Must):** Menu items are derived from **(a)** company/individual vehicle **compliance dates** — **insurance_on**, **inspection_on**, **road_tax_on** when **within 30 days** of today or **already past** (rule **19** / **A1**); **`registration_on` is not** a source **(A13)**; **(b)** **service** status from latest non-voided handover baseline — **approaching** when `0 < distance_remaining ≤ 2000` (same unit as next_service_distance / odometer from vehicle country) **or** **due/overdue** per Service-due board rules (days and/or `distance_remaining ≤ 0`) **(A128, A129)**; **(c)** **open Out incomplete** — vehicle has status **open** Out (In not done, not voided), **Company** tenants only **(A130)**. Custom-expiration menu rows remain Could (141). **(A74 extended)**
+107. **Item grain (Must):** One menu item per **vehicle + section** that qualifies: compliance section; **`service`**; or **`open_out`**. No fabricated items when none qualify **(A75 extended)**.
 108. **Ordering (Should):** Show **expired / overdue** before **within-window soon**; then by soonest date; stable tie-break allowed **(A76)**.
 109. **Tenancy (Must):** Items only for vehicles in the caller’s **company**. Cross-company data never appears **(22, A8, A77)**.
 110. **Authz (Must):** Drivers, other roles, and unsigned-in users do not receive Owner/Admin Global Header or its notification APIs/UI **(20, 21, E8, E9, E68)**.
@@ -258,8 +261,8 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | A71 | One shared header chrome component/region for all OA authenticated pages |
 | A72 | “Fleet Icon” = existing Fleet mark language (not a new product logo system) |
 | A73 | Notification entry is icon button + menu; not a full notifications page this slice |
-| A74 | MVP feed = compliance rule 19 only; no new domain events required for MVP |
-| A75 | Item = vehicle + section pair in warning/expired state |
+| A74 | Notification feed = compliance rule 19 **plus** service approaching/due **plus** open Out (Company); still no required new push/email domain bus for MVP in-app menu |
+| A75 | Item = vehicle + section pair (`insurance` \| `inspection` \| `road_tax` \| `service` \| `open_out` [\| custom Could]) in qualifying state |
 | A76 | Urgency-first sort is Should |
 | A77 | Strict company isolation |
 | A78 | Navigation from item is Should; deep-link target = that vehicle’s OA view |
@@ -460,3 +463,42 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | A125 | DSAR automation out of scope |
 | A126 | Copy is product draft, not certified legal advice |
 | A127 | Privacy link on all web footer variants including driver |
+
+## Service approaching & open-Out notify (US-109–US-111; extends US-60, US-97)
+
+174. **Approaching service threshold (Must):** **2000** remaining distance in the **same unit** as `next_service_distance` / vehicle odometer (country of registration). Qualifies as **approaching** iff baseline exists and **`0 < distance_remaining ≤ 2000`** **(A128)**.
+
+175. **Due/overdue service unchanged (Must):** Fully **due/overdue** still when days elapsed ≥ `next_service_days` **or** distance used up (`distance_remaining ≤ 0` / mileage ≥ handover.mileage + next_service_distance when mileage set)—US-97. Approaching is an **additional** distance band; it does **not** replace days-based due **(A129)**.
+
+176. **Service-due board inclusion (Must):** Board **must** list **approaching** and **due/overdue**. Omit vehicles with no handover service baseline; omit when remaining **> 2000** and not due by days/distance; omit when distance_remaining unknown **and** not due by days **(E100)**.
+
+177. **Open Out incomplete (Must):** Means handover **Out** with status **open** (custody started; **In** not completed). **Voided** and **closed** do **not** notify **(A130, E101)**.
+
+178. **Who is notified — service (Must):** **Owner/Admin** via **in-app notification menu** (and optional Service-due board/cue). **Driver** is **not** required to receive OA menu service rows this slice; driver service cue out unless later story **(A131)**.
+
+179. **Who is notified — open Out (Must):** **Driver** who holds the open Out: **driver home / handover cue** (US-60 Must, US-110). **Company Owner/Admin**: **in-app notification menu** item `open_out` (+ optional board/cue). Drivers **never** get OA Global Header **(110, E68)**. **Individual:** open-Out notify **N/A** (no company driver handovers) **(A132, E102)**.
+
+180. **Channels (Won't this slice):** **No** OS push, **no** SMS, **no** new email for service approaching or open Out. Existing **compliance digest email** (US-95) is **not** extended to open Out or service approaching unless a later story says so **(A81, A133, E103)**.
+
+181. **Tenancy (Must):** All service and open-Out signals **company/workspace-scoped**. Cross-tenant ids never appear **(22, A8, E104)**.
+
+182. **Menu ordering/cap (Must):** Extended sources share rules **108** (urgency-first: overdue/due before approaching/soon) and **114** (max 50). Prefer due/overdue service and open Out before approaching when tying **(A134)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E100 | No baseline or distance_remaining null and not due by days | Not on board/menu for service |
+| E101 | Voided or closed Out | No open_out notify |
+| E102 | Individual Owner seeks open_out menu items | Absent / N/A |
+| E103 | User expects push/email for open Out or service approaching | Not offered this slice |
+| E104 | Cross-company vehicle/open Out | Not found / not shown |
+| E105 | Driver seeks OA menu for open Out on others’ vehicles | No OA menu; only own open-Out cue |
+
+| ID | Assumption |
+| --- | --- |
+| A128 | Approaching band is distance-only at 2000 remaining; no separate “approaching by days” threshold this slice |
+| A129 | due_by_days / due_by_distance / distance_remaining semantics align with GET /v1/service-due |
+| A130 | Open Out incomplete = open status only |
+| A131 | Driver service-due notify not in this slice |
+| A132 | Individual keeps service-due on own vehicles; open Out driver/OA path N/A |
+| A133 | Do not invent handover/service email; US-95 stays compliance digest |
+| A134 | Soft cap 50 applies to mixed compliance+service+open_out feed |

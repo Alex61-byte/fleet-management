@@ -98,11 +98,24 @@ export class FleetService {
       start_place?: unknown;
       start_distance?: unknown;
       start_time?: unknown;
+      refuel_amount?: unknown;
+      refuel_at_mileage?: unknown;
+    },
+  ) {
+    return this.driver.createDriverDailyUsage(claims, body);
+  }
+
+  endDriverDailyUsage(
+    claims: AccessClaims,
+    body: {
       end_place?: unknown;
       end_distance?: unknown;
       end_time?: unknown;
-    },) {
-    return this.driver.createDriverDailyUsage(claims, body);
+      refuel_amount?: unknown;
+      refuel_at_mileage?: unknown;
+    },
+  ) {
+    return this.driver.endDriverDailyUsage(claims, body);
   }
 
   getDriverActiveHandover(claims: AccessClaims) {
@@ -128,6 +141,10 @@ export class FleetService {
 
   getVehicleHandover(claims: AccessClaims, vehicleId: string, handoverId: string) {
     return this.handovers.getVehicleHandover(claims, vehicleId, handoverId);
+  }
+
+  listOpenHandovers(claims: AccessClaims) {
+    return this.handovers.listOpenHandovers(claims);
   }
 
   uploadComplianceDocument(

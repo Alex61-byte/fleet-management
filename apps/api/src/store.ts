@@ -70,6 +70,19 @@ export interface Store {
   markResetUsed(tokenHash: string): Promise<void>;
   insertVehicle(v: Vehicle): Promise<void>;
   updateVehicle(v: Vehicle): Promise<void>;
+  /**
+   * Mileage-only write with monotonic floor (null or current ≤ mileage).
+   * Postgres path locks the row when used inside withTransaction (FOR UPDATE).
+   */
+  applyVehicleMileageMonotonic(
+    id: string,
+    companyId: string,
+    mileage: number,
+  ): Promise<
+    | { status: "ok"; vehicle: Vehicle }
+    | { status: "not_found" }
+    | { status: "below_floor"; vehicle: Vehicle }
+  >;
   findVehicle(id: string, companyId: string): Promise<Vehicle | undefined>;
   listVehicles(companyId: string): Promise<Vehicle[]>;
   counts(companyId: string): Promise<{ drivers: number; vehicles: number }>;
@@ -82,12 +95,18 @@ export interface Store {
   findHandover(id: string, companyId: string): Promise<VehicleHandover | undefined>;
   findOpenOutForDriver(driverId: string): Promise<VehicleHandover | undefined>;
   findOpenOutForVehicle(vehicleId: string, companyId: string): Promise<VehicleHandover | undefined>;
+  listOpenOutsForCompany(companyId: string): Promise<VehicleHandover[]>;
   listHandoversForVehicle(vehicleId: string, companyId: string): Promise<VehicleHandover[]>;
   insertHandoverImage(row: VehicleHandoverImage): Promise<void>;
   listHandoverImages(handoverId: string): Promise<VehicleHandoverImage[]>;
   countHandoverImages(handoverId: string): Promise<number>;
   voidOpenOutsForDriver(driverId: string): Promise<void>;
   insertDailyUsage(row: DriverDailyUsage): Promise<void>;
+  updateDailyUsage(row: DriverDailyUsage): Promise<void>;
+  findOpenDailyUsageForDriver(
+    driverId: string,
+    companyId: string,
+  ): Promise<DriverDailyUsage | undefined>;
   listDailyUsageForDriver(driverId: string, companyId: string): Promise<DriverDailyUsage[]>;
   listDailyUsageForCompany(
     companyId: string,
@@ -275,6 +294,36 @@ export class MemoryStore implements Store {
     });
   }
 
+  async applyVehicleMileageMonotonic(
+    id: string,
+    companyId: string,
+    mileage: number,
+  ): Promise<
+    | { status: "ok"; vehicle: Vehicle }
+    | { status: "not_found" }
+    | { status: "below_floor"; vehicle: Vehicle }
+  > {
+    const v = this.vehicles.get(id);
+    if (!v || v.companyId !== companyId) return { status: "not_found" };
+    if (v.mileage != null && mileage < v.mileage) {
+      return {
+        status: "below_floor",
+        vehicle: {
+          ...v,
+          customExpirations: v.customExpirations.map((row) => ({ ...row })),
+        },
+      };
+    }
+    v.mileage = mileage;
+    return {
+      status: "ok",
+      vehicle: {
+        ...v,
+        customExpirations: v.customExpirations.map((row) => ({ ...row })),
+      },
+    };
+  }
+
   async findVehicle(id: string, companyId: string): Promise<Vehicle | undefined> {
     const v = this.vehicles.get(id);
     if (!v || v.companyId !== companyId) return undefined;
@@ -381,6 +430,13 @@ export class MemoryStore implements Store {
     return undefined;
   }
 
+  async listOpenOutsForCompany(companyId: string): Promise<VehicleHandover[]> {
+    return [...this.handovers.values()]
+      .filter((h) => h.companyId === companyId && h.type === "out" && h.status === "open")
+      .map((h) => ({ ...h }))
+      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  }
+
   async listHandoversForVehicle(
     vehicleId: string,
     companyId: string,
@@ -421,7 +477,37 @@ export class MemoryStore implements Store {
   }
 
   async insertDailyUsage(row: DriverDailyUsage): Promise<void> {
+    if (row.status === "open") {
+      for (const existing of this.dailyUsages.values()) {
+        if (
+          existing.driverId === row.driverId &&
+          existing.companyId === row.companyId &&
+          existing.status === "open"
+        ) {
+          const err = new Error("unique");
+          (err as Error & { code: string }).code = "23505";
+          throw err;
+        }
+      }
+    }
     this.dailyUsages.set(row.id, { ...row });
+  }
+
+  async updateDailyUsage(row: DriverDailyUsage): Promise<void> {
+    if (!this.dailyUsages.has(row.id)) return;
+    this.dailyUsages.set(row.id, { ...row });
+  }
+
+  async findOpenDailyUsageForDriver(
+    driverId: string,
+    companyId: string,
+  ): Promise<DriverDailyUsage | undefined> {
+    for (const u of this.dailyUsages.values()) {
+      if (u.driverId === driverId && u.companyId === companyId && u.status === "open") {
+        return { ...u };
+      }
+    }
+    return undefined;
   }
 
   async listDailyUsageForDriver(

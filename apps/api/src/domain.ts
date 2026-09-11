@@ -148,20 +148,28 @@ export type VehicleIssue = {
   closedAt: number | null;
 };
 
+export type DailyUsageStatus = "open" | "closed";
+export type RefuelAmountUnit = "L" | "gal";
+
 export type DriverDailyUsage = {
   id: string;
   companyId: string;
   driverId: string;
   vehicleId: string;
   usageDate: string;
+  status: DailyUsageStatus;
   startPlace: string;
-  endPlace: string;
+  endPlace: string | null;
   startDistance: number;
-  endDistance: number;
+  endDistance: number | null;
   distanceUnit: OdometerUnit;
   startTime: string;
-  endTime: string;
+  endTime: string | null;
+  refuelAmount: number | null;
+  refuelAmountUnit: RefuelAmountUnit | null;
+  refuelAtMileage: number | null;
   createdAt: number;
+  closedAt: number | null;
 };
 
 /** Miles jurisdictions (ADR-012 / A34). Empty/unknown → km. */

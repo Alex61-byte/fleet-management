@@ -1,14 +1,15 @@
 import {
-  complianceNotificationItems,
-  type ComplianceNotificationItem,
+  notificationMenuItems,
+  type NotificationMenuItem,
 } from "@fleet/sdk";
 import { useCallback, useEffect, useState } from "react";
 import { DeviceEventEmitter } from "react-native";
 import { api } from "./api";
+import { useAuth } from "./auth";
 import { VEHICLES_CHANGED_EVENT } from "./vehicles-changed";
 
 export type ComplianceNotificationsState = {
-  items: ComplianceNotificationItem[];
+  items: NotificationMenuItem[];
   truncated: boolean;
   count: number;
   loading: boolean;
@@ -17,12 +18,13 @@ export type ComplianceNotificationsState = {
   refresh: () => Promise<void>;
 };
 
-/** OA Global Header feed — same vehicles source as US-28 (ADR-017). */
+/** OA Global Header feed — compliance + service + open_out (ADR-017). */
 export function useComplianceNotifications(
   enabled: boolean,
   offline = false,
 ): ComplianceNotificationsState {
-  const [items, setItems] = useState<ComplianceNotificationItem[]>([]);
+  const { me } = useAuth();
+  const [items, setItems] = useState<NotificationMenuItem[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(Boolean(enabled));
@@ -48,10 +50,24 @@ export function useComplianceNotifications(
     setLoading(true);
     setError(null);
     try {
+      const isCompany = me?.account_kind === "company";
       const listRes = await api.listVehicles();
-      if (listRes.notModified || !listRes.data) return;
+      if (listRes.notModified || !listRes.data) {
+        setLoading(false);
+        return;
+      }
       const vehicles = listRes.data.items;
-      const projected = complianceNotificationItems(vehicles);
+      const [serviceRes, openRes] = await Promise.all([
+        api.listServiceDue().catch(() => ({ items: [] })),
+        isCompany
+          ? api.listOpenHandovers().catch(() => ({ items: [] }))
+          : Promise.resolve({ items: [] }),
+      ]);
+      const projected = notificationMenuItems({
+        vehicles,
+        serviceDue: serviceRes.items,
+        openOuts: openRes.items,
+      });
       setItems(projected.items);
       setTruncated(projected.truncated);
       setCount(projected.items.length);
@@ -59,11 +75,11 @@ export function useComplianceNotifications(
       setItems([]);
       setTruncated(false);
       setCount(0);
-      setError("Could not load compliance alerts.");
+      setError("Could not load alerts.");
     } finally {
       setLoading(false);
     }
-  }, [enabled, offline]);
+  }, [enabled, offline, me?.account_kind]);
 
   useEffect(() => {
     void refresh();
