@@ -69,6 +69,11 @@ export default function DriverHome() {
         <Text className="text-caption text-text-secondary">Loading…</Text>
       ) : (
         <View className="gap-2" accessibilityLabel="Driver start">
+          {activeOut ? (
+            <Banner tone="warning">
+              Out open — complete Handover In when you return the vehicle.
+            </Banner>
+          ) : null}
           <Link href="/(driver)/travel" asChild>
             <Pressable
               accessibilityRole="button"
@@ -106,7 +111,7 @@ export default function DriverHome() {
                 !travel
                   ? "Vehicle handover. Select next travel first, then complete Out or In."
                   : activeOut
-                    ? "Vehicle handover. Out is open. Complete Handover In when you return."
+                    ? "Vehicle handover. Need Handover In to close custody."
                     : "Vehicle handover. Record Handover Out when you take the vehicle, or In when you return."
               }
               className="bg-surface-raised rounded-lg p-2 gap-1 border border-divider"
@@ -118,7 +123,7 @@ export default function DriverHome() {
                     {!travel
                       ? "Select next travel first, then complete Out or In."
                       : activeOut
-                        ? "Out is open — complete Handover In when you return."
+                        ? "Need Handover In to close custody."
                         : "Record Handover Out when you take the vehicle, or In when you return."}
                   </Text>
                 </View>

@@ -177,22 +177,79 @@ CREATE TABLE IF NOT EXISTS driver_daily_usages (
   driver_id UUID NOT NULL REFERENCES principals (id) ON DELETE CASCADE,
   vehicle_id UUID NOT NULL REFERENCES vehicles (id),
   usage_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'closed' CHECK (status IN ('open', 'closed')),
   start_place TEXT NOT NULL,
-  end_place TEXT NOT NULL,
+  end_place TEXT,
   start_distance DOUBLE PRECISION NOT NULL,
-  end_distance DOUBLE PRECISION NOT NULL,
+  end_distance DOUBLE PRECISION,
   distance_unit TEXT NOT NULL CHECK (distance_unit IN ('mi', 'km')),
   start_time TEXT NOT NULL,
-  end_time TEXT NOT NULL,
+  end_time TEXT,
+  refuel_amount DOUBLE PRECISION,
+  refuel_amount_unit TEXT CHECK (refuel_amount_unit IS NULL OR refuel_amount_unit IN ('L', 'gal')),
+  refuel_at_mileage DOUBLE PRECISION,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT driver_daily_usages_distance_order CHECK (end_distance >= start_distance),
-  CONSTRAINT driver_daily_usages_time_order CHECK (end_time >= start_time)
+  closed_at TIMESTAMPTZ,
+  CONSTRAINT driver_daily_usages_distance_order CHECK (
+    end_distance IS NULL OR end_distance >= start_distance
+  ),
+  CONSTRAINT driver_daily_usages_time_order CHECK (
+    end_time IS NULL OR end_time >= start_time
+  ),
+  CONSTRAINT driver_daily_usages_closed_complete CHECK (
+    status = 'open'
+    OR (
+      end_place IS NOT NULL
+      AND end_distance IS NOT NULL
+      AND end_time IS NOT NULL
+      AND closed_at IS NOT NULL
+    )
+  )
 );
+
+-- Migrate legacy single-shot rows (all required end fields) if upgrading in place.
+ALTER TABLE driver_daily_usages ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE driver_daily_usages ADD COLUMN IF NOT EXISTS refuel_amount DOUBLE PRECISION;
+ALTER TABLE driver_daily_usages ADD COLUMN IF NOT EXISTS refuel_amount_unit TEXT;
+ALTER TABLE driver_daily_usages ADD COLUMN IF NOT EXISTS refuel_at_mileage DOUBLE PRECISION;
+ALTER TABLE driver_daily_usages ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
+ALTER TABLE driver_daily_usages ALTER COLUMN end_place DROP NOT NULL;
+ALTER TABLE driver_daily_usages ALTER COLUMN end_distance DROP NOT NULL;
+ALTER TABLE driver_daily_usages ALTER COLUMN end_time DROP NOT NULL;
+ALTER TABLE driver_daily_usages DROP CONSTRAINT IF EXISTS driver_daily_usages_distance_order;
+ALTER TABLE driver_daily_usages DROP CONSTRAINT IF EXISTS driver_daily_usages_time_order;
+ALTER TABLE driver_daily_usages DROP CONSTRAINT IF EXISTS driver_daily_usages_closed_complete;
+ALTER TABLE driver_daily_usages
+  ADD CONSTRAINT driver_daily_usages_distance_order
+  CHECK (end_distance IS NULL OR end_distance >= start_distance);
+ALTER TABLE driver_daily_usages
+  ADD CONSTRAINT driver_daily_usages_time_order
+  CHECK (end_time IS NULL OR end_time >= start_time);
+ALTER TABLE driver_daily_usages
+  ADD CONSTRAINT driver_daily_usages_closed_complete
+  CHECK (
+    status = 'open'
+    OR (
+      end_place IS NOT NULL
+      AND end_distance IS NOT NULL
+      AND end_time IS NOT NULL
+      AND closed_at IS NOT NULL
+    )
+  );
+UPDATE driver_daily_usages
+   SET status = 'closed',
+       closed_at = COALESCE(closed_at, created_at)
+ WHERE status IS NULL OR status = '';
+ALTER TABLE driver_daily_usages ALTER COLUMN status SET DEFAULT 'closed';
+ALTER TABLE driver_daily_usages ALTER COLUMN status SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS driver_daily_usages_driver_created
   ON driver_daily_usages (driver_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS driver_daily_usages_company
   ON driver_daily_usages (company_id);
+CREATE UNIQUE INDEX IF NOT EXISTS driver_daily_usages_one_open_per_driver
+  ON driver_daily_usages (driver_id)
+  WHERE status = 'open';
 
 
 

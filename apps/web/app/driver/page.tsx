@@ -104,6 +104,18 @@ export default function DriverHomePage() {
           <Skeleton className="h-16 w-full" />
         </div>
       ) : (
+        <>
+        {activeOut ? (
+          <div className={themeClasses.bannerWarning} role="status">
+            <p className={themeClasses.body}>
+              Out open — complete{" "}
+              <a href="/driver/handover" className="underline font-medium">
+                Handover In
+              </a>{" "}
+              when you return the vehicle.
+            </p>
+          </div>
+        ) : null}
         <nav className="flex flex-col gap-2" aria-label="Driver start">
           <DriverHubLink
             href="/driver/travel"
@@ -122,7 +134,7 @@ export default function DriverHomePage() {
               !travel
                 ? "Select next travel first, then complete Out or In."
                 : activeOut
-                  ? "Out is open — complete Handover In when you return."
+                  ? "Need Handover In to close custody."
                   : "Record Handover Out when you take the vehicle, or In when you return."
             }
             badge={activeOut ? "Out open" : travel ? "Ready" : null}
@@ -138,6 +150,7 @@ export default function DriverHomePage() {
             badge={travel ? "Ready" : null}
           />
         </nav>
+        </>
       )}
 
     </DriverShell>

@@ -126,7 +126,7 @@ Collapsed sidebar (64px): same fill on the mark/icon hit target; tooltip / acces
 
 **Out of scope for urgency chrome:** list/detail `badgeWarning` / `badgeExpired` (30-day A1), owner-home KPI tiles, Global Header notification menu (US-68–US-76 — complementary, separate chrome), Driver app, public/auth chrome.
 
-### Global Header notifications (US-68–US-76) — summary
+### Global Header notifications (US-68–US-76 + US-109/US-111) — summary
 
 Full spec: [global-header.md](global-header.md).
 
@@ -134,11 +134,12 @@ Full spec: [global-header.md](global-header.md).
 | --- | --- |
 | Audience | Management web + mobile only (Company Owner/Admin + Individual Owner) |
 | Identity | **One** lockup in Global Header (shielded mark + “Fleet”); sidebar is role-only |
-| Control | Bell `buttonIcon`; count `notifBadge` when ≥1 MVP items (not color-only) |
-| Menu | Web **popover**; mobile **bottom sheet**; title “Compliance alerts” |
-| MVP items | `insurance_on` / `inspection_on` / `road_tax_on` within 30 days or past; **not** registration; grain = vehicle + section; cap 50. **Could (US-89):** custom expiration rows (grain = vehicle + custom label) — do not block MVP on menu redesign |
-| Navigate | Item → existing vehicle OA path `/vehicles/{id}` (edit/detail) |
-| States | Loading skeletons; empty “No compliance alerts.”; error + Try again |
+| Control | Bell `buttonIcon`; count `notifBadge` when ≥1 feed items (not color-only) |
+| Menu | Web **popover**; mobile **bottom sheet**; title **Alerts** |
+| Kinds | `compliance` (≤30d/past; not registration); `service` (approaching ≤2000 remaining or due/overdue — [service-due.md](service-due.md)); `open_out` (**Company only**). Cap 50; urgency: due/overdue + open_out before approaching/soon |
+| Navigate | compliance/service → vehicle (or service-due); open_out → vehicle Handovers tab if exists |
+| States | Loading skeletons; empty “No alerts.”; error + Try again |
+| Driver | **No** bell — open-Out cue on [driver-home.md](driver-home.md) / [handover.md](handover.md) only (`bannerWarning` + **Out open**) |
 
 ## Product identity — Fleet lockup
 

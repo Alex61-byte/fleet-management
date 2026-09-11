@@ -602,14 +602,14 @@ Driver-only. Owner/Admin → **403** `forbidden`. Drivers remain **403** on owne
 ### `PUT /v1/driver/travel`
 Body: `{ "vehicle_id": "uuid", "odometer": number | string }`
 
-- **200** Travel (new active row; prior active deactivated).
-- **400** `validation_error` — missing vehicle_id; odometer missing/negative/non-numeric; more than 1 decimal place on string input.
+- **200** Travel (new active row; prior active deactivated). **Side effect:** sets `vehicles.mileage` to the parsed `odometer` in the **same transaction** (ADR-014 write-through; A43).
+- **400** `validation_error` — missing vehicle_id; odometer missing/negative/non-numeric; more than 1 decimal place on string input; **or** `vehicles.mileage` is non-null and `odometer < mileage` (monotonic floor).
 - **404** `not_found` — vehicle not in driver company.
 - Unit stored from vehicle country at write time (not from body).
 
-Odometer: ≥ 0; max 1 decimal; values may be sent as number or numeric string.
+Odometer: ≥ 0; max 1 decimal; values may be sent as number or numeric string. When vehicle mileage is **null**, any valid odometer sets mileage. When set, odometer must be **≥** current mileage.
 
-**Mileage:** `PUT /v1/driver/travel` **must not** update `vehicles.mileage` (A43 / ADR-014). Handover Out/In **does** set `vehicles.mileage` (A52 / ADR-015).
+**Mileage writers:** `PUT /v1/driver/travel` (write-through) · Handover Out/In (A52 / ADR-015) · Owner/Admin `POST/PATCH /v1/vehicles`. **Not** Daily usage (A62). Drivers remain **403** on fleet vehicle write routes.
 
 ## Vehicle handovers (US-51–US-60)
 
@@ -706,10 +706,10 @@ Company Owner/Admin same tenant. Driver → **403** (E55). Individual Owner → 
 
 Company Owner/Admin same tenant. Individual Owner → **403** (E80). **200** HandoverDetail with signed damage image URLs. **404** if handover not on that vehicle/company.
 
-## Driver Daily usage (US-61–US-67)
+## Driver Daily usage (US-61–US-67 · US-113–US-115)
 
 Fleet. See [ADR-016](../adr/ADR-016-driver-daily-usage.md).  
-Day-use log against **active next-travel** vehicle. **Does not** update `vehicles.mileage` (A62). **Does not** create/close handovers (A57).
+Day-use log: **Day Start** (open) + **End of Day** (close) against **active next-travel** vehicle. Optional refuel. **Does not** update `vehicles.mileage` (A62). **Does not** create/close handovers (A57).
 
 ### Error codes (daily usage)
 
@@ -717,10 +717,12 @@ Day-use log against **active next-travel** vehicle. **Does not** update `vehicle
 | --- | --- | --- |
 | E59 | 409 | `daily_usage_no_active_travel` |
 | E60 / E64 | 403 | `forbidden` |
-| E61–E63 | 400 | `validation_error` |
-| E65 | — | No PATCH/DELETE routes |
+| E61–E63 / E70 | 400 | `validation_error` |
+| E65 | — | No free-form PATCH/DELETE routes |
 | E66 | 404 | `not_found` |
 | E67 | — | Client-only offline submit block |
+| E68 | 409 | `daily_usage_already_open` |
+| E69 | 409 | `daily_usage_no_open` |
 
 ### Daily usage resource
 
@@ -729,6 +731,7 @@ Day-use log against **active next-travel** vehicle. **Does not** update `vehicle
   "id": "uuid",
   "vehicle_id": "uuid",
   "usage_date": "2026-09-07",
+  "status": "closed",
   "start_place": "Depot A",
   "start_distance": 12010.5,
   "end_place": "Site B",
@@ -736,7 +739,11 @@ Day-use log against **active next-travel** vehicle. **Does not** update `vehicle
   "distance_unit": "km",
   "start_time": "08:30",
   "end_time": "17:15",
-  "created_at": "2026-09-07T10:00:00.000Z",
+  "refuel_amount": 40.5,
+  "refuel_amount_unit": "L",
+  "refuel_at_mileage": 12050.0,
+  "created_at": "2026-09-07T06:00:00.000Z",
+  "closed_at": "2026-09-07T16:00:00.000Z",
   "vehicle": {
     "id": "uuid",
     "make": "Ford",
@@ -749,23 +756,27 @@ Day-use log against **active next-travel** vehicle. **Does not** update `vehicle
 
 | Field | Notes |
 | --- | --- |
-| `usage_date` | Calendar day `YYYY-MM-DD` (local day as entered; no TZ field) |
-| `start_time` / `end_time` | Local wall-clock `HH:mm` (24h); `end_time >= start_time` |
-| `start_distance` / `end_distance` | ≥ 0, max 1 decimal; `end_distance >= start_distance`; if vehicle master mileage set, `start_distance >= mileage` at create |
-| `distance_unit` | `"mi"` \| `"km"` frozen at write from vehicle country (A34). **Not** accepted on write |
-| `vehicle` | Summary at read time (label = make + model). Row keeps `vehicle_id` even if travel selection later changes |
-| Places | Non-empty after trim |
+| `status` | `"open"` \| `"closed"` |
+| `usage_date` | Calendar day `YYYY-MM-DD` |
+| `start_time` / `end_time` | Local `HH:mm`; on close `end_time >= start_time`. `end_time` **null** while open |
+| `start_distance` / `end_distance` | ≥ 0, max 1 decimal; on close `end_distance >= start_distance`. `end_distance` **null** while open. Day Start floor: max(`vehicle.mileage` when set, latest **closed** `end_distance` on same vehicle) |
+| `distance_unit` | `"mi"` \| `"km"` from vehicle country (A34). **Not** accepted on write |
+| `refuel_amount` | Optional number \| null |
+| `refuel_amount_unit` | `"L"` \| `"gal"` when amount set (A34: km→L, mi→gal); else null. **Not** accepted on write |
+| `refuel_at_mileage` | Optional number \| null (odometer at refuel; does not write vehicle.mileage) |
+| `closed_at` | ISO timestamptz when closed; null while open |
+| `vehicle` | Summary at read time |
+| Places | Non-empty after trim; `end_place` null while open |
 
 ### `GET /v1/driver/daily-usage`
 
 Driver only. Owner/Admin → **403** `forbidden` (E64).
 
-**200** `{ "items": DailyUsage[] }` — **own** rows only, newest first (`created_at` DESC). Empty list → `{ "items": [] }`.
+**200** `{ "items": DailyUsage[] }` — **own** rows only (open + closed), newest first (`created_at` DESC). Empty → `{ "items": [] }`.
 
-### `POST /v1/driver/daily-usage`
+### `POST /v1/driver/daily-usage` — Day Start
 
-Driver only. Owner/Admin → **403** `forbidden` (E60).  
-`Content-Type: application/json`.
+Driver only. Owner/Admin → **403**. JSON body:
 
 ```json
 {
@@ -773,39 +784,55 @@ Driver only. Owner/Admin → **403** `forbidden` (E60).
   "start_place": "Depot A",
   "start_distance": 12010.5,
   "start_time": "08:30",
-  "end_place": "Site B",
-  "end_distance": 12085.0,
-  "end_time": "17:15"
+  "refuel_amount": 40.5,
+  "refuel_at_mileage": 12010.5
 }
 ```
 
 | Field | Required | Notes |
 | --- | --- | --- |
 | `usage_date` | yes | `YYYY-MM-DD` |
-| `start_place` | yes | non-empty string |
-| `start_distance` | yes | number \| numeric string; ≥ 0; max 1 decimal |
+| `start_place` | yes | non-empty |
+| `start_distance` | yes | ≥ 0; max 1 decimal; ≥ floor |
 | `start_time` | yes | `HH:mm` |
-| `end_place` | yes | non-empty string |
-| `end_distance` | yes | same parse as start; must be ≥ start |
-| `end_time` | yes | `HH:mm`; must be ≥ start_time |
+| `refuel_amount` | no | ≥ 0; max 1 decimal if present |
+| `refuel_at_mileage` | no | ≥ 0; max 1 decimal if present |
 
-**Not accepted:** `vehicle_id`, `distance_unit`, `company_id`, `driver_id`.
+**Not accepted:** `vehicle_id`, units, end fields, `company_id`, `driver_id`.
 
-**Vehicle** = caller’s active next-travel selection only.
+**Vehicle** = active next-travel only.
 
-**201** DailyUsage. Side effects: insert row only. **`vehicles.mileage` unchanged.**
+**201** DailyUsage with `status: "open"`, end fields null. **`vehicles.mileage` unchanged.**
 
-**Errors:**
+**Errors:** no travel → 409 `daily_usage_no_active_travel`; already open → 409 `daily_usage_already_open`; validation → 400.
 
-| Condition | HTTP | code |
+### `POST /v1/driver/daily-usage/end` — End of Day
+
+Driver only. Completes the caller’s **open** row (no id required).
+
+```json
+{
+  "end_place": "Site B",
+  "end_distance": 12085.0,
+  "end_time": "17:15",
+  "refuel_amount": 10,
+  "refuel_at_mileage": 12080
+}
+```
+
+| Field | Required | Notes |
 | --- | --- | --- |
-| No active next-travel | 409 | `daily_usage_no_active_travel` |
-| Missing/blank fields, bad date/time format | 400 | `validation_error` |
-| Distance negative / non-numeric / >1 decimal / end &lt; start / start &lt; vehicle.mileage | 400 | `validation_error` |
-| end_time &lt; start_time | 400 | `validation_error` |
-| Owner/Admin | 403 | `forbidden` |
+| `end_place` | yes | non-empty |
+| `end_distance` | yes | ≥ start_distance; max 1 decimal |
+| `end_time` | yes | `HH:mm`; ≥ start_time |
+| `refuel_amount` | no | if present, sets/overwrites refuel amount (+ unit) |
+| `refuel_at_mileage` | no | if present, sets/overwrites refuel-at-mileage |
 
-**Default “today”** is a **client** prefills concern; API does not inject date if omitted (omission → validation_error).
+**200** DailyUsage with `status: "closed"`. Start fields unchanged. **`vehicles.mileage` unchanged.**
+
+**Errors:** no open → 409 `daily_usage_no_open`; validation → 400; Owner/Admin → 403.
+
+**Default “today”** is client-only on Day Start; API does not inject date.
 
 
 ---
@@ -891,9 +918,25 @@ Same auth/filters. **200** `text/csv` attachment.
 
 ### `GET /v1/service-due`
 
-Owner/Admin. Vehicles whose latest non-voided handover is due by days and/or distance.
+Owner/Admin (Company and Individual). Latest non-voided handover baseline per vehicle.
 
-**200** `{ "items": [{ vehicle_id, vehicle, handover_id, handover_created_at, next_service_days, next_service_distance, next_service_distance_unit, days_elapsed, days_overdue, vehicle_mileage, handover_mileage, distance_remaining, due_by_days, due_by_distance }] }`.
+**Include** when `due_by_days` **or** `due_by_distance` **or** **approaching**: `distance_remaining != null` and `0 < distance_remaining ≤ 2000` (unit = `next_service_distance_unit`). Server owns the **2000** threshold.
+
+**`service_status`:** `"due"` if `due_by_days || due_by_distance`; else `"approaching"`.
+
+**200** `{ "items": [{ vehicle_id, vehicle, handover_id, handover_created_at, next_service_days, next_service_distance, next_service_distance_unit, days_elapsed, days_overdue, vehicle_mileage, handover_mileage, distance_remaining, due_by_days, due_by_distance, service_status }] }`.
+
+Sort: due/overdue before approaching; then `days_overdue` desc; `vehicle_id`.
+
+### `GET /v1/handovers/open`
+
+Company Owner/Admin only. Lists **open** Out handovers for the caller’s company (In not done; not voided).
+
+**Individual** → **403** `forbidden`. **Driver** → **403** `forbidden`.
+
+**200** `{ "items": [{ id, vehicle_id, company_id, type: "out", status: "open", driver: { id, email } | null, mileage, mileage_unit, created_at, vehicle: { id, make, model, license_plate, label } }] }`.
+
+Sort: `created_at` **ASC** (longest open first).
 
 ### `POST /v1/compliance-digest/send`
 

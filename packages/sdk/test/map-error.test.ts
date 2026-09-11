@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   complianceNotificationItems,
   complianceNotificationsA11yLabel,
+  notificationMenuItems,
   daysUntilUtc,
   mapAuthError,
   vehiclesNavA11yLabel,
@@ -201,5 +202,78 @@ test("complianceNotificationItems expands warnings, sorts, caps, ignores registr
   assert.equal(capped.items.length, 50);
   assert.equal(capped.truncated, true);
   assert.equal(complianceNotificationsA11yLabel(0), "Notifications");
-  assert.equal(complianceNotificationsA11yLabel(3), "Notifications, 3 compliance alerts");
+  assert.equal(complianceNotificationsA11yLabel(3), "Notifications, 3 alerts");
+});
+
+test("sdk-menu-merge-service-open-out-cap-50", () => {
+  const today = "2026-09-03";
+  const merged = notificationMenuItems({
+    todayIso: today,
+    vehicles: [
+      {
+        id: "v-c",
+        make: "Ford",
+        model: "Transit",
+        license_plate: "C-01",
+        insurance_on: "2026-09-20",
+        inspection_on: null,
+        road_tax_on: null,
+        warnings: [{ field: "insurance_on", state: "due_soon" }],
+      },
+    ],
+    serviceDue: [
+      {
+        vehicle_id: "v-s-due",
+        vehicle: { make: "VW", model: "Crafter", license_plate: "S-DUE" },
+        service_status: "due",
+        distance_remaining: -10,
+        next_service_distance_unit: "km",
+        days_overdue: 2,
+        due_by_days: true,
+        due_by_distance: true,
+      },
+      {
+        vehicle_id: "v-s-app",
+        vehicle: { make: "VW", model: "Caddy", license_plate: "S-APP" },
+        service_status: "approaching",
+        distance_remaining: 1500,
+        next_service_distance_unit: "km",
+        days_overdue: null,
+        due_by_days: false,
+        due_by_distance: false,
+      },
+    ],
+    openOuts: [
+      {
+        id: "h1",
+        vehicle_id: "v-out",
+        vehicle: { make: "Toyota", model: "Proace", license_plate: "OUT-1" },
+        driver: { id: "d1", email: "driver@fleet.example" },
+        created_at: "2026-09-01T12:00:00.000Z",
+      },
+    ],
+    cap: 50,
+  });
+  assert.equal(merged.total, 4);
+  assert.equal(merged.truncated, false);
+  assert.equal(merged.items[0]?.section, "open_out");
+  assert.equal(merged.items[1]?.section, "service");
+  assert.equal(merged.items[1]?.state, "due");
+  assert.ok(merged.items.some((i) => i.section === "service" && i.state === "approaching"));
+  assert.ok(merged.items.some((i) => i.section === "compliance"));
+
+  const manyService = Array.from({ length: 60 }, (_, i) => ({
+    vehicle_id: `vs-${i}`,
+    vehicle: { make: "M", model: "X", license_plate: `P${i}` },
+    service_status: "approaching" as const,
+    distance_remaining: 1000 + i,
+    next_service_distance_unit: "km" as const,
+    days_overdue: null,
+    due_by_days: false,
+    due_by_distance: false,
+  }));
+  const capped = notificationMenuItems({ serviceDue: manyService, todayIso: today, cap: 50 });
+  assert.equal(capped.total, 60);
+  assert.equal(capped.items.length, 50);
+  assert.equal(capped.truncated, true);
 });

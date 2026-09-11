@@ -202,6 +202,9 @@ export type ComplianceNotificationField = Exclude<
   "registration_on"
 >;
 
+/** Docs/tests only — server owns approaching inclusion on GET /v1/service-due. */
+export const SERVICE_APPROACHING_DISTANCE_REMAINING = 2000;
+
 export type ComplianceNotificationItem = {
   vehicle_id: string;
   make: string;
@@ -215,10 +218,38 @@ export type ComplianceNotificationItem = {
   days_until: number;
 };
 
+/** OA menu kinds after US-109–US-111 (ADR-017 hybrid). */
+export type NotificationMenuSection = "compliance" | "service" | "open_out";
+
+export type NotificationMenuItem = {
+  section: NotificationMenuSection;
+  vehicle_id: string;
+  make: string;
+  model: string;
+  license_plate: string;
+  /** Sort key: lower = more urgent (overdue first). */
+  urgency: number;
+  /** Compliance field, `service`, or `open_out`. */
+  field: string;
+  field_label: string;
+  /** compliance: expired|due_soon; service: due|approaching; open_out: open */
+  state: string;
+  date_on?: string | null;
+  days_until?: number | null;
+  service_status?: "due" | "approaching";
+  distance_remaining?: number | null;
+  distance_unit?: OdometerUnit | null;
+  driver_email?: string | null;
+  handover_id?: string | null;
+  href_hint?: "vehicle" | "service_due" | "vehicle_handovers";
+};
+
 const NOTIFICATION_FIELD_ORDER: Record<string, number> = {
   insurance_on: 0,
   inspection_on: 1,
   road_tax_on: 2,
+  open_out: 3,
+  service: 4,
 };
 
 function notificationFieldOrder(field: string): number {
@@ -299,10 +330,147 @@ export function complianceNotificationItems(
   };
 }
 
-/** Accessible name for the Global Header notification control (US-70 / US-74). */
+export type ServiceDueNotificationInput = {
+  vehicle_id: string;
+  vehicle: {
+    id?: string;
+    make?: string;
+    model?: string;
+    license_plate?: string;
+    label?: string;
+  } | null;
+  service_status: "due" | "approaching";
+  distance_remaining: number | null;
+  next_service_distance_unit: OdometerUnit;
+  days_overdue: number | null;
+  due_by_days: boolean;
+  due_by_distance: boolean;
+};
+
+export type OpenOutNotificationInput = {
+  id: string;
+  vehicle_id: string;
+  vehicle: {
+    id?: string;
+    make?: string;
+    model?: string;
+    license_plate?: string;
+    label?: string;
+  } | null;
+  driver: { id: string; email: string } | null;
+  created_at: string;
+};
+
+/**
+ * Hybrid OA notification feed (ADR-017 US-109–111): compliance + service-due + open outs.
+ * Does **not** re-gate service ≤2000 — trust server listServiceDue. Cap 50 after urgency sort.
+ */
+export function notificationMenuItems(input: {
+  vehicles?: Iterable<ComplianceNotificationVehicle>;
+  serviceDue?: Iterable<ServiceDueNotificationInput>;
+  openOuts?: Iterable<OpenOutNotificationInput>;
+  todayIso?: string;
+  cap?: number;
+}): { items: NotificationMenuItem[]; truncated: boolean; total: number } {
+  const todayIso = input.todayIso ?? utcToday();
+  const cap = input.cap ?? 50;
+  const items: NotificationMenuItem[] = [];
+
+  if (input.vehicles) {
+    const compliance = complianceNotificationItems(input.vehicles, todayIso, Number.MAX_SAFE_INTEGER);
+    for (const c of compliance.items) {
+      items.push({
+        section: "compliance",
+        vehicle_id: c.vehicle_id,
+        make: c.make,
+        model: c.model,
+        license_plate: c.license_plate,
+        urgency: c.days_until,
+        field: c.field,
+        field_label: c.field_label,
+        state: c.state,
+        date_on: c.date_on,
+        days_until: c.days_until,
+        href_hint: "vehicle",
+      });
+    }
+  }
+
+  if (input.serviceDue) {
+    for (const s of input.serviceDue) {
+      const make = s.vehicle?.make ?? "";
+      const model = s.vehicle?.model ?? "";
+      const plate = s.vehicle?.license_plate ?? "";
+      const due = s.service_status === "due" || s.due_by_days || s.due_by_distance;
+      const urgency = due
+        ? s.days_overdue != null
+          ? -1000 - s.days_overdue
+          : -500
+        : s.distance_remaining ?? 0;
+      items.push({
+        section: "service",
+        vehicle_id: s.vehicle_id,
+        make,
+        model,
+        license_plate: plate,
+        urgency,
+        field: "service",
+        field_label: "Service",
+        state: due ? "due" : "approaching",
+        service_status: due ? "due" : "approaching",
+        distance_remaining: s.distance_remaining,
+        distance_unit: s.next_service_distance_unit,
+        href_hint: "vehicle",
+      });
+    }
+  }
+
+  if (input.openOuts) {
+    for (const o of input.openOuts) {
+      const make = o.vehicle?.make ?? "";
+      const model = o.vehicle?.model ?? "";
+      const plate = o.vehicle?.license_plate ?? "";
+      const createdMs = Date.parse(o.created_at);
+      const ageDays = Number.isFinite(createdMs)
+        ? Math.floor((Date.parse(`${todayIso}T00:00:00.000Z`) - createdMs) / 86_400_000)
+        : 0;
+      items.push({
+        section: "open_out",
+        vehicle_id: o.vehicle_id,
+        make,
+        model,
+        license_plate: plate,
+        urgency: -2000 - Math.max(0, ageDays),
+        field: "open_out",
+        field_label: "Handover out open",
+        state: "open",
+        driver_email: o.driver?.email ?? null,
+        handover_id: o.id,
+        href_hint: "vehicle_handovers",
+      });
+    }
+  }
+
+  items.sort((a, b) => {
+    if (a.urgency !== b.urgency) return a.urgency - b.urgency;
+    const fieldDelta = notificationFieldOrder(a.field) - notificationFieldOrder(b.field);
+    if (fieldDelta !== 0) return fieldDelta;
+    if (a.field !== b.field) return a.field.localeCompare(b.field);
+    return a.license_plate.localeCompare(b.license_plate);
+  });
+
+  const total = items.length;
+  return {
+    items: items.slice(0, cap),
+    truncated: total > cap,
+    total,
+  };
+}
+
+/** Accessible name for the Global Header notification control (US-70 / US-74 / US-109). */
 export function complianceNotificationsA11yLabel(count: number): string {
   if (count <= 0) return "Notifications";
-  return `Notifications, ${count} compliance alerts`;
+  return `Notifications, ${count} alerts`;
 }
 
 /** List/home identity: "Make Model" with single space. */
@@ -781,29 +949,46 @@ export type DailyUsageVehicleSummary = {
   label: string;
 };
 
+export type DailyUsageStatus = "open" | "closed";
+export type RefuelAmountUnit = "L" | "gal";
+
 export type DailyUsage = {
   id: string;
   vehicle_id: string;
   usage_date: string;
+  status: DailyUsageStatus;
   start_place: string;
   start_distance: number;
-  end_place: string;
-  end_distance: number;
+  end_place: string | null;
+  end_distance: number | null;
   distance_unit: OdometerUnit;
   start_time: string;
-  end_time: string;
+  end_time: string | null;
+  refuel_amount: number | null;
+  refuel_amount_unit: RefuelAmountUnit | null;
+  refuel_at_mileage: number | null;
   created_at: string;
+  closed_at: string | null;
   vehicle: DailyUsageVehicleSummary | null;
 };
 
+/** Day Start — creates open row. */
 export type CreateDailyUsageInput = {
   usage_date: string;
   start_place: string;
   start_distance: number | string;
   start_time: string;
+  refuel_amount?: number | string | null;
+  refuel_at_mileage?: number | string | null;
+};
+
+/** End of Day — closes open row. */
+export type EndDailyUsageInput = {
   end_place: string;
   end_distance: number | string;
   end_time: string;
+  refuel_amount?: number | string | null;
+  refuel_at_mileage?: number | string | null;
 };
 
 export type ComplianceDocType =
@@ -850,14 +1035,19 @@ export type CompanyDailyUsage = {
   driver_email: string | null;
   vehicle_id: string;
   usage_date: string;
+  status: DailyUsageStatus;
   start_place: string;
   start_distance: number;
-  end_place: string;
-  end_distance: number;
+  end_place: string | null;
+  end_distance: number | null;
   distance_unit: OdometerUnit;
   start_time: string;
-  end_time: string;
+  end_time: string | null;
+  refuel_amount: number | null;
+  refuel_amount_unit: RefuelAmountUnit | null;
+  refuel_at_mileage: number | null;
   created_at: string;
+  closed_at: string | null;
   vehicle: DailyUsageVehicleSummary | null;
 };
 
@@ -876,6 +1066,21 @@ export type ServiceDueItem = {
   distance_remaining: number | null;
   due_by_days: boolean;
   due_by_distance: boolean;
+  /** Server: due if days or distance due; else approaching (≤2000 remaining). */
+  service_status: "due" | "approaching";
+};
+
+export type OpenHandoverListItem = {
+  id: string;
+  vehicle_id: string;
+  company_id: string;
+  type: "out";
+  status: "open";
+  driver: { id: string; email: string } | null;
+  mileage: number;
+  mileage_unit: OdometerUnit;
+  created_at: string;
+  vehicle: DailyUsageVehicleSummary | null;
 };
 
 export function odometerUnitLabel(unit: OdometerUnit): string {
@@ -1349,9 +1554,14 @@ export class FleetClient {
     return this.request<{ items: DailyUsage[] }>("GET", "/v1/driver/daily-usage");
   }
 
-  /** US-61 — create Daily usage against active next-travel vehicle. */
+  /** US-113 — Day Start (create open Daily usage). */
   createDriverDailyUsage(input: CreateDailyUsageInput) {
     return this.request<DailyUsage>("POST", "/v1/driver/daily-usage", { body: input });
+  }
+
+  /** US-114 — End of Day (close open Daily usage). */
+  endDriverDailyUsage(input: EndDailyUsageInput) {
+    return this.request<DailyUsage>("POST", "/v1/driver/daily-usage/end", { body: input });
   }
 
   /** US-93/94 — list compliance documents for a vehicle. */
@@ -1391,6 +1601,11 @@ export class FleetClient {
       "GET",
       `/v1/reports/daily-usage${qs ? `?${qs}` : ""}`,
     );
+  }
+
+  /** US-111 — Company OA open Out handovers. Individual → 403. */
+  listOpenHandovers() {
+    return this.request<{ items: OpenHandoverListItem[] }>("GET", "/v1/handovers/open");
   }
 
   /** US-96 — company daily usage CSV as blob/text via low-level fetch. */

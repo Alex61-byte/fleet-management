@@ -47,13 +47,14 @@ test("AppShell Global Header has Fleet mark and notification control (US-68–US
   assert.doesNotMatch(shell, /<p className=\{`\$\{themeClasses\.sidebarMeta\}/);
 });
 
-test("Notification menu covers open/close states and compliance copy", () => {
-  assert.match(notif, /Compliance alerts/);
-  assert.match(notif, /No compliance alerts/);
+test("Notification menu covers open/close states and alerts copy", () => {
+  assert.match(notif, /Alerts/);
+  assert.match(notif, /No alerts/);
   assert.match(notif, /role="dialog"/);
   assert.match(notif, /Notifications/);
-  assert.match(notif, /href=\{`\/vehicles\/\$\{item\.vehicle_id\}`\}/);
+  assert.match(notif, /itemHref/);
   assert.match(notif, /name="bell"/);
+  assert.match(notif, /open_out|service/);
 });
 
 test("Notification popover uses fixed readable width not bell hit-target width", () => {

@@ -115,16 +115,30 @@ export default function DailyUsageReportPage() {
           {items?.map((row) => (
             <li key={row.id} className={`${themeClasses.raised} p-2 flex flex-col gap-0.5`}>
               <span className={themeClasses.label}>
-                {row.usage_date} · {row.driver_email ?? "Driver"}
+                {row.usage_date} · {row.status} · {row.driver_email ?? "Driver"}
               </span>
               <span className={themeClasses.caption}>
                 {row.vehicle?.label ?? "Vehicle"}
                 {row.vehicle?.license_plate ? ` · ${row.vehicle.license_plate}` : ""}
               </span>
               <span className={themeClasses.caption}>
-                {row.start_place} → {row.end_place} · {row.start_distance}–{row.end_distance}{" "}
-                {row.distance_unit} · {row.start_time}–{row.end_time}
+                {row.start_place}
+                {row.end_place ? ` → ${row.end_place}` : " (open)"} · {row.start_distance}
+                {row.end_distance != null ? `–${row.end_distance}` : ""} {row.distance_unit} ·{" "}
+                {row.start_time}
+                {row.end_time ? `–${row.end_time}` : ""}
               </span>
+              {row.refuel_amount != null || row.refuel_at_mileage != null ? (
+                <span className={themeClasses.caption}>
+                  Refuel
+                  {row.refuel_amount != null
+                    ? ` ${row.refuel_amount}${row.refuel_amount_unit ?? ""}`
+                    : ""}
+                  {row.refuel_at_mileage != null
+                    ? ` @ ${row.refuel_at_mileage} ${row.distance_unit}`
+                    : ""}
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>

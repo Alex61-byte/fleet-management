@@ -1,14 +1,14 @@
 # Driver home (start)
 
-**Stories:** US-10, US-14, **US-33**, **US-34**, **US-51–US-54**, **US-58–US-60**, **US-61–US-67**  
+**Stories:** US-10, US-14, **US-33**, **US-34**, **US-51–US-54**, **US-58–US-60**, **US-61–US-67**, **US-110** (open-Out notify strengthen)  
 **Density:** Web compact content; mobile comfortable. **Both surfaces** after invite accept (or subsequent login).  
-**Purpose:** Calm **post-auth start / hub**: identity, navigation to **Next travel**, **Vehicle handover**, and **Daily usage**, sign out. Login and invite land here — **not** on handover or Daily usage forms. **No** fleet admin create/edit, **no** driver management, **no** create Admin, **no** Owner expiry inbox, **no** TOTP settings, **no** Owner/Admin chrome, **no** Owner/Admin Handovers history tab (E55), **no** Owner Daily usage reporting (A65).  
+**Purpose:** Calm **post-auth start / hub**: identity, navigation to **Next travel**, **Vehicle handover**, and **Daily usage**, sign out. Login and invite land here — **not** on handover or Daily usage forms. **No** fleet admin create/edit, **no** driver management, **no** create Admin, **no** Owner expiry inbox, **no** TOTP settings, **no** Owner/Admin chrome / notification bell, **no** Owner/Admin Handovers history tab (E55), **no** Owner Daily usage reporting (A65).  
 **Chrome:** Driver-only shell — see [_patterns.md](_patterns.md) **Driver shell (web + mobile)**.  
-- **Mobile:** `appBarMobile` only — **no** tab bar, **no** sidebar.  
-- **Web:** top driver header strip only — **no** Owner `sidebar`.  
+- **Mobile:** `appBarMobile` only — **no** tab bar, **no** sidebar, **no** OA notification menu (US-109/US-111 N/A).  
+- **Web:** top driver header strip only — **no** Owner `sidebar`, **no** Global Header bell.  
 **Handover shared spec:** [handover.md](handover.md) (fields, damage grid, validation, viewer).  
 **Daily usage shared spec:** [daily-usage.md](daily-usage.md) (create + own list, gate, offline).  
-Task screens own forms; this page owns **start placement** and hub cues.
+Task screens own forms; this page owns **start placement** and hub cues. Open-Out / need-In is **in-app only** (no push/email/SMS).
 
 ## Information architecture
 
@@ -29,6 +29,7 @@ Auth redirects (`sign-in`, invite accept, root) always go to **Start**, never di
 Safe area
 appBarMobile / pageTitleMobile Home
 canvas contentPadComfortable gap-2
+  [when open Out for me] bannerWarning need-In (US-60 / US-110)
   panel (identity)
     overline Driver
     label {email}
@@ -40,7 +41,7 @@ canvas contentPadComfortable gap-2
       badge Selected | (chevron)
     hubLink Vehicle handover
       label Vehicle handover
-      caption {guidance / Out open cue}
+      caption {guidance / need-In cue}
       badge Out open | Ready | (chevron)
     hubLink Daily usage
       label Daily usage
@@ -55,12 +56,27 @@ canvas contentPadComfortable gap-2
 page (bg-canvas min-h-full)
 driverAppBar title Home
 contentPadCompact max-w-auth-card mx-auto flex flex-col gap-2
+  [when open Out for me] bannerWarning need-In
   panel identity (as mobile)
   nav hub links (panel-styled Link cards)
   buttonSecondary Sign out
 ```
 
 **No** next-travel, handover, or Daily usage **forms** on Start. Status badges only (Selected / Ready / Out open). Daily usage does **not** use Out open.
+
+### Open-Out / need-In cue (US-60 Must + US-110)
+
+Visible on **Start** as soon as session lands (sign-in / invite) when **this** driver holds an open Out (In not done; not voided) on the active next-travel vehicle. **Not** another driver’s Out. **Not** OA header.
+
+| Element | Spec |
+| --- | --- |
+| Page banner | `bannerWarning` **above** identity: “Out open — complete **Handover In** when you return the vehicle.” Optional trailing text control / whole-banner activate → `/driver/handover` (or mobile equiv.) |
+| Hub card | Handover card: `badgeNeutral` **Out open** + caption “Need Handover In to close custody.” (text + badge — not color-only) |
+| Cleared | After successful In or voided Out: banner **absent**; hub returns to **Ready** or travel-first guidance |
+| No open Out | No banner; eligible hub shows **Ready** / chevron only |
+| Reduce-motion | No pulse/shine on banner or badge |
+
+Banner + hub badge **together** strengthen awareness (Must); either alone is insufficient if the other fits the layout — **require both** when open Out.
 
 ## Layout — Next travel screen
 
@@ -110,15 +126,16 @@ Not auto-opened after login or after saving next-travel. Independent of open Out
 | Vehicle | native select or radio list | Options: “{Make Model} · {plate}”; empty → emptyState sentence |
 | Odometer | text/number input | Label “Odometer”; **hint** shows unit only (not a second control). Unit **not** editable |
 | Unit | `caption` / field hint | “Miles” or “Kilometers” from selected vehicle country (US-34) |
+| Floor caption | `caption` (optional Should) | When selected vehicle’s `vehicle.mileage` known: “Must be at least {n} {mi\|km}.” — same calm pattern as [handover.md](handover.md) monotonic floor |
 | Primary | `buttonPrimary` | “Save selection” |
 | Empty fleet | `body` | “No vehicles available. Ask your company to add a vehicle.” |
 | Back | `buttonSecondary` | “Back to Home” |
 
-Changing vehicle in the selector **updates the unit hint immediately**.
+Changing vehicle in the selector **updates the unit hint immediately** (and floor caption when applicable).
 
-**Handover coupling:** Next-travel **Save selection** does **not** create a handover and does **not** write `vehicle.mileage` (A43 / US-59). Handover lives on its own route; hub may show **Ready** / **Out open** after travel is set.
+**Mileage write-through:** Successful next-travel **Save selection** / **Update selection** writes the odometer through to `vehicle.mileage` so Owner/Admin list and detail show the new reading. **Does not** create a handover (A43 / US-59). Handover remains its own route and still writes through on submit; Daily usage does **not** write through. Hub may show **Ready** / **Out open** after travel is set.
 
-## Handover panel (task screen; US-51–US-54, US-58–US-60)
+## Handover panel (task screen; US-51–US-54, US-58–US-60, US-110)
 
 Full field inventory, damage attach, validation copy, and viewer: **[handover.md](handover.md)**. Summary:
 
@@ -127,12 +144,12 @@ Full field inventory, damage attach, validation copy, and viewer: **[handover.md
 | Situation | Cue | Title | Primary |
 | --- | --- | --- | --- |
 | Active next-travel; **no** open Out; driver/vehicle eligible | None (or calm `caption`) | **Handover Out** | `buttonPrimary` **Submit Handover Out** |
-| Open **Out** on **this** driver + **this** active vehicle (US-60) | `bannerWarning`: “Out open — complete **Handover In** when you return the vehicle.” + optional `badgeNeutral` **Out open** | **Handover In** | `buttonPrimary` **Submit Handover In** |
+| Open **Out** on **this** driver + **this** active vehicle (US-60 / US-110) | `bannerWarning` need-In copy + `badgeNeutral` **Out open** on title row | **Handover In** | `buttonPrimary` **Submit Handover In** |
 | No active next-travel | Form omitted; CTA to Next travel | — | Go to Next travel |
 | Blocked (already out elsewhere, wrong holder, no open Out for In, etc.) | `bannerDanger` with failure meaning (E45–E49) | Form disabled or omitted | No successful submit |
 
 - **One** handover panel at a time — never Out and In forms stacked.
-- Open-Out awareness is **not** color-only (banner text + optional badge text); hub card may also show **Out open**.
+- Open-Out awareness is **not** color-only (banner text + badge text); Start hub **and** handover entry both show the cue (US-110).
 - Owner/Admin **never** see this panel on driver start (different role shell).
 
 ### Field strip (both Out and In)
@@ -180,12 +197,14 @@ Daily usage hub never shows **Out open** (that cue is handover-only).
 | --- | --- |
 | Loading start | App bar real; skeleton identity + hub cards |
 | Start default | Identity + hub links (no forms) + Sign out |
+| Start, open Out (me) | `bannerWarning` need-In + handover hub **Out open**; visible after sign-in without OA chrome |
 | Start, travel selected | Next travel badge **Selected**; handover **Ready** or **Out open**; Daily usage **Ready** (Should) |
+| Start, Out cleared | Banner gone; hub not **Out open** |
 | Start, no travel | Handover + Daily usage cards explain select travel first |
 | Travel screen empty / form / error | As prior next-travel states |
 | Handover screen no travel | CTA to Next travel only |
 | Handover eligible Out / open Out / success | Per [handover.md](handover.md) |
-| Daily usage screen no travel | CTA to Next travel; optional own list | 
+| Daily usage screen no travel | CTA to Next travel; optional own list |
 | Daily usage eligible / list / offline | Per [daily-usage.md](daily-usage.md) |
 | Offline | `bannerWarning`; primary actions disabled on task screens |
 | Owner deep link | [denied.md](denied.md) |
@@ -197,7 +216,8 @@ Daily usage hub never shows **Out open** (that cue is handover-only).
 | Start screen | Home |
 | Hub nav | Driver start |
 | Hub Next travel | Next travel. {badge}. {description} |
-| Hub Handover | Vehicle handover. {badge}. {description} |
+| Hub Handover | Vehicle handover. {Out open\|Ready}. {description} |
+| Open-Out banner | Out open, complete Handover In when you return the vehicle |
 | Hub Daily usage | Daily usage. {badge}. {description} |
 | Travel screen | Next travel |
 | Vehicle | Vehicle for next travel |
@@ -205,7 +225,6 @@ Daily usage hub never shows **Out open** (that cue is handover-only).
 | Save | Save selection |
 | Handover screen | Handover |
 | Handover panel | Handover Out \| Handover In |
-| Open Out banner | Out open, complete Handover In when you return the vehicle |
 | Mileage (handover) | Miles \| Kilometers (handover) |
 | Next service days | Next service in days |
 | Next service distance | Next service distance in {miles\|kilometres} |

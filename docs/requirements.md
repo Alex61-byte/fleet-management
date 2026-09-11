@@ -11,7 +11,7 @@ A company that runs vehicles and drivers has no shared place to:
 - Invite drivers by email (no Admin-set temporary password); drivers receive an invitation via **Resend**, create their own password, then sign in on **web and mobile**.
 - Keep vehicle records (make/model, plate, optional current mileage/odometer reading, insurance, inspection dates, country of registration, road tax) and see when those dates are about to expire.
 - Record **vehicle handovers** (**Out** when taking / **In** when returning) with mileage, next-service days/distance, optional damage notes and photos; let Owner/Admin review handover history on the vehicle.
-- Let drivers log **Daily usage** (date, start/end place, start/end distance, start/end time) against their **active next-travel** vehicle.
+- Let drivers log **Daily usage** in two independently savable parts — **Day Start** (open) and **End of Day** (close) — with optional **refuel amount** and **refuel at mileage**, against their **active next-travel** vehicle.
 - Let **Individuals** self-register a **personal** account (not a company) and manage **their own vehicles** with compliance dates—without inviting drivers or running a multi-driver org.
 
 **What success looks like**
@@ -24,15 +24,17 @@ A company that runs vehicles and drivers has no shared place to:
 - Owner/Admin can **hard-delete** a driver profile (permanent remove). **Disable login without delete** remains available as Should (US-16).
 - After the driver accepts the invite and sets a password, later logins use that password on web or mobile (no MFA for drivers). Post-auth driver UX is **minimal home** only (not Owner/Admin fleet UI).
 - Owner/Admin can create and edit vehicles and compliance **dates**; the product **warns** when insurance, inspection, road tax, or registration is within the warning window or already expired.
-- Owner/Admin can optionally record **current vehicle mileage** (odometer reading) on the vehicle; unit is **Miles** or **Kilometers** from **country of registration** (same rule as driver odometer). Empty/unknown allowed. Distinct from driver next-travel odometer.
+- Owner/Admin can optionally record **current vehicle mileage** (odometer reading) on the vehicle; unit is **Miles** or **Kilometers** from **country of registration** (same rule as driver odometer). Empty/unknown allowed. Driver next-travel odometer remains a separate selection row, but a successful travel save **also** updates vehicle current mileage (write-through).
 - Owner/Admin **edit vehicle** opens with fields **prepopulated** from stored data; **create** stays blank.
 - Owner/Admin can attach **optional appearance photos** of a vehicle from **four sides** (**FRONT**, **LEFT**, **RIGHT**, **BACK**): at most one image per side, replace or clear per side. Files live in **Supabase Storage**; the product stores **references** (path/URL), not file bytes in the database. **Not** insurance/inspection/tax/registration document upload.
 - **Vehicles** nav (web side nav + mobile Owner/Admin tabs) shows **orange** when any company section date is **exactly 7 days** out and **red** when any is **&lt; 7 days** or overdue (fleet-wide worst-wins); list/detail keep the 30-day warnings.
 - Drivers never see Owner/Admin screens; people who are not signed in cannot open fleet or driver records.
-- A signed-in **driver** can **select a company vehicle for their next travel** and record the current **odometer** reading. Odometer unit is **miles or kilometres** based on the vehicle’s **country of registration** (not a free choice by the driver).
+- A signed-in **driver** can **select a company vehicle for their next travel** and record the current **odometer** reading. Odometer unit is **miles or kilometres** based on the vehicle’s **country of registration** (not a free choice by the driver). Successful next-travel save **updates vehicle current mileage** so Owner/Admin list/detail reflect it (monotonic when mileage already set).
 - With an active next-travel vehicle, a driver can complete **Handover Out** and **Handover In** (required mileage, next service days, next service distance; optional damages text/images). Successful handover **updates vehicle current mileage**.
-- With an active next-travel vehicle, a driver can log **Daily usage** (required: date, start place, start distance, start time, end place, end distance, end time). Multiple entries per day allowed. **Does not** update vehicle mileage. Driver lists **own** entries only.
-- Owner/Admin vehicle UI has a **third tab Handovers** (history + detail, read-only). **Drivers do not** see that tab. **No** Owner/Admin Daily usage reporting this slice.
+- **Service approaching / due:** Owner/Admin **Service due** board and **notification menu** signal vehicles **approaching** service when remaining distance is **≤ 2000** (same unit as odometer / next_service_distance) and still list fully **due/overdue** from handover next-service days/distance. In-app only this slice (no OS push/SMS; compliance digest email not extended).
+- **Open Out incomplete:** Driver who holds an **open Out** (In not done) gets a clear **driver home / handover** cue. **Company** Owner/Admin see **open_out** items in the **notification menu** (vehicle + driver when known). No OS push/email/SMS for open Out this slice. Individual open-Out path N/A.
+- With an active next-travel vehicle, a driver can log **Daily usage** as **Day Start** then **End of Day** (independently savable). Day Start requires date, start place, start distance, start time (creates **open** row). End of Day requires end place, end distance, end time (closes the open row). Optional **refuel amount** and **refuel at mileage** on either save. Multiple **closed** entries per day allowed; at most one **open** per driver. **Does not** update vehicle mileage. Driver lists **own** entries (open + closed).
+- Owner/Admin vehicle UI has a **third tab Handovers** (history + detail, read-only). **Drivers do not** see that tab. **Company** Owner/Admin Daily usage report + CSV include status and refuel fields (US-96).
 - An unsigned-in person can choose **Company** or **Individual** account creation.
 - **Company** path still creates an organization with registration number, VAT, address, and first **Owner**.
 - **Individual** path creates a **personal workspace** owned by that user (Owner of an individual-kind tenant) with email/password only—**no** company legal entity fields.
@@ -174,9 +176,8 @@ Paid **pricing plans** (2 Individual + 2 Company) are defined in [pricing-plans.
 - Delete of Owner/Admin users (except existing last-Owner protection only)
 - Driver self-serve password reset (still A9 unless later decided)
 - Global sign-out-everywhere
-- Auto-update of vehicle mileage from driver next-travel odometer
 - mi↔km conversion when country of registration changes
-- Driver write of vehicle inventory mileage
+- Driver direct write via fleet vehicle POST/PATCH (travel/handover write-through only)
 
 ### MoSCoW
 
@@ -227,16 +228,23 @@ Paid **pricing plans** (2 Individual + 2 Company) are defined in [pricing-plans.
 | **Must** | Handover required fields: mileage; next service days; next service distance (unit from country) |
 | **Must** | Optional damages text + optional damage images (multi, caps) linked to handover and vehicle |
 | **Must** | Out→In pairing; one open Out per vehicle; one open Out per driver; same driver closes In |
-| **Must** | Successful handover updates `vehicle.mileage` (monotonic rules); next-travel PUT still does not |
+| **Must** | Successful handover updates `vehicle.mileage` (monotonic rules) |
+| **Must** | Successful driver next-travel PUT updates `vehicle.mileage` from odometer (monotonic when set); drivers still cannot POST/PATCH fleet vehicles |
 | **Must** | Owner/Admin third vehicle tab **Handovers**: history + detail read-only (web + mobile) |
 | **Must** | Drivers cannot see Handovers history tab / company handover admin |
-| **Should** | Driver home shows open Out / start In cue when applicable |
-| **Must** | Driver **Daily usage** create when active next-travel exists (web + mobile) |
-| **Must** | Daily usage required fields: date, start place, start distance, start time, end place, end distance, end time |
-| **Must** | Distance unit from country (A34); end ≥ start; start ≥ vehicle.mileage when set; end time ≥ start time same date |
-| **Must** | Multiple Daily usage entries per day allowed; driver lists **own** only; no edit/delete this slice |
+| **Must** | Driver home / handover shows open Out / need-In cue when driver holds open Out (US-60, US-110) |
+| **Must** | Service-due board includes **approaching** (`0 < distance_remaining ≤ 2000`) and existing due/overdue (US-97) |
+| **Must** | OA notification menu sources extend to **service** + **open_out** (Company); in-app only (US-109, US-111) |
+| **Won't** | OS push / SMS / new email for service approaching or open Out this slice |
+| **Must** | Driver **Day Start** when active next-travel exists (web + mobile); creates open Daily usage |
+| **Must** | Driver **End of Day** completes open row (web + mobile); no open → reject |
+| **Must** | Day Start fields: date, start place, start distance, start time; End of Day: end place, end distance, end time |
+| **Must** | Optional refuel_amount + refuel_at_mileage on either save; unit L/gal from A34; no cost/type |
+| **Must** | Distance unit from country (A34); end ≥ start on close; start ≥ max(vehicle.mileage, latest closed end on vehicle); end time ≥ start time same date |
+| **Must** | At most one open per driver; multiple closed per day OK; driver lists own open+closed; closed immutable; open only via End of Day |
 | **Must** | Daily usage does **not** update `vehicle.mileage` |
-| **Must** | Offline: Daily usage submit disabled with warning |
+| **Must** | Offline: Day Start and End of Day submit disabled with warning |
+| **Must** | Company OA Daily usage report/CSV includes status + refuel fields |
 | **Should** | Driver home hub cue for Daily usage when next-travel active |
 | **Must** | Store compliance dates and warn on expiry |
 | **Must** | Edit vehicle form prepopulated from stored vehicle (web + mobile); create stays blank |
@@ -303,7 +311,7 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 | A40 | Owner/Admin **clear** removes that side’s reference and the product **must not** keep presenting that image; storage object is removed or equivalent cleanup. **Clear of a filled side requires confirmation (A41) before the clear runs.** Drivers have **no** side-image manage UI; next-travel list does **not** require side images this slice. List gallery is **Should** presence only. |
 | A41 | **Confirm-before-delete** is **Must** for in-product actions that **delete** user-visible assets or records (e.g. hard-delete driver, clear vehicle side image, and any future delete). First control activation opens confirm only; Cancel/dismiss makes no change. Does not require confirm for non-delete flows (e.g. disable login) unless those stories say so. |
 | A42 | Vehicle **mileage** = optional **current odometer reading** on the fleet vehicle record. Product field label is the unit (**Miles** / **Kilometers**). API/storage concept name: **`mileage`**. |
-| A43 | Driver **next-travel odometer** (`driver_travel_selections`) remains **separate**. This slice does **not** overwrite vehicle.mileage when travel is saved. |
+| A43 | Driver **next-travel odometer** (`driver_travel_selections`) remains a **separate selection row**. Successful `PUT /v1/driver/travel` **does** write-through parsed odometer to `vehicle.mileage` (same transaction; monotonic when mileage set). Drivers still **cannot** POST/PATCH fleet vehicles. |
 | A44 | Driver read-only display of vehicle.mileage is **Should**, not Must. |
 | A45 | **Handover Out** starts open vehicle custody; **Handover In** closes it. Pair = Out → In on the same vehicle. |
 | A46 | Driver may create handovers only for the vehicle of their **active next-travel selection** (US-33). No separate assignment entity this slice. |
@@ -312,7 +320,7 @@ See [business-rules.md](business-rules.md) for numbered rules. Assumptions and o
 | A49 | **Damages text** optional. **Damage images** optional. Images do **not** hard-require text. |
 | A50 | Damage images: **1–10** per handover; image types; **max 5 MB** each. Object storage + DB references; linked to **handover_id** and **vehicle_id**. |
 | A51 | Units for handover mileage and next_service_distance derived from vehicle **country of registration** (A34)—not driver-chosen. Store value + unit at write. |
-| A52 | On successful Out or In, **update `vehicle.mileage`** to the handover mileage. Does **not** change A43 for plain next-travel PUT. |
+| A52 | On successful Out or In, **update `vehicle.mileage`** to the handover mileage. Travel PUT also write-throughs (A43). Daily usage does **not** (A62). |
 | A53 | Monotonicity: handover mileage ≥ 0, max 1 decimal; if vehicle.mileage set, handover ≥ it; on In, ≥ paired Out mileage. |
 | A54 | **next_service_days**: integer ≥ 1. **next_service_distance**: number ≥ 0, max 1 decimal. |
 | A55 | Owner and Admin only see Handovers history tab + detail; Drivers cannot. History **read-only** this slice. |

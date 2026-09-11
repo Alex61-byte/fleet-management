@@ -1533,6 +1533,46 @@ describe("HTTP /v1 first slice", () => {
       payload: { mileage: 200 },
     });
 
+    const beforeLow = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${usCar.body.id}`,
+      token: ownerTok,
+    });
+    assert.equal(beforeLow.body.mileage, 200);
+
+    const travelLow = await json(inject, {
+      method: "PUT",
+      url: "/v1/driver/travel",
+      token: driverTok,
+      payload: { vehicle_id: usCar.body.id, odometer: 199 },
+    });
+    assert.equal(travelLow.status, 400);
+
+    // C-03: floor reject — no travel activation, mileage unchanged
+    const afterLowMileage = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${usCar.body.id}`,
+      token: ownerTok,
+    });
+    assert.equal(afterLowMileage.body.mileage, 200);
+    const afterLowTravel = await json(inject, {
+      method: "GET",
+      url: "/v1/driver/travel",
+      token: driverTok,
+    });
+    assert.equal(afterLowTravel.status, 200);
+    assert.equal(afterLowTravel.body.travel, null);
+
+    // ADR-020: travel write-through must invalidate vehicle list ETag
+    const listBefore = await inject({
+      method: "GET",
+      url: "/v1/vehicles",
+      headers: { authorization: `Bearer ${ownerTok}` },
+    });
+    assert.equal(listBefore.statusCode, 200);
+    const listEtag = listBefore.headers.etag;
+    assert.ok(listEtag);
+
     const travel = await json(inject, {
       method: "PUT",
       url: "/v1/driver/travel",
@@ -1547,7 +1587,24 @@ describe("HTTP /v1 first slice", () => {
       url: `/v1/vehicles/${usCar.body.id}`,
       token: ownerTok,
     });
-    assert.equal(afterTravel.body.mileage, 200);
+    // US-112: travel odometer write-through to vehicle.mileage
+    assert.equal(afterTravel.body.mileage, 999);
+
+    const listAfter = await inject({
+      method: "GET",
+      url: "/v1/vehicles",
+      headers: {
+        authorization: `Bearer ${ownerTok}`,
+        "if-none-match": String(listEtag),
+      },
+    });
+    assert.equal(listAfter.statusCode, 200);
+    assert.ok(listAfter.headers.etag);
+    assert.notEqual(listAfter.headers.etag, listEtag);
+    const listedOwner = JSON.parse(listAfter.body).items.find(
+      (v: { id: string }) => v.id === usCar.body.id,
+    );
+    assert.equal(listedOwner.mileage, 999);
 
     const driverList = await json(inject, {
       method: "GET",
@@ -1556,7 +1613,7 @@ describe("HTTP /v1 first slice", () => {
     });
     assert.equal(driverList.status, 200);
     const listed = driverList.body.items.find((v: { id: string }) => v.id === usCar.body.id);
-    assert.equal(listed.mileage, 200);
+    assert.equal(listed.mileage, 999);
     assert.equal(listed.mileage_unit, "km");
   });
 
@@ -1780,6 +1837,7 @@ describe("HTTP /v1 first slice", () => {
     }
 
     // Bind travel to this vehicle (driver may already have travel from earlier tests).
+    // Vehicle mileage is already 1000 from create — equal odometer is allowed and write-through keeps 1000.
     const travel = await json(inject, {
       method: "PUT",
       url: "/v1/driver/travel",
@@ -1789,7 +1847,7 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(travel.status, 200);
     assert.equal(travel.body.vehicle_id, vehicleId);
 
-    // travel must not change vehicle.mileage
+    // travel write-through keeps vehicle.mileage at odometer (A43 / US-112)
     const afterTravel = await json(inject, {
       method: "GET",
       url: `/v1/vehicles/${vehicleId}`,
@@ -1976,7 +2034,7 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(ownerCreateRes.statusCode, 403);
   });
 
-  it("US-61–67 driver daily usage create/list, gate, validation, no mileage write", async () => {
+  it("US-61–67 · US-113–115 daily usage Day Start / End of Day, refuel, no mileage write", async () => {
     const ownerReg = await json(inject, {
       method: "POST",
       url: "/v1/auth/register",
@@ -2043,13 +2101,23 @@ describe("HTTP /v1 first slice", () => {
         start_place: "Depot",
         start_distance: 1000,
         start_time: "08:00",
+      },
+    });
+    assert.equal(noTravel.status, 409);
+    assert.equal(noTravel.body.error.code, "daily_usage_no_active_travel");
+
+    const noOpenEnd = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage/end",
+      token: driverToken,
+      payload: {
         end_place: "Site",
         end_distance: 1010,
         end_time: "17:00",
       },
     });
-    assert.equal(noTravel.status, 409);
-    assert.equal(noTravel.body.error.code, "daily_usage_no_active_travel");
+    assert.equal(noOpenEnd.status, 409);
+    assert.equal(noOpenEnd.body.error.code, "daily_usage_no_open");
 
     const travel = await json(inject, {
       method: "PUT",
@@ -2068,23 +2136,54 @@ describe("HTTP /v1 first slice", () => {
         start_place: "Depot",
         start_distance: 999,
         start_time: "08:00",
-        end_place: "Site",
-        end_distance: 1010,
-        end_time: "17:00",
       },
     });
     assert.equal(lowStart.status, 400);
     assert.equal(lowStart.body.error.code, "validation_error");
 
-    const endBeforeStart = await json(inject, {
+    const ok1Start = await json(inject, {
       method: "POST",
       url: "/v1/driver/daily-usage",
       token: driverToken,
       payload: {
         usage_date: "2026-09-07",
-        start_place: "Depot",
-        start_distance: 1000,
-        start_time: "17:00",
+        start_place: "Depot A",
+        start_distance: "1000.5",
+        start_time: "08:30",
+        refuel_amount: 40.5,
+        refuel_at_mileage: 1000.5,
+      },
+    });
+    assert.equal(ok1Start.status, 201);
+    assert.equal(ok1Start.body.status, "open");
+    assert.equal(ok1Start.body.vehicle_id, vehicleId);
+    assert.equal(ok1Start.body.distance_unit, "km");
+    assert.equal(ok1Start.body.start_place, "Depot A");
+    assert.equal(ok1Start.body.end_place, null);
+    assert.equal(ok1Start.body.refuel_amount, 40.5);
+    assert.equal(ok1Start.body.refuel_amount_unit, "L");
+    assert.equal(ok1Start.body.refuel_at_mileage, 1000.5);
+    assert.equal(ok1Start.body.vehicle.label, "Daily Van");
+
+    const alreadyOpen = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+      payload: {
+        usage_date: "2026-09-07",
+        start_place: "Other",
+        start_distance: 1001,
+        start_time: "09:00",
+      },
+    });
+    assert.equal(alreadyOpen.status, 409);
+    assert.equal(alreadyOpen.body.error.code, "daily_usage_already_open");
+
+    const endBeforeStart = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage/end",
+      token: driverToken,
+      payload: {
         end_place: "Site",
         end_distance: 1010,
         end_time: "08:00",
@@ -2094,39 +2193,33 @@ describe("HTTP /v1 first slice", () => {
 
     const endKmLow = await json(inject, {
       method: "POST",
-      url: "/v1/driver/daily-usage",
+      url: "/v1/driver/daily-usage/end",
       token: driverToken,
       payload: {
-        usage_date: "2026-09-07",
-        start_place: "Depot",
-        start_distance: 1010,
-        start_time: "08:00",
         end_place: "Site",
-        end_distance: 1005,
+        end_distance: 1000,
         end_time: "17:00",
       },
     });
     assert.equal(endKmLow.status, 400);
 
-    const ok1 = await json(inject, {
+    const ok1End = await json(inject, {
       method: "POST",
-      url: "/v1/driver/daily-usage",
+      url: "/v1/driver/daily-usage/end",
       token: driverToken,
       payload: {
-        usage_date: "2026-09-07",
-        start_place: "Depot A",
-        start_distance: "1000.5",
-        start_time: "08:30",
         end_place: "Site B",
         end_distance: 1100,
         end_time: "17:15",
       },
     });
-    assert.equal(ok1.status, 201);
-    assert.equal(ok1.body.vehicle_id, vehicleId);
-    assert.equal(ok1.body.distance_unit, "km");
-    assert.equal(ok1.body.start_place, "Depot A");
-    assert.equal(ok1.body.vehicle.label, "Daily Van");
+    assert.equal(ok1End.status, 200);
+    assert.equal(ok1End.body.status, "closed");
+    assert.equal(ok1End.body.id, ok1Start.body.id);
+    assert.equal(ok1End.body.start_place, "Depot A");
+    assert.equal(ok1End.body.end_place, "Site B");
+    assert.equal(ok1End.body.refuel_amount, 40.5);
+    assert.ok(ok1End.body.closed_at);
 
     const afterMileage = await json(inject, {
       method: "GET",
@@ -2136,7 +2229,22 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(afterMileage.status, 200);
     assert.equal(afterMileage.body.mileage, 1000);
 
-    const ok2 = await json(inject, {
+    // A61: floor is last closed end_distance even when vehicle.mileage lags
+    const lowAfterLastEnd = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+      payload: {
+        usage_date: "2026-09-07",
+        start_place: "Site B",
+        start_distance: 1099,
+        start_time: "18:00",
+      },
+    });
+    assert.equal(lowAfterLastEnd.status, 400);
+    assert.equal(lowAfterLastEnd.body.error.code, "validation_error");
+
+    const ok2Start = await json(inject, {
       method: "POST",
       url: "/v1/driver/daily-usage",
       token: driverToken,
@@ -2145,12 +2253,28 @@ describe("HTTP /v1 first slice", () => {
         start_place: "Site B",
         start_distance: 1100,
         start_time: "18:00",
+      },
+    });
+    assert.equal(ok2Start.status, 201);
+    assert.equal(ok2Start.body.status, "open");
+
+    const ok2End = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage/end",
+      token: driverToken,
+      payload: {
         end_place: "Depot A",
         end_distance: 1150,
         end_time: "19:00",
+        refuel_amount: 10,
+        refuel_at_mileage: 1140,
       },
     });
-    assert.equal(ok2.status, 201);
+    assert.equal(ok2End.status, 200);
+    assert.equal(ok2End.body.status, "closed");
+    assert.equal(ok2End.body.refuel_amount, 10);
+    assert.equal(ok2End.body.refuel_amount_unit, "L");
+    assert.equal(ok2End.body.refuel_at_mileage, 1140);
 
     const list = await json(inject, {
       method: "GET",
@@ -2160,8 +2284,9 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(list.status, 200);
     assert.equal(list.body.items.length, 2);
     const ids = list.body.items.map((i: { id: string }) => i.id);
-    assert.ok(ids.includes(ok1.body.id));
-    assert.ok(ids.includes(ok2.body.id));
+    assert.ok(ids.includes(ok1Start.body.id));
+    assert.ok(ids.includes(ok2Start.body.id));
+    assert.ok(list.body.items.every((i: { status: string }) => i.status === "closed"));
 
     const ownerList = await json(inject, {
       method: "GET",
@@ -2179,19 +2304,27 @@ describe("HTTP /v1 first slice", () => {
         start_place: "X",
         start_distance: 1000,
         start_time: "08:00",
+      },
+    });
+    assert.equal(ownerPost.status, 403);
+
+    const ownerEnd = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage/end",
+      token: ownerToken,
+      payload: {
         end_place: "Y",
         end_distance: 1010,
         end_time: "09:00",
       },
     });
-    assert.equal(ownerPost.status, 403);
+    assert.equal(ownerEnd.status, 403);
 
     await json(inject, {
       method: "DELETE",
       url: `/v1/drivers/${driverId}`,
       token: ownerToken,
     });
-    // Driver gone; owner still cannot list driver daily usage route as owner.
     const ownerAfterDelete = await json(inject, {
       method: "GET",
       url: "/v1/driver/daily-usage",
@@ -2714,7 +2847,7 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(closed.body.status, "closed");
 
     // driver daily usage + owner report
-    const usage = await json(inject, {
+    const usageStart = await json(inject, {
       method: "POST",
       url: "/v1/driver/daily-usage",
       token: driverToken,
@@ -2723,12 +2856,24 @@ describe("HTTP /v1 first slice", () => {
         start_place: "A",
         start_distance: 1000,
         start_time: "08:00",
+        refuel_amount: 12,
+      },
+    });
+    assert.equal(usageStart.status, 201);
+    assert.equal(usageStart.body.status, "open");
+
+    const usageEnd = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage/end",
+      token: driverToken,
+      payload: {
         end_place: "B",
         end_distance: 1010,
         end_time: "09:00",
       },
     });
-    assert.equal(usage.status, 201);
+    assert.equal(usageEnd.status, 200);
+    assert.equal(usageEnd.body.status, "closed");
 
     const report = await json(inject, {
       method: "GET",
@@ -2738,6 +2883,8 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(report.status, 200);
     assert.ok(report.body.items.length >= 1);
     assert.equal(report.body.items[0].driver_email, driverEmail);
+    assert.equal(report.body.items[0].status, "closed");
+    assert.equal(report.body.items[0].refuel_amount, 12);
 
     const csv = await inject({
       method: "GET",
@@ -2747,6 +2894,8 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(csv.statusCode, 200);
     assert.match(csv.headers["content-type"] as string, /text\/csv/);
     assert.match(csv.body, /driver_email/);
+    assert.match(csv.body, /status/);
+    assert.match(csv.body, /refuel_amount/);
 
     const driverReport = await json(inject, {
       method: "GET",
@@ -2772,6 +2921,32 @@ describe("HTTP /v1 first slice", () => {
     });
     assert.equal(due.status, 200);
     assert.ok(due.body.items.some((i: { vehicle_id: string }) => i.vehicle_id === vehicleId));
+    {
+      const dueRow = due.body.items.find((i: { vehicle_id: string }) => i.vehicle_id === vehicleId);
+      assert.equal(dueRow.service_status, "due");
+      assert.equal(dueRow.due_by_distance, true);
+    }
+
+    // open handovers list while Out still open (In not done)
+    const openList = await json(inject, {
+      method: "GET",
+      url: "/v1/handovers/open",
+      token: ownerToken,
+    });
+    assert.equal(openList.status, 200);
+    assert.ok(
+      openList.body.items.some(
+        (i: { vehicle_id: string; status: string }) =>
+          i.vehicle_id === vehicleId && i.status === "open",
+      ),
+    );
+
+    const driverOpenList = await json(inject, {
+      method: "GET",
+      url: "/v1/handovers/open",
+      token: driverToken,
+    });
+    assert.equal(driverOpenList.status, 403);
 
     // digest
     mailer.digests = [];
@@ -2799,6 +2974,247 @@ describe("HTTP /v1 first slice", () => {
       headers: { authorization: `Bearer ${ownerToken}` },
     });
     assert.equal(del.statusCode, 204);
+  });
+
+
+  it("service-due-includes-approaching-band and omits far remaining", async () => {
+    const suffix = String(Date.now());
+    const ownerEmail = `svc-app-${suffix}@fleet.example`;
+    const driverEmail = `svc-app-d-${suffix}@fleet.example`;
+    const reg = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: { email: ownerEmail, password: "password1", ...companyFields },
+    });
+    assert.equal(reg.status, 201);
+    const ownerToken = reg.body.access_token as string;
+
+    const vehicle = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: ownerToken,
+      payload: {
+        make: "Svc",
+        model: "Approach",
+        license_plate: `SA-${suffix.slice(-6)}`,
+        country_of_registration: "RO",
+        mileage: 1000,
+      },
+    });
+    assert.equal(vehicle.status, 201);
+    const vehicleId = vehicle.body.id as string;
+
+    const invite = await json(inject, {
+      method: "POST",
+      url: "/v1/drivers",
+      token: ownerToken,
+      payload: { email: driverEmail },
+    });
+    assert.equal(invite.status, 201);
+    const token = mailer.lastToken();
+    const accept = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/invite/accept",
+      payload: {
+        token,
+        email: driverEmail,
+        password: "password1",
+        client: "web",
+      },
+    });
+    assert.equal(accept.status, 200);
+    const driverToken = accept.body.access_token as string;
+
+    const travel = await json(inject, {
+      method: "PUT",
+      url: "/v1/driver/travel",
+      token: driverToken,
+      payload: { vehicle_id: vehicleId, odometer: 1000 },
+    });
+    assert.equal(travel.status, 200);
+
+    function handMultipart(fields: Record<string, string>) {
+      const boundary = "----handbound";
+      const chunks: Buffer[] = [];
+      for (const [k, v] of Object.entries(fields)) {
+        chunks.push(
+          Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`,
+          ),
+        );
+      }
+      chunks.push(Buffer.from(`--${boundary}--\r\n`));
+      return { boundary, body: Buffer.concat(chunks) };
+    }
+
+    const out = handMultipart({
+      type: "out",
+      mileage: "1000",
+      next_service_days: "30",
+      next_service_distance: "5000",
+    });
+    const outRes = await inject({
+      method: "POST",
+      url: "/v1/driver/handovers",
+      headers: {
+        authorization: `Bearer ${driverToken}`,
+        "content-type": `multipart/form-data; boundary=${out.boundary}`,
+      },
+      payload: out.body,
+    });
+    assert.equal(outRes.statusCode, 201, outRes.body);
+
+    // remaining = 5000 → omit
+    let due = await json(inject, {
+      method: "GET",
+      url: "/v1/service-due",
+      token: ownerToken,
+    });
+    assert.equal(due.status, 200);
+    assert.ok(!due.body.items.some((i: { vehicle_id: string }) => i.vehicle_id === vehicleId));
+
+    // remaining = 1500 → approaching
+    const patchApp = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${vehicleId}`,
+      token: ownerToken,
+      payload: { mileage: 4500 },
+    });
+    assert.equal(patchApp.status, 200);
+    due = await json(inject, {
+      method: "GET",
+      url: "/v1/service-due",
+      token: ownerToken,
+    });
+    assert.equal(due.status, 200);
+    const appRow = due.body.items.find((i: { vehicle_id: string }) => i.vehicle_id === vehicleId);
+    assert.ok(appRow);
+    assert.equal(appRow.service_status, "approaching");
+    assert.equal(appRow.distance_remaining, 1500);
+
+    // remaining <= 0 → due beats approaching
+    const patchDue = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${vehicleId}`,
+      token: ownerToken,
+      payload: { mileage: 6000 },
+    });
+    assert.equal(patchDue.status, 200);
+    due = await json(inject, {
+      method: "GET",
+      url: "/v1/service-due",
+      token: ownerToken,
+    });
+    const dueRow = due.body.items.find((i: { vehicle_id: string }) => i.vehicle_id === vehicleId);
+    assert.ok(dueRow);
+    assert.equal(dueRow.service_status, "due");
+    assert.equal(dueRow.due_by_distance, true);
+  });
+
+  it("handovers-open-company-oa-lists-open-only and individual-403", async () => {
+    const suffix = String(Date.now());
+    const ownerEmail = `open-oa-${suffix}@fleet.example`;
+    const driverEmail = `open-d-${suffix}@fleet.example`;
+    const reg = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: { email: ownerEmail, password: "password1", ...companyFields },
+    });
+    assert.equal(reg.status, 201);
+    const ownerToken = reg.body.access_token as string;
+    const vehicle = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: ownerToken,
+      payload: {
+        make: "Open",
+        model: "Out",
+        license_plate: `OO-${suffix.slice(-6)}`,
+        country_of_registration: "RO",
+        mileage: 10,
+      },
+    });
+    assert.equal(vehicle.status, 201);
+    const vehicleId = vehicle.body.id as string;
+    const invite = await json(inject, {
+      method: "POST",
+      url: "/v1/drivers",
+      token: ownerToken,
+      payload: { email: driverEmail },
+    });
+    assert.equal(invite.status, 201);
+    const token = mailer.lastToken();
+    const accept = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/invite/accept",
+      payload: {
+        token,
+        email: driverEmail,
+        password: "password1",
+        client: "web",
+      },
+    });
+    assert.equal(accept.status, 200);
+    const driverToken = accept.body.access_token as string;
+    await json(inject, {
+      method: "PUT",
+      url: "/v1/driver/travel",
+      token: driverToken,
+      payload: { vehicle_id: vehicleId, odometer: 10 },
+    });
+    function handMultipart(fields: Record<string, string>) {
+      const boundary = "----openbound";
+      const chunks: Buffer[] = [];
+      for (const [k, v] of Object.entries(fields)) {
+        chunks.push(
+          Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`,
+          ),
+        );
+      }
+      chunks.push(Buffer.from(`--${boundary}--\r\n`));
+      return { boundary, body: Buffer.concat(chunks) };
+    }
+    const out = handMultipart({
+      type: "out",
+      mileage: "10",
+      next_service_days: "10",
+      next_service_distance: "100",
+    });
+    const outRes = await inject({
+      method: "POST",
+      url: "/v1/driver/handovers",
+      headers: {
+        authorization: `Bearer ${driverToken}`,
+        "content-type": `multipart/form-data; boundary=${out.boundary}`,
+      },
+      payload: out.body,
+    });
+    assert.equal(outRes.statusCode, 201, outRes.body);
+
+    const openList = await json(inject, {
+      method: "GET",
+      url: "/v1/handovers/open",
+      token: ownerToken,
+    });
+    assert.equal(openList.status, 200);
+    assert.equal(openList.body.items.length, 1);
+    assert.equal(openList.body.items[0].vehicle_id, vehicleId);
+    assert.equal(openList.body.items[0].status, "open");
+    assert.equal(openList.body.items[0].driver.email, driverEmail);
+
+    const ind = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register/individual",
+      payload: { email: `ind-open-${suffix}@fleet.example`, password: "password1" },
+    });
+    assert.equal(ind.status, 201);
+    const indOpen = await json(inject, {
+      method: "GET",
+      url: "/v1/handovers/open",
+      token: ind.body.access_token,
+    });
+    assert.equal(indOpen.status, 403);
   });
 
 });

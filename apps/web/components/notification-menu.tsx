@@ -2,8 +2,9 @@
 
 import {
   complianceNotificationsA11yLabel,
+  odometerUnitLabel,
   vehicleLabel,
-  type ComplianceNotificationItem,
+  type NotificationMenuItem,
 } from "@fleet/sdk";
 import { themeClasses } from "../../../design/tailwind.theme";
 import Link from "next/link";
@@ -22,19 +23,62 @@ function formatDateOn(dateIso: string): string {
   });
 }
 
+function itemHref(item: NotificationMenuItem): string {
+  if (item.href_hint === "vehicle_handovers") {
+    return `/vehicles/${item.vehicle_id}?tab=handovers`;
+  }
+  if (item.href_hint === "service_due") return "/service-due";
+  return `/vehicles/${item.vehicle_id}`;
+}
+
+function statusChrome(item: NotificationMenuItem): { label: string; badgeClass: string } {
+  if (item.section === "compliance") {
+    return {
+      label: item.state === "expired" ? "Expired" : "Due soon",
+      badgeClass:
+        item.state === "expired" ? themeClasses.badgeExpired : themeClasses.badgeWarning,
+    };
+  }
+  if (item.section === "service") {
+    if (item.state === "due") {
+      return { label: "Due", badgeClass: themeClasses.badgeExpired };
+    }
+    return { label: "Approaching", badgeClass: themeClasses.badgeWarning };
+  }
+  return { label: "Out open", badgeClass: themeClasses.badgeWarning };
+}
+
+function detailLine(item: NotificationMenuItem): string {
+  if (item.section === "compliance" && item.date_on) {
+    return formatDateOn(item.date_on);
+  }
+  if (item.section === "service") {
+    if (item.distance_remaining != null && item.distance_unit) {
+      const unit = odometerUnitLabel(item.distance_unit);
+      if (item.state === "approaching") {
+        return `${item.distance_remaining} ${unit} remaining`;
+      }
+      return item.distance_remaining <= 0
+        ? `Due by distance`
+        : `${item.distance_remaining} ${unit} left`;
+    }
+    return item.state === "due" ? "Due by days" : "Service soon";
+  }
+  if (item.driver_email) return item.driver_email;
+  return "Driver unknown";
+}
+
 function NotificationItemRow({
   item,
   onNavigate,
 }: {
-  item: ComplianceNotificationItem;
+  item: NotificationMenuItem;
   onNavigate: () => void;
 }) {
-  const statusLabel = item.state === "expired" ? "Expired" : "Due soon";
-  const badgeClass =
-    item.state === "expired" ? themeClasses.badgeExpired : themeClasses.badgeWarning;
+  const chrome = statusChrome(item);
   return (
     <Link
-      href={`/vehicles/${item.vehicle_id}`}
+      href={itemHref(item)}
       onClick={onNavigate}
       className={`${themeClasses.notifMenuItem} hover:bg-hover focus-visible:shadow-ring no-underline`}
     >
@@ -48,9 +92,9 @@ function NotificationItemRow({
         <span className={`${themeClasses.caption} text-text-secondary`}>
           {item.field_label}
         </span>
-        <span className={badgeClass}>{statusLabel}</span>
+        <span className={chrome.badgeClass}>{chrome.label}</span>
         <span className={`${themeClasses.caption} font-tabular tabular-nums text-text-secondary`}>
-          {formatDateOn(item.date_on)}
+          {detailLine(item)}
         </span>
       </span>
     </Link>
@@ -70,7 +114,7 @@ export function NotificationMenuPanel({
 }: {
   open: boolean;
   onClose: () => void;
-  items: ComplianceNotificationItem[];
+  items: NotificationMenuItem[];
   truncated: boolean;
   loading: boolean;
   error: string | null;
@@ -112,10 +156,10 @@ export function NotificationMenuPanel({
     body = (
       <div className={`${themeClasses.emptyState} px-2`}>
         <p className="text-label font-semibold text-text-primary text-center">
-          No compliance alerts.
+          No alerts.
         </p>
         <p className={`${themeClasses.caption} text-text-secondary text-center mt-1`}>
-          Insurance, inspection, and road tax are clear for the next 30 days.
+          Compliance, service, and open handovers are clear.
         </p>
       </div>
     );
@@ -124,7 +168,7 @@ export function NotificationMenuPanel({
       <div className="flex flex-col">
         {items.map((item) => (
           <NotificationItemRow
-            key={`${item.vehicle_id}:${item.field}`}
+            key={`${item.section}:${item.vehicle_id}:${item.field}:${item.handover_id ?? ""}`}
             item={item}
             onNavigate={onClose}
           />
@@ -142,7 +186,7 @@ export function NotificationMenuPanel({
     >
       <div className={themeClasses.notifMenuHeader}>
         <h2 id={titleId} className={themeClasses.notifMenuTitle}>
-          Compliance alerts
+          Alerts
         </h2>
         <button
           type="button"
@@ -182,7 +226,7 @@ export function NotificationControl({
   loading: boolean;
   error: string | null;
   offline: boolean;
-  items: ComplianceNotificationItem[];
+  items: NotificationMenuItem[];
   truncated: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;

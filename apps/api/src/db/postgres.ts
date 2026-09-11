@@ -548,6 +548,34 @@ export class PostgresStore implements Store {
     );
   }
 
+  async applyVehicleMileageMonotonic(
+    id: string,
+    companyId: string,
+    mileage: number,
+  ): Promise<
+    | { status: "ok"; vehicle: Vehicle }
+    | { status: "not_found" }
+    | { status: "below_floor"; vehicle: Vehicle }
+  > {
+    // Lock when inside withTransaction so concurrent travel/handover writers serialize.
+    const locked = await this.q(
+      "SELECT * FROM vehicles WHERE id=$1 AND company_id=$2 FOR UPDATE",
+      [id, companyId],
+    );
+    if (!locked.rows[0]) return { status: "not_found" };
+    const current = mapVehicle(locked.rows[0]);
+    if (current.mileage != null && mileage < current.mileage) {
+      return { status: "below_floor", vehicle: current };
+    }
+    const { rows } = await this.q(
+      `UPDATE vehicles SET mileage=$3
+       WHERE id=$1 AND company_id=$2
+       RETURNING *`,
+      [id, companyId, mileage],
+    );
+    return { status: "ok", vehicle: mapVehicle(rows[0]!) };
+  }
+
   async findVehicle(id: string, companyId: string): Promise<Vehicle | undefined> {
     const { rows } = await this.q(
       "SELECT * FROM vehicles WHERE id=$1 AND company_id=$2",
@@ -650,6 +678,16 @@ export class PostgresStore implements Store {
       [vehicleId, companyId],
     );
     return rows[0] ? mapHandover(rows[0]) : undefined;
+  }
+
+  async listOpenOutsForCompany(companyId: string): Promise<VehicleHandover[]> {
+    const { rows } = await this.q(
+      `SELECT * FROM vehicle_handovers
+       WHERE company_id=$1 AND type='out' AND status='open'
+       ORDER BY created_at ASC, id ASC`,
+      [companyId],
+    );
+    return rows.map(mapHandover);
   }
 
   async listHandoversForVehicle(
@@ -760,15 +798,20 @@ export class PostgresStore implements Store {
   async insertDailyUsage(row: DriverDailyUsage): Promise<void> {
     await this.q(
       `INSERT INTO driver_daily_usages
-        (id, company_id, driver_id, vehicle_id, usage_date, start_place, end_place,
-         start_distance, end_distance, distance_unit, start_time, end_time, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,to_timestamp($13/1000.0))`,
+        (id, company_id, driver_id, vehicle_id, usage_date, status,
+         start_place, end_place, start_distance, end_distance, distance_unit,
+         start_time, end_time, refuel_amount, refuel_amount_unit, refuel_at_mileage,
+         created_at, closed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+               to_timestamp($17/1000.0),
+               CASE WHEN $18::bigint IS NULL THEN NULL ELSE to_timestamp($18/1000.0) END)`,
       [
         row.id,
         row.companyId,
         row.driverId,
         row.vehicleId,
         row.usageDate,
+        row.status,
         row.startPlace,
         row.endPlace,
         row.startDistance,
@@ -776,9 +819,52 @@ export class PostgresStore implements Store {
         row.distanceUnit,
         row.startTime,
         row.endTime,
+        row.refuelAmount,
+        row.refuelAmountUnit,
+        row.refuelAtMileage,
         row.createdAt,
+        row.closedAt,
       ],
     );
+  }
+
+  async updateDailyUsage(row: DriverDailyUsage): Promise<void> {
+    await this.q(
+      `UPDATE driver_daily_usages SET
+         status=$2, end_place=$3, end_distance=$4, end_time=$5,
+         refuel_amount=$6, refuel_amount_unit=$7, refuel_at_mileage=$8,
+         closed_at=CASE WHEN $9::bigint IS NULL THEN NULL ELSE to_timestamp($9/1000.0) END
+       WHERE id=$1`,
+      [
+        row.id,
+        row.status,
+        row.endPlace,
+        row.endDistance,
+        row.endTime,
+        row.refuelAmount,
+        row.refuelAmountUnit,
+        row.refuelAtMileage,
+        row.closedAt,
+      ],
+    );
+  }
+
+  async findOpenDailyUsageForDriver(
+    driverId: string,
+    companyId: string,
+  ): Promise<DriverDailyUsage | undefined> {
+    const { rows } = await this.q(
+      `SELECT id, company_id, driver_id, vehicle_id,
+              to_char(usage_date, 'YYYY-MM-DD') AS usage_date, status,
+              start_place, end_place, start_distance, end_distance, distance_unit,
+              start_time, end_time, refuel_amount, refuel_amount_unit, refuel_at_mileage,
+              created_at, closed_at
+       FROM driver_daily_usages
+       WHERE driver_id=$1 AND company_id=$2 AND status='open'
+       LIMIT 1`,
+      [driverId, companyId],
+    );
+    return rows[0] ? mapDailyUsage(rows[0]) : undefined;
   }
 
   async listDailyUsageForDriver(
@@ -787,9 +873,10 @@ export class PostgresStore implements Store {
   ): Promise<DriverDailyUsage[]> {
     const { rows } = await this.q(
       `SELECT id, company_id, driver_id, vehicle_id,
-              to_char(usage_date, 'YYYY-MM-DD') AS usage_date,
+              to_char(usage_date, 'YYYY-MM-DD') AS usage_date, status,
               start_place, end_place, start_distance, end_distance, distance_unit,
-              start_time, end_time, created_at
+              start_time, end_time, refuel_amount, refuel_amount_unit, refuel_at_mileage,
+              created_at, closed_at
        FROM driver_daily_usages
        WHERE driver_id=$1 AND company_id=$2
        ORDER BY created_at DESC`,
@@ -808,9 +895,10 @@ export class PostgresStore implements Store {
   ): Promise<DriverDailyUsage[]> {
     const params: unknown[] = [companyId];
     let sql = `SELECT id, company_id, driver_id, vehicle_id,
-              to_char(usage_date, 'YYYY-MM-DD') AS usage_date,
+              to_char(usage_date, 'YYYY-MM-DD') AS usage_date, status,
               start_place, end_place, start_distance, end_distance, distance_unit,
-              start_time, end_time, created_at
+              start_time, end_time, refuel_amount, refuel_amount_unit, refuel_at_mileage,
+              created_at, closed_at
        FROM driver_daily_usages
        WHERE company_id=$1`;
     if (opts?.from) {
@@ -986,14 +1074,19 @@ function mapDailyUsage(row: pg.QueryResultRow): DriverDailyUsage {
     driverId: row.driver_id,
     vehicleId: row.vehicle_id,
     usageDate: pgDateToIso(row.usage_date) ?? "1970-01-01",
+    status: (row.status as "open" | "closed") || "closed",
     startPlace: row.start_place,
-    endPlace: row.end_place,
+    endPlace: row.end_place ?? null,
     startDistance: Number(row.start_distance),
-    endDistance: Number(row.end_distance),
+    endDistance: row.end_distance == null ? null : Number(row.end_distance),
     distanceUnit: row.distance_unit as OdometerUnit,
     startTime: row.start_time,
-    endTime: row.end_time,
+    endTime: row.end_time ?? null,
+    refuelAmount: row.refuel_amount == null ? null : Number(row.refuel_amount),
+    refuelAmountUnit: (row.refuel_amount_unit as "L" | "gal" | null) ?? null,
+    refuelAtMileage: row.refuel_at_mileage == null ? null : Number(row.refuel_at_mileage),
     createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    closedAt: row.closed_at ? new Date(row.closed_at).getTime() : null,
   };
 }
 

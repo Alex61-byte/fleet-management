@@ -1,7 +1,8 @@
 import {
   complianceNotificationsA11yLabel,
+  odometerUnitLabel,
   vehicleLabel,
-  type ComplianceNotificationItem,
+  type NotificationMenuItem,
 } from "@fleet/sdk";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -32,15 +33,46 @@ function formatDateOn(dateIso: string): string {
   });
 }
 
+function statusChrome(item: NotificationMenuItem): {
+  label: string;
+  expired: boolean;
+} {
+  if (item.section === "compliance") {
+    return {
+      label: item.state === "expired" ? "Expired" : "Due soon",
+      expired: item.state === "expired",
+    };
+  }
+  if (item.section === "service") {
+    return {
+      label: item.state === "due" ? "Due" : "Approaching",
+      expired: item.state === "due",
+    };
+  }
+  return { label: "Out open", expired: false };
+}
+
+function detailLine(item: NotificationMenuItem): string {
+  if (item.section === "compliance" && item.date_on) return formatDateOn(item.date_on);
+  if (item.section === "service") {
+    if (item.distance_remaining != null && item.distance_unit) {
+      const unit = odometerUnitLabel(item.distance_unit);
+      if (item.state === "approaching") return `${item.distance_remaining} ${unit} remaining`;
+      return item.distance_remaining <= 0 ? "Due by distance" : `${item.distance_remaining} ${unit} left`;
+    }
+    return item.state === "due" ? "Due by days" : "Service soon";
+  }
+  return item.driver_email ?? "Driver unknown";
+}
+
 function NotificationItemRow({
   item,
   onPress,
 }: {
-  item: ComplianceNotificationItem;
+  item: NotificationMenuItem;
   onPress: () => void;
 }) {
-  const statusLabel = item.state === "expired" ? "Expired" : "Due soon";
-  const expired = item.state === "expired";
+  const chrome = statusChrome(item);
   return (
     <Pressable
       accessibilityRole="button"
@@ -50,19 +82,21 @@ function NotificationItemRow({
       <Text className="text-label font-medium text-text-primary">{vehicleLabel(item)}</Text>
       <Text className="text-caption text-text-secondary">{item.license_plate}</Text>
       <View className="flex-row flex-wrap items-center gap-1 mt-1">
-        <Text className="text-caption text-text-secondary">
-          {item.field_label}
-        </Text>
+        <Text className="text-caption text-text-secondary">{item.field_label}</Text>
         <View
           className={`px-1 py-0.5 rounded-full ${
-            expired ? "bg-danger-subtle" : "bg-warning-subtle"
+            chrome.expired ? "bg-danger-subtle" : "bg-warning-subtle"
           }`}
         >
-          <Text className={`text-caption font-medium ${expired ? "text-danger" : "text-warning"}`}>
-            {statusLabel}
+          <Text
+            className={`text-caption font-medium ${
+              chrome.expired ? "text-danger" : "text-warning"
+            }`}
+          >
+            {chrome.label}
           </Text>
         </View>
-        <Text className="text-caption text-text-secondary">{formatDateOn(item.date_on)}</Text>
+        <Text className="text-caption text-text-secondary">{detailLine(item)}</Text>
       </View>
     </Pressable>
   );
@@ -81,7 +115,7 @@ export function NotificationControl({
   loading: boolean;
   error: string | null;
   offline: boolean;
-  items: ComplianceNotificationItem[];
+  items: NotificationMenuItem[];
   truncated: boolean;
   onRetry: () => void;
 }) {
@@ -95,9 +129,9 @@ export function NotificationControl({
     setOpen(false);
   }
 
-  function openVehicle(id: string) {
+  function openItem(item: NotificationMenuItem) {
     close();
-    router.push(`/(owner)/vehicles/${id}`);
+    router.push(`/(owner)/vehicles/${item.vehicle_id}`);
   }
 
   return (
@@ -138,7 +172,7 @@ export function NotificationControl({
             style={{ maxHeight: "70%", paddingBottom: Math.max(insets.bottom, 8) }}
           >
             <View className="h-app-bar px-3 flex-row items-center justify-between border-b border-divider">
-              <Text className="text-label font-semibold text-text-primary">Compliance alerts</Text>
+              <Text className="text-label font-semibold text-text-primary">Alerts</Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Close"
@@ -165,19 +199,19 @@ export function NotificationControl({
             ) : items.length === 0 ? (
               <View className="p-6 items-center gap-1">
                 <Text className="text-label font-semibold text-text-primary text-center">
-                  No compliance alerts.
+                  No alerts.
                 </Text>
                 <Text className="text-caption text-text-secondary text-center">
-                  Insurance, inspection, and road tax are clear for the next 30 days.
+                  Compliance, service, and open handovers are clear.
                 </Text>
               </View>
             ) : (
               <ScrollView>
                 {items.map((item) => (
                   <NotificationItemRow
-                    key={`${item.vehicle_id}:${item.field}`}
+                    key={`${item.section}:${item.vehicle_id}:${item.field}:${item.handover_id ?? ""}`}
                     item={item}
-                    onPress={() => openVehicle(item.vehicle_id)}
+                    onPress={() => openItem(item)}
                   />
                 ))}
               </ScrollView>

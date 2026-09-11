@@ -7,7 +7,7 @@
 
 ## Context
 
-Drivers record **Handover Out** (take custody) and **Handover In** (return) against their **active next-travel** vehicle, with required service/mileage fields and optional damage text/images. Owner/Admin need **read-only history** on the vehicle. Successful handovers **write through** to `vehicles.mileage`. Travel PUT must still **not** touch vehicle mileage (A43). Open Out must not strand a vehicle when the driver is hard-deleted (rule 85).
+Drivers record **Handover Out** (take custody) and **Handover In** (return) against their **active next-travel** vehicle, with required service/mileage fields and optional damage text/images. Owner/Admin need **read-only history** on the vehicle. Successful handovers **write through** to `vehicles.mileage`. Travel PUT also write-throughs odometer → mileage (ADR-014 / A43). Open Out must not strand a vehicle when the driver is hard-deleted (rule 85).
 
 ## Decision
 
@@ -49,8 +49,9 @@ Drivers record **Handover Out** (take custody) and **Handover In** (return) agai
 | Path | Updates `vehicles.mileage`? |
 | --- | --- |
 | Successful handover Out or In | **Yes** — set to handover mileage (A52) |
-| `PUT /v1/driver/travel` | **No** (A43 / ADR-014) |
+| `PUT /v1/driver/travel` | **Yes** — set to travel odometer (ADR-014 / A43) |
 | Owner/Admin `POST/PATCH /v1/vehicles` | **Yes** — existing optional master edit (unchanged) |
+| Daily usage create | **No** (A62 / ADR-016) |
 
 ### 5. HTTP shape
 
@@ -58,6 +59,7 @@ Drivers record **Handover Out** (take custody) and **Handover In** (return) agai
 | --- | --- | --- | --- |
 | `GET` | `/v1/driver/handovers/active` | Driver | Open Out for caller or `null` (+ vehicle summary) |
 | `POST` | `/v1/driver/handovers` | Driver | Create Out or In — **multipart** (fields + optional `damages` files) |
+| `GET` | `/v1/handovers/open` | Company Owner/Admin | Company-wide **open** Outs only (US-111); Individual → 403 |
 | `GET` | `/v1/vehicles/:id/handovers` | Owner/Admin | List newest first |
 | `GET` | `/v1/vehicles/:id/handovers/:handoverId` | Owner/Admin | Detail + signed damage image URLs |
 

@@ -202,7 +202,26 @@ export class FleetVehicles {
     }
     const today = utcToday();
     const todayMs = Date.parse(`${today}T00:00:00.000Z`);
-    const items = [];
+    /** Server-owned approaching band (US-97 / US-109; rule 174). */
+    const APPROACHING_REMAINING = 2000;
+    type ServiceDueRow = {
+      vehicle_id: string;
+      vehicle: ReturnType<FleetVehicles["ctx"]["vehicleSummary"]>;
+      handover_id: string;
+      handover_created_at: string;
+      next_service_days: number;
+      next_service_distance: number;
+      next_service_distance_unit: VehicleHandover["nextServiceDistanceUnit"];
+      days_elapsed: number;
+      days_overdue: number | null;
+      vehicle_mileage: number | null;
+      handover_mileage: number;
+      distance_remaining: number | null;
+      due_by_days: boolean;
+      due_by_distance: boolean;
+      service_status: "due" | "approaching";
+    };
+    const items: ServiceDueRow[] = [];
     for (const vehicle of vehicles) {
       const h = latestByVehicle.get(vehicle.id);
       if (!h) continue;
@@ -217,8 +236,14 @@ export class FleetVehicles {
         distanceRemaining = Math.round((threshold - vehicle.mileage) * 10) / 10;
         dueByDistance = vehicle.mileage >= threshold;
       }
-      if (!dueByDays && !dueByDistance) continue;
+      const approaching =
+        distanceRemaining != null &&
+        distanceRemaining > 0 &&
+        distanceRemaining <= APPROACHING_REMAINING;
+      if (!dueByDays && !dueByDistance && !approaching) continue;
       const daysOverdue = dueByDays ? daysElapsed - h.nextServiceDays : null;
+      const service_status: "due" | "approaching" =
+        dueByDays || dueByDistance ? "due" : "approaching";
       items.push({
         vehicle_id: vehicle.id,
         vehicle: this.ctx.vehicleSummary(vehicle),
@@ -234,12 +259,20 @@ export class FleetVehicles {
         distance_remaining: distanceRemaining,
         due_by_days: dueByDays,
         due_by_distance: dueByDistance,
+        service_status,
       });
     }
     items.sort((a, b) => {
+      const rank = (row: (typeof items)[number]) => (row.service_status === "due" ? 0 : 1);
+      const rd = rank(a) - rank(b);
+      if (rd !== 0) return rd;
       const ao = a.days_overdue ?? -1;
       const bo = b.days_overdue ?? -1;
-      return bo - ao || a.vehicle_id.localeCompare(b.vehicle_id);
+      if (bo !== ao) return bo - ao;
+      const ar = a.distance_remaining ?? Number.POSITIVE_INFINITY;
+      const br = b.distance_remaining ?? Number.POSITIVE_INFINITY;
+      if (ar !== br) return ar - br;
+      return a.vehicle_id.localeCompare(b.vehicle_id);
     });
     return { items };
   }

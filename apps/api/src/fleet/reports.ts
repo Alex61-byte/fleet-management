@@ -93,6 +93,7 @@ export class FleetReports {
         driver_email: driver?.email ?? null,
         vehicle_id: row.vehicleId,
         usage_date: row.usageDate,
+        status: row.status,
         start_place: row.startPlace,
         start_distance: row.startDistance,
         end_place: row.endPlace,
@@ -100,7 +101,11 @@ export class FleetReports {
         distance_unit: row.distanceUnit,
         start_time: row.startTime,
         end_time: row.endTime,
+        refuel_amount: row.refuelAmount,
+        refuel_amount_unit: row.refuelAmountUnit,
+        refuel_at_mileage: row.refuelAtMileage,
         created_at: new Date(row.createdAt).toISOString(),
+        closed_at: row.closedAt != null ? new Date(row.closedAt).toISOString() : null,
         vehicle: vehicle ? this.ctx.vehicleSummary(vehicle) : null,
       });
     }
@@ -114,6 +119,7 @@ export class FleetReports {
     const { items } = await this.listCompanyDailyUsage(claims, opts);
     const header = [
       "usage_date",
+      "status",
       "driver_email",
       "vehicle_label",
       "license_plate",
@@ -124,7 +130,11 @@ export class FleetReports {
       "distance_unit",
       "start_time",
       "end_time",
+      "refuel_amount",
+      "refuel_amount_unit",
+      "refuel_at_mileage",
       "created_at",
+      "closed_at",
     ];
     const escape = (v: string) => {
       if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
@@ -141,17 +151,22 @@ export class FleetReports {
       lines.push(
         [
           row.usage_date,
+          row.status,
           row.driver_email ?? "",
           label,
           plate,
           row.start_place,
-          row.end_place,
+          row.end_place ?? "",
           String(row.start_distance),
-          String(row.end_distance),
+          row.end_distance == null ? "" : String(row.end_distance),
           row.distance_unit,
           row.start_time,
-          row.end_time,
+          row.end_time ?? "",
+          row.refuel_amount == null ? "" : String(row.refuel_amount),
+          row.refuel_amount_unit ?? "",
+          row.refuel_at_mileage == null ? "" : String(row.refuel_at_mileage),
           row.created_at,
+          row.closed_at ?? "",
         ]
           .map((c) => escape(String(c)))
           .join(","),

@@ -191,6 +191,7 @@ export class FleetContext {
       id: row.id,
       vehicle_id: row.vehicleId,
       usage_date: row.usageDate,
+      status: row.status,
       start_place: row.startPlace,
       start_distance: row.startDistance,
       end_place: row.endPlace,
@@ -198,7 +199,11 @@ export class FleetContext {
       distance_unit: row.distanceUnit,
       start_time: row.startTime,
       end_time: row.endTime,
+      refuel_amount: row.refuelAmount,
+      refuel_amount_unit: row.refuelAmountUnit,
+      refuel_at_mileage: row.refuelAtMileage,
       created_at: new Date(row.createdAt).toISOString(),
+      closed_at: row.closedAt != null ? new Date(row.closedAt).toISOString() : null,
       vehicle: vehicle ? this.vehicleSummary(vehicle) : null,
     };
   }

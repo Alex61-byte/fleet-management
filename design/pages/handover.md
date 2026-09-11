@@ -1,11 +1,11 @@
 # Vehicle handovers (shared)
 
-**Stories:** US-51–US-60  
+**Stories:** US-51–US-60, **US-110** (driver open-Out notify), **US-111** (OA menu `open_out` — see [global-header.md](global-header.md); no extra OA board this slice)  
 **Rules:** 72–86; **A:** A45–A56; **E:** E45–E58  
 **Surfaces:** Driver create Out/In — [driver-home.md](driver-home.md). Owner/Admin history + detail — [vehicles.md](vehicles.md) **Handovers** tab.  
 **Density:** Driver web compact / mobile comfortable. Owner/Admin web compact table or list; mobile comfortable rows.  
 **Purpose:** Record **Out** (custody start) and **In** (return) against the driver’s **active next-travel** vehicle; Owner/Admin review **immutable** history per vehicle.  
-**Not in scope:** Edit/delete past handovers; unit picker; side-appearance slots; compliance docs; driver history tab; Owner/Admin create handover.
+**Not in scope:** Edit/delete past handovers; unit picker; side-appearance slots; compliance docs; driver history tab; Owner/Admin create handover; OS push/email/SMS.
 
 Reuse chrome from [_patterns.md](_patterns.md). **No hex** — classes from [tailwind.theme.ts](../tailwind.theme.ts). Prefer existing `panel`, `banner*`, `badge*`, `emptyState`, `vehicleFormTab*`, `buttonPrimary`, `errorText`, `skeleton`. Damage enlarge reuses a **simplified** side-image viewer (`vehicleSideViewer*`).
 
@@ -28,9 +28,9 @@ Reuse chrome from [_patterns.md](_patterns.md). **No hex** — classes from [tai
 | --- | --- | --- | --- |
 | **Out** | Badge **Out** | `badgeNeutral` + text | Custody start; open until In |
 | **In** | Badge **In** | `badgeOk` + text | Closes paired Out |
-| Open Out (driver cue) | Banner + badge | `bannerWarning` + `badgeNeutral` **Out open** | Not color-only; body says complete **Handover In** |
+| Open Out (driver cue, US-60 / US-110) | Banner + badge | `bannerWarning` + `badgeNeutral` **Out open** | Not color-only; body says complete **Handover In**; same pattern on Start hub |
 
-Do **not** invent `badgeOut` / `badgeIn` tokens — reuse neutral / success chips.
+Do **not** invent `badgeOut` / `badgeIn` / `badgeOpenOut` tokens — reuse neutral / success / warning chips.
 
 ---
 
@@ -44,16 +44,29 @@ Do **not** invent `badgeOut` / `badgeIn` tokens — reuse neutral / success chip
 | --- | --- |
 | No active next-travel | No handover form. Optional calm `caption`: “Select a vehicle for next travel before handover.” |
 | Active selection, **no** open Out (driver + vehicle eligible) | **Handover Out** panel + primary **Submit Handover Out** |
-| Active selection, **open Out** held by **this** driver on that vehicle | Open-Out cue + **Handover In** panel + primary **Submit Handover In** |
-| Open Out on another vehicle / blocked (E46/E47/E48/E49) | Form disabled or hidden; `bannerDanger` with failure meaning (no partial create) |
+| Active selection, **open Out** held by **this** driver on that vehicle | **Required** open-Out / need-In cue + **Handover In** panel + primary **Submit Handover In** (US-110 entry point) |
+| Open Out on another vehicle / blocked (E46/E47/E48/E49) | Form disabled or hidden; `bannerDanger` with failure meaning (no partial create); **no** “my” need-In banner for someone else’s Out |
 | Loading eligibility | Skeleton handover panel |
+
+### Open-Out banner (handover entry)
+
+When this driver holds open Out on the bound vehicle, show **before** or as first child of the form panel (same copy as Start):
+
+| | Spec |
+| --- | --- |
+| Chrome | `bannerWarning` |
+| Copy | “Out open — complete **Handover In** when you return the vehicle.” |
+| Title row | optional `badgeNeutral` **Out open** beside **Handover In** |
+| Clear | After In success or void — banner and badge gone; mode returns to Out if eligible |
+| A11y | Name: “Out open, complete Handover In when you return the vehicle”; not color-only |
+| Motion | No pulse (reduce-motion safe) |
 
 ### Layout
 
 ```
 panel handoverForm  aria-label Handover Out | Handover In
-  [optional] bannerWarning  Out open — complete Handover In when you return the vehicle.
-  sectionTitle  Handover Out | Handover In
+  [open Out for me] bannerWarning  Out open — complete Handover In when you return the vehicle.
+  sectionTitle  Handover Out | Handover In   (+ badge Out open when In)
   caption  {Make Model} · {plate}   (bound to active next-travel; read-only)
   caption  Units: Miles | Kilometers   (from vehicle country; not editable)
 
@@ -119,7 +132,7 @@ No secondary “Save draft.” Cancel = leave fields / navigate away (no partial
 | --- | --- |
 | **Loading** | Skeleton inside handover `panel` (title + 3 field bones + actions) |
 | **Eligible Out** | Out title + empty/defaults fields + Submit Out |
-| **Open Out (In)** | `bannerWarning` open cue + In title + Submit In; summary may show open Out time if API provides |
+| **Open Out (In)** | `bannerWarning` need-In cue **required** + In title + `badgeNeutral` **Out open** + Submit In; summary may show open Out time if API provides; cue clears after In/void |
 | **No next-travel** | Form omitted; next-travel empty copy only |
 | **Blocked** (E45–E49) | `bannerDanger` + primary `buttonDisabled` or form hidden; no silent fail |
 | **Validation** | Field `inputError` + `errorText`; focus first invalid; no row created (E50) |

@@ -21,6 +21,7 @@ Backend before frontend. Never FE+BE in parallel on the **same** feature slice. 
 | --- | --- |
 | `/feature-slice` | New feature / behavior / UI structure — full BA→…→FE |
 | `/tech-fix` | Bug, breakage, misconfig, perf, wiring — Architect then owners |
+| `/challenge-slice` | Adversarial bug-risk pass — Challenger → Architect → BE/FE → Challenger re-verify |
 | `/gap-fill-stage` | Missing stage artifacts; produce them and finish |
 | `/ba-scope` `/design-screens` `/arch-review` `/be-implement` `/fe-implement` | Single stage only |
 
@@ -41,6 +42,7 @@ Prefer slash prompts over retyping boilerplate. Orchestrator auto-advances multi
 | New feature / behavior / new UI structure | First incomplete stage → remaining line to done |
 | Missing stage artifacts | Produce via specialist, continue line |
 | Pure technical | Architect → BE/FE owners |
+| Bug-risk / challenge / pre-merge adversarial pass | Challenger → Architect triage → BE/FE → Challenger re-verify |
 | Tiny obvious bug or UI polish | Fix in place; no pipeline |
 | API unchanged (client-only) | Architect no-op BE → FE |
 
@@ -50,6 +52,7 @@ Stay in **current specialist role per stage**. Orchestrator auto-advances.
 | --- | --- |
 | **Feature** | BA → Design → Architect → BE → FE (skip complete stages only) |
 | **Technical** | Architect → BE and/or FE |
+| **Challenge** | Challenger → Architect triage → BE and/or FE fix → Challenger re-verify |
 | **Micro** | In-place fix |
 
 ## Done when

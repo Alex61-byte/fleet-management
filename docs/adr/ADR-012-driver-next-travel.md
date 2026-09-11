@@ -21,3 +21,7 @@ Drivers need to pick a company vehicle for the next travel and record odometer. 
 - Driver home grows a next-travel panel (web + mobile).
 - Hard-delete driver clears their selections.
 - No live GPS / trip start-stop in this slice.
+
+## Amendment (mileage write-through)
+
+Successful `PUT /v1/driver/travel` **write-through** updates `vehicles.mileage` from `odometer` in the same transaction, with monotonic floor when mileage is set. See **ADR-014** amendment (**A43**). Drivers remain **403** on `POST/PATCH /v1/vehicles`.
