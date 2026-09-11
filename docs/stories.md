@@ -8,13 +8,13 @@ INVEST stories with Given/When/Then. One outcome each. Rules: [business-rules.md
 **Account kind:** **Company** only (after US-77 chooses Company).
 
 **As** a person starting a fleet company  
-**I need** to create an account with email, password, company registration number, VAT number, and address  
-**So that** my company exists with required legal/address details and I am the Owner.
+**I need** to create an account with email, password, company name, company registration number, VAT number, and address  
+**So that** my company exists with required name/legal/address details and I am the Owner.
 
 **Acceptance**
 
 - **Given** I chose **Company** (or equivalent Company sign-up entry) and I am not signed in and that email is not already a login identity  
-  **When** I submit email, password (≥ 8), company registration number, VAT number, and address  
+  **When** I submit email, password (≥ 8), company name, company registration number, VAT number, and address  
   **Then** a company is created with those company fields (`account_kind = company`), I am the Owner of that company, and I can sign in.
 
 - **Given** address lookup (free OSM/Nominatim-style) is available  
@@ -25,9 +25,13 @@ INVEST stories with Given/When/Then. One outcome each. Rules: [business-rules.md
   **When** I submit sign-up  
   **Then** no new company is created and I am not signed in as a new Owner.
 
-- **Given** registration number, VAT, or address is missing, or password is shorter than 8  
+- **Given** company name, registration number, VAT, or address is missing, or password is shorter than 8  
   **When** I submit sign-up  
   **Then** no company is created (E33).
+
+- **Given** I am the Owner of an existing company tenant whose display name is empty (created before name was required)  
+  **When** I open the Owner app  
+  **Then** I must enter a company name before continuing; Admins are not prompted to set it.
 
 - **Given** address lookup fails or is offline  
   **When** I still provide a non-empty address manually  
@@ -1743,3 +1747,372 @@ Spec: account-kind choice; Individual sign-up; Company sign-up via choice; landi
 ## Design Specialist handoff — Pricing (US-91–US-92)
 
 Public web only. Catalog: [pricing-plans.md](pricing-plans.md). Spec: [design/pages/pricing.md](../design/pages/pricing.md).
+
+
+## US-93 — Upload compliance document **(Must)**
+
+**As** an Owner or Admin  
+**I need** to upload proof documents on a vehicle (insurance, inspection, road tax, registration, other)  
+**So that** compliance is auditable beyond dates alone.
+
+**Acceptance**
+
+- **Given** I am Owner/Admin on a vehicle in my tenant  
+  **When** I upload a PDF or image ≤ 10 MB with a valid `doc_type`  
+  **Then** the file is stored (Supabase/S3 ref) and listed on that vehicle.
+
+- **Given** the vehicle already has the product hard-cap of documents  
+  **When** I upload another  
+  **Then** the write is rejected (400); no orphan blob required to remain.
+
+- **Given** I am a driver or unsigned-in  
+  **When** I upload  
+  **Then** denied (403/401).
+
+## US-94 — List and delete compliance documents **(Must)**
+
+**As** an Owner or Admin  
+**I need** to list and delete compliance documents  
+**So that** I can manage proof files.
+
+**Acceptance**
+
+- **Given** documents exist on vehicle V  
+  **When** I list documents for V  
+  **Then** I see type, label, size, created_at, and a time-limited download URL.
+
+- **Given** I confirm delete on a document  
+  **When** delete succeeds  
+  **Then** the row is gone and storage object is removed (best-effort if already missing).
+
+- **Given** another tenant’s vehicle/doc id  
+  **When** I list or delete  
+  **Then** not_found / no leak.
+
+## US-95 — Outbound compliance digest email **(Must)**
+
+**As** an Owner or Admin  
+**I need** a daily email digest of due-soon and expired compliance items  
+**So that** I act even when not in the app.
+
+**Acceptance**
+
+- **Given** my tenant has ≥1 warning (built-in or custom) and digest is enabled for product  
+  **When** the daily digest job runs for my principal  
+  **Then** at most one email is sent per UTC day containing up to 50 items.
+
+- **Given** I already received a digest today (UTC)  
+  **When** the job runs again  
+  **Then** no second email is sent.
+
+- **Given** zero warnings  
+  **When** the job runs  
+  **Then** no email is sent.
+
+- **Given** Resend is not configured  
+  **When** the job runs  
+  **Then** send is skipped (logged); product remains usable.
+
+## US-96 — Owner/Admin Daily usage report **(Must)**
+
+**As** a Company Owner or Admin  
+**I need** to list Daily usage across my company and export CSV  
+**So that** I can review driver activity without spreadsheets.
+
+**Acceptance**
+
+- **Given** I am Company Owner/Admin  
+  **When** I open Daily usage report (optional `from`/`to` dates)  
+  **Then** I see company-scoped rows (driver email, vehicle, places, distances, times), newest first.
+
+- **Given** I request CSV  
+  **When** export runs  
+  **Then** I receive `text/csv` of the same scope.
+
+- **Given** I am Individual Owner or Driver  
+  **When** I call owner daily-usage report  
+  **Then** forbidden / not offered (Individual has no drivers; drivers keep own list only).
+
+- **Given** rows exist  
+  **When** I view the report  
+  **Then** I cannot edit or delete usage rows from this UI.
+
+## US-97 — Service-due board **(Must)**
+
+**As** an Owner or Admin  
+**I need** a fleet board of vehicles due for service  
+**So that** I schedule maintenance from handover next-service data.
+
+**Acceptance**
+
+- **Given** a vehicle has a closed or open handover with next_service_days / next_service_distance  
+  **When** I open Service due  
+  **Then** vehicles with days elapsed ≥ next_service_days since that handover **or** mileage ≥ handover.mileage + next_service_distance (when vehicle.mileage set) appear as due/overdue.
+
+- **Given** no handover service baseline  
+  **When** I open the board  
+  **Then** that vehicle is omitted (not “unknown due”).
+
+- **Given** Individual Owner  
+  **When** I open Service due  
+  **Then** only my vehicles appear (from my handovers if any; company drivers N/A).
+
+## US-98 — Create and close vehicle issues **(Must)**
+
+**As** an Owner, Admin, or Driver  
+**I need** lightweight defect/issue records on a vehicle  
+**So that** damage and problems are tracked to close-out without full work orders.
+
+**Acceptance**
+
+- **Given** I am Owner/Admin  
+  **When** I create an issue on a vehicle with title (required) and optional description  
+  **Then** status is `open` and it appears on the vehicle issue list.
+
+- **Given** I am a driver with active next-travel on vehicle V  
+  **When** I create an issue on V  
+  **Then** it is stored for the company.
+
+- **Given** an open issue  
+  **When** Owner/Admin closes it  
+  **Then** status is `closed` with closed_at; drivers cannot close.
+
+- **Given** handover Out/In includes non-empty damages_text  
+  **When** handover is created  
+  **Then** an issue may be auto-created (source=`handover`) with that text (Should if Must auto is heavy—implement Must auto).
+
+## US-99 — Pricing catalog v2 on public page **(Must)**
+
+**As** an unsigned-in visitor  
+**I need** `/pricing` to show catalog v2 prices and new entitlements  
+**So that** list prices match infra-aware packaging.
+
+**Acceptance**
+
+- **Given** I open `/pricing`  
+  **When** the page loads  
+  **Then** Personal **$2**/veh, Plus **$14**, Team **$7**/veh, Fleet **$11**/veh (min 5) and features mention docs, digests, reports, service due, issues per [pricing-plans.md](pricing-plans.md).
+
+## Design Specialist handoff — Manager loop (US-93–US-98)
+
+Spec web Owner/Admin: vehicle Documents tab; Service due page; Daily usage report page; Issues on vehicle; empty/loading/error. Mobile Owner/Admin parity where shell exists. Driver: create issue only (minimal). Tokens + `_patterns.md`. No GPS.
+
+## Architect handoff
+
+Contracts for docs, issues, owner daily-usage report/CSV, service-due list, digest job trigger. ADR short notes OK. Storage keys under `{company}/{vehicle}/docs/`. No Stripe.
+
+## US-100 — Web footer on public marketing pages **(Must)**
+
+**As** an unsigned-in visitor  
+**I need** a calm footer on public web pages (`/`, `/pricing`)  
+**So that** product identity and copyright are visible without Owner chrome.
+
+**Acceptance**
+
+- **Given** I open `/` or `/pricing` unsigned-in  
+  **When** the page renders  
+  **Then** I see a footer with **Fleet** and **© {current year} Fleet**.
+
+- **Given** page content is shorter than the viewport  
+  **When** the public page renders  
+  **Then** the footer sits at the bottom of the viewport (sticky-footer pattern).
+
+- **Given** page content is longer than the viewport  
+  **When** I scroll to the end  
+  **Then** the footer appears after the main public body content.
+
+## US-101 — Web footer on auth canvas **(Must)**
+
+**As** a person on web auth flows  
+**I need** the same minimal footer on auth canvas pages  
+**So that** identity stays consistent before and during sign-in.
+
+**Acceptance**
+
+- **Given** I open a web auth page (sign-in, account-kind, company/individual sign-up, password reset, TOTP challenge, driver invite accept)  
+  **When** the page renders  
+  **Then** I see the footer with **Fleet** and **© {current year} Fleet**.
+
+- **Given** auth layout is centered canvas  
+  **When** the footer renders  
+  **Then** it does not replace the auth card or block primary fields/CTAs.
+
+## US-102 — Web footer on Owner/Admin and driver shells **(Must)**
+
+**As** a signed-in Owner, Admin, Individual Owner, or Driver on **web**  
+**I need** a footer at the end of the main column  
+**So that** authenticated shells share calm enterprise chrome without new nav.
+
+**Acceptance**
+
+- **Given** I am signed in as Owner/Admin (Company or Individual) on web  
+  **When** I open any Owner/Admin shell page  
+  **Then** a footer with **Fleet** and **© {current year} Fleet** appears at the **bottom of the main content column** under page body.
+
+- **Given** I am signed in as Driver on web minimal shell  
+  **When** I open driver web pages in that shell  
+  **Then** the same minimal footer appears at the bottom of the main column.
+
+- **Given** Global Header, side nav, or driver hub already exist  
+  **When** the footer is added  
+  **Then** destinations, role gating, and Global Header rules are **unchanged**.
+
+- **Given** I use **Expo mobile**  
+  **When** I use Owner/Admin or driver mobile chrome  
+  **Then** this story does **not** require a mobile app footer.
+
+## US-103 — Footer secondary links only to existing public routes **(Should)**
+
+**As** a visitor or signed-in web user  
+**I need** optional footer links only where routes already exist  
+**So that** I can reach Pricing, Landing, or approved legal pages without stubs.
+
+**Acceptance**
+
+- **Given** `/pricing` and `/` exist  
+  **When** the footer shows secondary links  
+  **Then** links may include **Pricing** and **Home** (or Landing), plus **Terms** per US-106.
+
+- **Given** approved Terms exist at `/terms` and Privacy at `/privacy`  
+  **When** the footer renders  
+  **Then** it shows **Terms** and **Privacy** per US-106/US-108 and does **not** show other “coming soon” legal stubs.
+
+- **Given** I activate a footer **Pricing** link from a public page  
+  **When** navigation completes  
+  **Then** I reach `/pricing` (session redirect rules for signed-in users still apply per US-91 / rule 148).
+
+## US-104 — Signed-in footer Billing replaces Pricing **(Must)**
+
+**As** a signed-in Owner or Admin on web  
+**I need** the footer to link to **Billing** instead of public **Pricing**  
+**So that** I reach plan/billing context inside the product, not the marketing catalog.
+
+**Acceptance**
+
+- **Given** I am signed out  
+  **When** the footer renders  
+  **Then** secondary links may include **Pricing** → `/pricing` (and Home → `/`).
+
+- **Given** I am signed in as Owner/Admin (Company or Individual)  
+  **When** the footer renders  
+  **Then** I see **Billing** → `/billing` and **do not** see **Pricing**.
+
+- **Given** I am signed in as Driver  
+  **When** the footer renders  
+  **Then** I do **not** see Pricing or Billing; Home goes to driver home.
+
+- **Given** I am Owner/Admin  
+  **When** I open `/billing`  
+  **Then** I see a Billing page in the Owner/Admin shell with calm status copy and **no** payment checkout, card form, or Stripe this slice.
+
+- **Given** I am unsigned-in or a driver  
+  **When** I open `/billing`  
+  **Then** I am sent to sign-in or driver/denied experience (not the marketing pricing page as a substitute shell).
+
+## US-105 — Public Terms and Conditions page **(Must)**
+
+**As** a visitor or signed-in web user  
+**I need** a public **Terms and Conditions** page at `/terms`  
+**So that** I can read how Fleet describes service use, accounts, and limits.
+
+**Acceptance**
+
+- **Given** I open `/terms` signed out  
+  **When** the page loads  
+  **Then** I see title **Terms and Conditions**, public chrome (header + footer), and static body copy—no API error dependency.
+
+- **Given** the Terms body is shown  
+  **When** I read the page  
+  **Then** these sections exist (headings or equivalent): service description; accounts & tenancy (high-level); acceptable use; data/tenancy high-level; disclaimer / no warranty; limitation of liability; changes to terms; contact placeholder.
+
+- **Given** I am signed in  
+  **When** I open `/terms`  
+  **Then** I can read the same page without an acceptance checkbox or blocking gate this slice.
+
+- **Given** product scope  
+  **When** copy mentions commercial capability  
+  **Then** it does not claim in-product payment processing that does not exist yet.
+
+**Assumption:** Copy is product-owned static text, not lawyer-certified.
+
+## US-106 — Footer Terms link on all web variants **(Must)**
+
+**As** a web user on any Fleet shell  
+**I need** a **Terms** link in the application footer  
+**So that** I can open `/terms` from public, auth, Owner/Admin, and driver chrome.
+
+**Acceptance**
+
+- **Given** I view a **public** page footer (`/`, `/pricing`, `/terms`)  
+  **When** the footer renders  
+  **Then** I see **Terms** → `/terms` plus other allowed secondaries (e.g. Pricing, Home).
+
+- **Given** I view an **auth** canvas footer  
+  **When** the footer renders  
+  **Then** I see **Terms** → `/terms`.
+
+- **Given** I am signed in as **Owner/Admin**  
+  **When** the footer renders  
+  **Then** I see **Terms** → `/terms` (and Billing, not Pricing).
+
+- **Given** I am signed in as **Driver**  
+  **When** the footer renders  
+  **Then** I see **Terms** → `/terms` and still do **not** see Pricing or Billing.
+
+- **Given** I activate **Terms**  
+  **When** navigation completes  
+  **Then** I reach `/terms`.
+
+## US-107 — Public Privacy notice page **(Must)**
+
+**As** a visitor or signed-in web user operating with Fleet globally  
+**I need** a public **Privacy** notice at `/privacy`  
+**So that** I can read how Fleet describes personal-data processing at a product level.
+
+**Acceptance**
+
+- **Given** I open `/privacy` signed out  
+  **When** the page loads  
+  **Then** I see title **Privacy**, public chrome (header + footer), and static body copy—no API error dependency.
+
+- **Given** the Privacy body is shown  
+  **When** I read the page  
+  **Then** these sections exist (headings or equivalent): who we are; scope; personal data we process; purposes and legal bases; sharing and processors; international transfers; retention; security; your rights; cookies and similar technologies; children; changes; contact and requests.
+
+- **Given** I am signed in  
+  **When** I open `/privacy`  
+  **Then** I can read the same page without an acceptance checkbox or blocking gate this slice.
+
+- **Given** product scope  
+  **When** copy describes requests  
+  **Then** it does not claim an in-product DSAR portal or automated export this slice.
+
+**Assumption:** Copy is product-owned static text for global operations, not lawyer-certified.
+
+## US-108 — Footer Privacy link on all web variants **(Must)**
+
+**As** a web user on any Fleet shell  
+**I need** a **Privacy** link in the application footer  
+**So that** I can open `/privacy` from public, auth, Owner/Admin, and driver chrome.
+
+**Acceptance**
+
+- **Given** I view a **public** page footer (`/`, `/pricing`, `/terms`, `/privacy`)  
+  **When** the footer renders  
+  **Then** I see **Privacy** → `/privacy` plus **Terms** and other allowed secondaries.
+
+- **Given** I view an **auth** canvas footer  
+  **When** the footer renders  
+  **Then** I see **Privacy** → `/privacy`.
+
+- **Given** I am signed in as **Owner/Admin**  
+  **When** the footer renders  
+  **Then** I see **Privacy** → `/privacy` (and Billing, not Pricing).
+
+- **Given** I am signed in as **Driver**  
+  **When** the footer renders  
+  **Then** I see **Privacy** → `/privacy` and still do **not** see Pricing or Billing.
+
+- **Given** I activate **Privacy**  
+  **When** navigation completes  
+  **Then** I reach `/privacy`.

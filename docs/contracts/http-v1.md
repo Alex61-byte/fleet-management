@@ -99,13 +99,14 @@ Query (list routes above **except** `GET /v1/home`):
 {
   "email": "owner@fleet.example",
   "password": "string min 8",
+  "name": "string non-empty max 120",
   "registration_number": "string non-empty max 64",
   "vat_number": "string non-empty max 64",
   "address": "string non-empty max 500"
 }
 ```
 
-Trim legal fields before emptiness checks. Address text only (no lat/lon). Missing/empty/overlong → **400** `validation_error` (E33).
+Trim name/legal fields before emptiness checks. Address text only (no lat/lon). Missing/empty/overlong → **400** `validation_error` (E33).
 
 **201**
 
@@ -273,12 +274,34 @@ Same session issuance rules as company register (new refresh family, US-30).
   "role": "owner",
   "company_id": "uuid",
   "account_kind": "company",
+  "company_name": "Fleet Co",
+  "company_name_required": false,
   "must_change_password": false,
   "login_enabled": true,
   "totp_enabled": false
-}register/individual`, `totp/verify`, `invite/accept` each issue a **new** refresh family (US-30).
+}
+```
+
+- `company_name`: display name when `account_kind = company` (may be `""` for legacy); `null` for individual.
+- `company_name_required`: `true` only for **company Owner** when name is empty (prompt to set). Admins/drivers: `false`.
+
+### `PATCH /v1/company/name`
+
+**Story:** US-01 legacy name backfill  
+**Auth:** session. **Owner** of `account_kind = company` only.
+
+```json
+{ "name": "string non-empty max 120" }
+```
+
+**200** — same shape as `GET /v1/me` after update.  
+**400** `validation_error`. **403** `forbidden` (Admin/Driver/Individual).
 
 Auth success `principal` objects (register*, login, totp/verify, invite/accept) include `account_kind`. Drivers are always `"company"` when present.
+
+### Session issuance
+
+`login`, `register`, `register/individual`, `totp/verify`, `invite/accept` each issue a **new** refresh family (US-30).
 
 ### TOTP
 
@@ -783,3 +806,95 @@ Driver only. Owner/Admin → **403** `forbidden` (E60).
 | Owner/Admin | 403 | `forbidden` |
 
 **Default “today”** is a **client** prefills concern; API does not inject date if omitted (omission → validation_error).
+
+
+---
+
+## Manager loop (US-93–US-98)
+
+### Compliance document
+
+```json
+{
+  "id": "uuid",
+  "vehicle_id": "uuid",
+  "company_id": "uuid",
+  "doc_type": "insurance",
+  "label": "Policy 2026",
+  "content_type": "application/pdf",
+  "byte_size": 12345,
+  "path": "company/vehicle/docs/id.pdf",
+  "url": "https://signed...",
+  "created_at": "2026-04-01T12:00:00.000Z"
+}
+```
+
+`doc_type`: `insurance` | `inspection` | `road_tax` | `registration` | `other`.
+
+### `GET /v1/vehicles/:id/documents`
+
+Owner/Admin. **200** `{ "items": ComplianceDocument[] }` with signed `url` when storage available.
+
+### `POST /v1/vehicles/:id/documents`
+
+Owner/Admin. Multipart: `file` (required), `doc_type` (required), `label` (optional). PDF or image ≤ 10 MB. Hard cap **40** docs/vehicle → **400** `validation_error`.
+
+**201** ComplianceDocument.
+
+### `DELETE /v1/vehicles/:id/documents/:docId`
+
+Owner/Admin. **204**. Best-effort storage delete.
+
+### Vehicle issue
+
+```json
+{
+  "id": "uuid",
+  "vehicle_id": "uuid",
+  "company_id": "uuid",
+  "created_by_principal_id": "uuid",
+  "source": "manual",
+  "handover_id": null,
+  "title": "Left mirror cracked",
+  "description": "",
+  "status": "open",
+  "created_at": "2026-04-01T12:00:00.000Z",
+  "closed_at": null
+}
+```
+
+`source`: `manual` | `handover`. `status`: `open` | `closed`.
+
+### `GET /v1/vehicles/:id/issues`
+
+Owner/Admin: any vehicle in tenant. Driver: only active next-travel vehicle. **200** `{ "items": Issue[] }`.
+
+### `POST /v1/vehicles/:id/issues`
+
+JSON `{ "title": "...", "description?": "..." }`. Owner/Admin any vehicle; driver only active travel vehicle. **201** Issue (`source=manual`).
+
+Handover create with non-empty `damages_text` also inserts Issue (`source=handover`).
+
+### `POST /v1/vehicles/:id/issues/:issueId/close`
+
+Owner/Admin. **200** Issue (`status=closed`). Drivers → **403**.
+
+### `GET /v1/reports/daily-usage`
+
+Company Owner/Admin only (Individual → **403**). Query `from`/`to` optional `YYYY-MM-DD`.
+
+**200** `{ "items": [{ id, company_id, driver_id, driver_email, vehicle_id, usage_date, start_place, end_place, start_distance, end_distance, distance_unit, start_time, end_time, created_at, vehicle }] }` newest first.
+
+### `GET /v1/reports/daily-usage.csv`
+
+Same auth/filters. **200** `text/csv` attachment.
+
+### `GET /v1/service-due`
+
+Owner/Admin. Vehicles whose latest non-voided handover is due by days and/or distance.
+
+**200** `{ "items": [{ vehicle_id, vehicle, handover_id, handover_created_at, next_service_days, next_service_distance, next_service_distance_unit, days_elapsed, days_overdue, vehicle_mileage, handover_mileage, distance_remaining, due_by_days, due_by_distance }] }`.
+
+### `POST /v1/compliance-digest/send`
+
+Owner/Admin. Sends at most one digest email per Owner/Admin principal per UTC day when warnings exist (cap 50 items). **200** `{ "sent", "skipped", "reason", "item_count?" }`.

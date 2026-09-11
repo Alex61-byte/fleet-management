@@ -18,6 +18,8 @@ function meFromPrincipal(principal: Principal, mustChangePassword = false): Me {
     must_change_password: mustChangePassword,
     login_enabled: true,
     totp_enabled: false,
+    company_name: null,
+    company_name_required: false,
   };
 }
 

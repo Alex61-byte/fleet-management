@@ -68,6 +68,7 @@ One bounded context in-process: Identity, Fleet. HTTP `/v1`. Next.js and Expo ar
 
 - **Identity:** tenant (`account_kind` company\|individual), principals (Owner, Admin, Driver), credentials, TOTP, sessions, password reset; company register + **individual register** ([ADR-018](adr/ADR-018-account-kinds.md)).
 - **Fleet:** vehicles + compliance dates + optional **vehicle.mileage** + **vehicle handovers** (Out/In, damage images — [ADR-015](adr/ADR-015-vehicle-handovers.md)) + **driver Daily usage** logs ([ADR-016](adr/ADR-016-driver-daily-usage.md)) (master odometer reading; unit derived from country — [ADR-014](adr/ADR-014-vehicle-mileage.md)); expiry computed on read; **optional side appearance images** (paths in Postgres, bytes in **Supabase Storage** via API **S3 gateway** / `OBJECT_STORAGE_*` — [ADR-013](adr/ADR-013-vehicle-side-images.md)).
+- **API module layout (in-process):** thin `buildApp` + `src/routes/{identity,driver,fleet}` registration; `FleetService` facade over `src/fleet/*` subdomain ops ([ADR-027](adr/ADR-027-api-route-and-fleet-modules.md)). HTTP contract and authz unchanged.
 - **No event bus.** Reserve in-process hooks later for `vehicle.created` if tracking needs it.
 - **Auth:** opaque refresh + short-lived access token (see ADR-002). Same contract for web and mobile. Next.js may store refresh in httpOnly cookie as a **client** detail; API still Bearer-access.
 - **Clients:** Next.js = Owner/Admin management **+** driver minimal shell. Expo = role shells after login. API enforces; UI hides Owner nav for drivers (defense in depth). Local orchestration is Turborepo on npm workspaces; Expo Metro (`npm run dev:mobile`) runs in a dedicated TTY so the QR prints ([ADR-006](adr/ADR-006-turborepo-orchestration.md)).
@@ -158,9 +159,12 @@ flowchart TD
 | [adr/ADR-004-compliance-dates.md](adr/ADR-004-compliance-dates.md) | Dates + derived warnings |
 | [adr/ADR-005-clients.md](adr/ADR-005-clients.md) | Next.js vs Expo |
 | [adr/ADR-006-turborepo-orchestration.md](adr/ADR-006-turborepo-orchestration.md) | npm workspaces + Turbo; Expo QR on its own TTY |
+| [adr/ADR-027-api-route-and-fleet-modules.md](adr/ADR-027-api-route-and-fleet-modules.md) | Route modules + FleetService facade / `src/fleet/*` |
 | [adr/ADR-008-driver-hard-delete.md](adr/ADR-008-driver-hard-delete.md) | Driver hard delete vs disable; session revoke |
 | [adr/ADR-016-driver-daily-usage.md](adr/ADR-016-driver-daily-usage.md) | Driver Daily usage create/list; hard-delete cascade |
 | [adr/ADR-020-tenant-data-cache-scale.md](adr/ADR-020-tenant-data-cache-scale.md) | Tenant revision ETag/304, opt-in list pagination, client SWR keys |
+| [adr/ADR-023-web-app-footer.md](adr/ADR-023-web-app-footer.md) | Web application footer chrome only (no API) |
+| [adr/ADR-024-web-billing-page.md](adr/ADR-024-web-billing-page.md) | Web `/billing` placeholder; signed-in footer Billing |
 | [contracts/http-v1.md](contracts/http-v1.md) | Routes, bodies, error codes |
 
 **Next specialist (US-27):** Senior Backend Specialist — Identity `DELETE /v1/drivers/:id` + session fail-closed against contract and BA AC. Fleet no-op. Do not start Next.js/Expo until that slice passes tests. Then Senior Frontend Specialist per [design/pages/drivers.md](../design/pages/drivers.md).

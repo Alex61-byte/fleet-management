@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AppFooter } from "./app-footer";
 import { BrandMark, OfflineBanner, SecondaryButton } from "./ui";
 import { themeClasses } from "../../../design/tailwind.theme";
 import { useAuth } from "../lib/auth-context";
@@ -27,7 +28,7 @@ export function DriverShell({
         <span className={themeClasses.appBarProduct}>Fleet</span>
         <h1 className={`${themeClasses.pageTitle} ml-2`}>{title}</h1>
       </header>
-      <main className={`${themeClasses.contentPadCompact} w-full max-w-auth-card mx-auto flex flex-col gap-2`}>
+      <main className={`${themeClasses.contentPadCompact} w-full max-w-auth-card mx-auto flex flex-col gap-2 flex-1`}>
         <OfflineBanner offline={offline} />
         {children}
         {showSignOut ? (
@@ -40,6 +41,7 @@ export function DriverShell({
           </SecondaryButton>
         ) : null}
       </main>
+      <AppFooter />
     </div>
   );
 }

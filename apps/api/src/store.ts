@@ -5,8 +5,10 @@ import type {
   Principal,
   Role,
   Vehicle,
+  VehicleComplianceDocument,
   VehicleHandover,
   VehicleHandoverImage,
+  VehicleIssue,
 } from "./domain.ts";
 
 export type RefreshRow = {
@@ -35,6 +37,7 @@ export type ResetRow = {
 export type CompanyInsert = {
   id: string;
   accountKind: AccountKind;
+  name: string;
   registrationNumber: string;
   vatNumber: string;
   address: string;
@@ -43,6 +46,7 @@ export type CompanyInsert = {
 export interface Store {
   withTransaction<T>(fn: (s: Store) => Promise<T>): Promise<T>;
   insertCompany(company: CompanyInsert): Promise<void>;
+  updateCompany(company: CompanyInsert): Promise<void>;
   findCompany(id: string): Promise<CompanyInsert | undefined>;
   insertPrincipal(p: Principal): Promise<void>;
   findPrincipalByEmail(email: string): Promise<Principal | undefined>;
@@ -85,7 +89,24 @@ export interface Store {
   voidOpenOutsForDriver(driverId: string): Promise<void>;
   insertDailyUsage(row: DriverDailyUsage): Promise<void>;
   listDailyUsageForDriver(driverId: string, companyId: string): Promise<DriverDailyUsage[]>;
+  listDailyUsageForCompany(
+    companyId: string,
+    opts?: { from?: string; to?: string },
+  ): Promise<DriverDailyUsage[]>;
   deleteDailyUsageForDriver(driverId: string): Promise<void>;
+  insertComplianceDocument(row: VehicleComplianceDocument): Promise<void>;
+  listComplianceDocuments(vehicleId: string, companyId: string): Promise<VehicleComplianceDocument[]>;
+  findComplianceDocument(id: string, companyId: string): Promise<VehicleComplianceDocument | undefined>;
+  deleteComplianceDocument(id: string, companyId: string): Promise<void>;
+  countComplianceDocuments(vehicleId: string, companyId: string): Promise<number>;
+  insertIssue(row: VehicleIssue): Promise<void>;
+  updateIssue(row: VehicleIssue): Promise<void>;
+  listIssuesForVehicle(vehicleId: string, companyId: string): Promise<VehicleIssue[]>;
+  findIssue(id: string, companyId: string): Promise<VehicleIssue | undefined>;
+  listLatestHandoversForCompany(companyId: string): Promise<VehicleHandover[]>;
+  hasComplianceDigestSend(companyId: string, principalId: string, sentOn: string): Promise<boolean>;
+  recordComplianceDigestSend(companyId: string, principalId: string, sentOn: string): Promise<void>;
+  listOwnerAdminPrincipals(companyId: string): Promise<Principal[]>;
 }
 
 export class MemoryStore implements Store {
@@ -100,12 +121,20 @@ export class MemoryStore implements Store {
   handovers = new Map<string, VehicleHandover>();
   handoverImages = new Map<string, VehicleHandoverImage>();
   dailyUsages = new Map<string, DriverDailyUsage>();
+  complianceDocuments = new Map<string, VehicleComplianceDocument>();
+  issues = new Map<string, VehicleIssue>();
+  complianceDigestSends = new Set<string>();
 
   async withTransaction<T>(fn: (s: Store) => Promise<T>): Promise<T> {
     return fn(this);
   }
 
   async insertCompany(company: CompanyInsert): Promise<void> {
+    this.companies.set(company.id, { ...company });
+  }
+
+  async updateCompany(company: CompanyInsert): Promise<void> {
+    if (!this.companies.has(company.id)) return;
     this.companies.set(company.id, { ...company });
   }
 
@@ -410,6 +439,108 @@ export class MemoryStore implements Store {
       if (row.driverId === driverId) this.dailyUsages.delete(id);
     }
   }
+
+  async listDailyUsageForCompany(
+    companyId: string,
+    opts?: { from?: string; to?: string },
+  ): Promise<DriverDailyUsage[]> {
+    return [...this.dailyUsages.values()]
+      .filter((u) => {
+        if (u.companyId !== companyId) return false;
+        if (opts?.from && u.usageDate < opts.from) return false;
+        if (opts?.to && u.usageDate > opts.to) return false;
+        return true;
+      })
+      .map((u) => ({ ...u }))
+      .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+  }
+
+  async insertComplianceDocument(row: VehicleComplianceDocument): Promise<void> {
+    this.complianceDocuments.set(row.id, { ...row });
+  }
+
+  async listComplianceDocuments(
+    vehicleId: string,
+    companyId: string,
+  ): Promise<VehicleComplianceDocument[]> {
+    return [...this.complianceDocuments.values()]
+      .filter((d) => d.vehicleId === vehicleId && d.companyId === companyId)
+      .map((d) => ({ ...d }))
+      .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+  }
+
+  async findComplianceDocument(
+    id: string,
+    companyId: string,
+  ): Promise<VehicleComplianceDocument | undefined> {
+    const row = this.complianceDocuments.get(id);
+    if (!row || row.companyId !== companyId) return undefined;
+    return { ...row };
+  }
+
+  async deleteComplianceDocument(id: string, companyId: string): Promise<void> {
+    const row = this.complianceDocuments.get(id);
+    if (row && row.companyId === companyId) this.complianceDocuments.delete(id);
+  }
+
+  async countComplianceDocuments(vehicleId: string, companyId: string): Promise<number> {
+    let n = 0;
+    for (const d of this.complianceDocuments.values()) {
+      if (d.vehicleId === vehicleId && d.companyId === companyId) n += 1;
+    }
+    return n;
+  }
+
+  async insertIssue(row: VehicleIssue): Promise<void> {
+    this.issues.set(row.id, { ...row });
+  }
+
+  async updateIssue(row: VehicleIssue): Promise<void> {
+    this.issues.set(row.id, { ...row });
+  }
+
+  async listIssuesForVehicle(vehicleId: string, companyId: string): Promise<VehicleIssue[]> {
+    return [...this.issues.values()]
+      .filter((i) => i.vehicleId === vehicleId && i.companyId === companyId)
+      .map((i) => ({ ...i }))
+      .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+  }
+
+  async findIssue(id: string, companyId: string): Promise<VehicleIssue | undefined> {
+    const row = this.issues.get(id);
+    if (!row || row.companyId !== companyId) return undefined;
+    return { ...row };
+  }
+
+  async listLatestHandoversForCompany(companyId: string): Promise<VehicleHandover[]> {
+    return [...this.handovers.values()]
+      .filter((h) => h.companyId === companyId && h.status !== "voided")
+      .map((h) => ({ ...h }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  async hasComplianceDigestSend(
+    companyId: string,
+    principalId: string,
+    sentOn: string,
+  ): Promise<boolean> {
+    return this.complianceDigestSends.has(`${companyId}|${principalId}|${sentOn}`);
+  }
+
+  async recordComplianceDigestSend(
+    companyId: string,
+    principalId: string,
+    sentOn: string,
+  ): Promise<void> {
+    this.complianceDigestSends.add(`${companyId}|${principalId}|${sentOn}`);
+  }
+
+  async listOwnerAdminPrincipals(companyId: string): Promise<Principal[]> {
+    return [...this.principals.values()]
+      .filter((p) => p.companyId === companyId && (p.role === "owner" || p.role === "admin"))
+      .map((p) => ({ ...p }));
+  }
+
 }
 
 export function isUniqueViolation(err: unknown): boolean {

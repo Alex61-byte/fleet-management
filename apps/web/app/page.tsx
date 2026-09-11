@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AppFooter } from "../components/app-footer";
 import { BrandMarkPublic, OfflineBanner, Skeleton } from "../components/ui";
 import { themeClasses } from "../../../design/tailwind.theme";
 import { useAuth } from "../lib/auth-context";
@@ -167,7 +168,12 @@ export default function PublicLandingPage() {
             <section className={themeClasses.publicPathCardAccent}>
               <h2 className={themeClasses.publicValueTitle}>Company</h2>
               <p className={themeClasses.publicValueBody}>
-                Owners and Admins, driver invites, fleet vehicles, handovers, and daily usage.
+                Built for fleets with people and vehicles to coordinate. You create the company as
+                Owner, add Admins when you need help, and invite drivers by email. Keep every vehicle’s
+                plate, insurance, inspection, registration country, and road tax in one place. Drivers
+                can log next travel, complete vehicle handovers, and record daily usage so you always
+                know who had the vehicle and what was driven. Fleet flags dates that are due soon or
+                already expired.
               </p>
               <Link
                 href="/sign-up"
@@ -179,7 +185,11 @@ export default function PublicLandingPage() {
             <section className={themeClasses.publicPathCard}>
               <h2 className={themeClasses.publicValueTitle}>Individual</h2>
               <p className={themeClasses.publicValueBody}>
-                Personal workspace for your own vehicles and compliance dates — no driver roster.
+                Built for you and the vehicles you own—no company setup and no driver roster. Track
+                each vehicle’s plate, insurance, inspection, registration country, and road tax, plus
+                optional custom expiration dates when you need them. Fleet warns before dates lapse
+                and after they expire so renewals stay on your radar. You manage only your own
+                vehicles; invites, handovers, and daily usage stay on the company path.
               </p>
               <Link
                 href="/individual-sign-up"
@@ -194,10 +204,10 @@ export default function PublicLandingPage() {
         <div className={themeClasses.publicDescription}>
           <h2 className={themeClasses.publicDescriptionTitle}>What Fleet is for</h2>
           <p className={themeClasses.publicDescriptionBody}>
-            Create a company or a personal account. A company Owner is first; Owners and Admins manage
-            drivers and vehicles for that company. An individual Owner manages their own vehicles only.
-            Drivers are invited by companies. Vehicles keep license plate, insurance, inspection, country
-            of registration, and road tax dates. Fleet warns when those dates are due soon or expired.
+            Choose a company workspace or a personal account. With a company, you start as Owner; you and
+            your Admins manage vehicles and invite drivers. With a personal account, you manage only your
+            own vehicles—no drivers. For each vehicle, track plate, insurance, inspection, registration
+            country, and road tax. Fleet flags dates that are coming due or already expired so nothing slips.
           </p>
           <p className={themeClasses.publicDescriptionMeta}>
             Software plans only — no hardware telematics. See{" "}
@@ -208,6 +218,7 @@ export default function PublicLandingPage() {
           </p>
         </div>
       </div>
+      <AppFooter variant="public" />
     </div>
   );
 }

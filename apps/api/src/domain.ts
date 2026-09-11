@@ -35,6 +35,8 @@ export type Principal = {
 export type CompanyProfile = {
   id: string;
   accountKind: AccountKind;
+  /** Display name; required on company create; may be empty for legacy company tenants until Owner sets it. */
+  name: string;
   registrationNumber: string;
   vatNumber: string;
   address: string;
@@ -108,6 +110,42 @@ export type VehicleHandoverImage = {
   storagePath: string;
   sortOrder: number;
   createdAt: number;
+};
+
+export type ComplianceDocType =
+  | "insurance"
+  | "inspection"
+  | "road_tax"
+  | "registration"
+  | "other";
+
+export type VehicleComplianceDocument = {
+  id: string;
+  companyId: string;
+  vehicleId: string;
+  docType: ComplianceDocType;
+  label: string;
+  storagePath: string;
+  contentType: string;
+  byteSize: number;
+  createdAt: number;
+};
+
+export type IssueSource = "manual" | "handover";
+export type IssueStatus = "open" | "closed";
+
+export type VehicleIssue = {
+  id: string;
+  companyId: string;
+  vehicleId: string;
+  createdByPrincipalId: string | null;
+  source: IssueSource;
+  handoverId: string | null;
+  title: string;
+  description: string;
+  status: IssueStatus;
+  createdAt: number;
+  closedAt: number | null;
 };
 
 export type DriverDailyUsage = {

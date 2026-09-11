@@ -174,6 +174,15 @@ export const themeClasses = {
   publicLockup: "flex flex-row items-center gap-1.5 min-h-hit",
   publicWordmark: "text-title font-semibold text-text-primary tracking-tight",
   publicHeaderActions: "flex flex-row items-center gap-1",
+  /** US-100–US-103 web application footer */
+  appFooter:
+    "mt-auto w-full shrink-0 border-t border-divider bg-surface-raised py-2",
+  appFooterInner:
+    "w-full px-content-gutter-compact flex flex-row flex-wrap items-center justify-between gap-2",
+  appFooterInnerPublic:
+    "mx-auto w-full max-w-public-content px-content-gutter-compact flex flex-row flex-wrap items-center justify-between gap-2",
+  appFooterCopy: "font-sans text-caption font-regular text-text-secondary",
+  appFooterNav: "flex flex-row flex-wrap items-center gap-2",
   publicBody:
     "flex-1 bg-canvas mx-auto w-full max-w-public-content px-content-gutter-compact py-3 flex flex-col gap-3",
   publicHero: "flex flex-col gap-3 items-stretch",
@@ -222,6 +231,13 @@ export const themeClasses = {
   pricingFeatureItem: "font-sans text-label font-regular text-text-primary",
   pricingFeatureMuted: "font-sans text-label font-regular text-text-secondary",
   pricingFootnote: "font-sans text-caption font-regular text-text-secondary",
+  /** US-105 public Terms document */
+  termsDocument:
+    "bg-surface-raised border border-border rounded-lg shadow-raised p-3 flex flex-col gap-3 max-w-prose w-full",
+  termsSection: "flex flex-col gap-1",
+  termsSectionTitle: "font-sans text-section font-semibold text-text-primary",
+  termsSectionBody: "font-sans text-body font-regular text-text-primary",
+  termsMeta: "font-sans text-caption font-regular text-text-secondary",
   publicIdentity:
     "max-w-auth-card px-content-gutter-compact py-8 flex flex-col gap-1",
   publicIdentityTitle:

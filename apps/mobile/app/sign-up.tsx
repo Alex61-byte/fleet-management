@@ -14,6 +14,7 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [vatNumber, setVatNumber] = useState("");
   const [address, setAddress] = useState("");
@@ -30,6 +31,7 @@ export default function SignUpScreen() {
   const canSubmit =
     password.length >= 8 &&
     confirm.length >= 8 &&
+    Boolean(companyName.trim()) &&
     Boolean(registrationNumber.trim()) &&
     Boolean(vatNumber.trim()) &&
     Boolean(address.trim()) &&
@@ -76,8 +78,13 @@ export default function SignUpScreen() {
       setPasswordError("At least 8 characters.");
       return;
     }
-    if (!registrationNumber.trim() || !vatNumber.trim() || !address.trim()) {
-      setCompanyError("Registration number, VAT number, and address are required.");
+    if (
+      !companyName.trim() ||
+      !registrationNumber.trim() ||
+      !vatNumber.trim() ||
+      !address.trim()
+    ) {
+      setCompanyError("Company name, registration number, VAT number, and address are required.");
       return;
     }
     setBusy(true);
@@ -85,6 +92,7 @@ export default function SignUpScreen() {
       const res = await api.register({
         email: email.trim(),
         password,
+        name: companyName.trim(),
         registration_number: registrationNumber.trim(),
         vat_number: vatNumber.trim(),
         address: address.trim(),
@@ -127,7 +135,10 @@ export default function SignUpScreen() {
           <Field label="Confirm password" error={confirmError}>
             <TextInput value={confirm} onChangeText={setConfirm} secureTextEntry error={Boolean(confirmError)} />
           </Field>
-          <Field label="Company registration number" error={companyError}>
+          <Field label="Company name" error={companyError}>
+            <TextInput value={companyName} onChangeText={setCompanyName} />
+          </Field>
+          <Field label="Company registration number">
             <TextInput value={registrationNumber} onChangeText={setRegistrationNumber} />
           </Field>
           <Field label="VAT number">

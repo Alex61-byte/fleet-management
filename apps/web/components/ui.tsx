@@ -1,6 +1,7 @@
 "use client";
 
 import { themeClasses } from "../../../design/tailwind.theme";
+import { AppFooter } from "./app-footer";
 import type { VehicleCustomExpiration, Warning } from "@fleet/sdk";
 import { warningFieldLabel } from "@fleet/sdk";
 import Link from "next/link";
@@ -272,13 +273,16 @@ export function AuthShell({
   children: ReactNode;
 }) {
   return (
-    <main className={`${themeClasses.pageAuth} min-h-screen flex ${themeClasses.authCanvas}`}>
-      <div className={`${themeClasses.authCard} flex flex-col`}>
-        <AuthLockup />
-        <h1 className={themeClasses.authTitle}>{title}</h1>
-        {caption ? <p className={themeClasses.authCaption}>{caption}</p> : null}
-        {children}
-      </div>
-    </main>
+    <div className={`${themeClasses.pageAuth} min-h-screen flex flex-col`}>
+      <main className={`flex-1 flex ${themeClasses.authCanvas}`}>
+        <div className={`${themeClasses.authCard} flex flex-col`}>
+          <AuthLockup />
+          <h1 className={themeClasses.authTitle}>{title}</h1>
+          {caption ? <p className={themeClasses.authCaption}>{caption}</p> : null}
+          {children}
+        </div>
+      </main>
+      <AppFooter />
+    </div>
   );
 }

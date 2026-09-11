@@ -8,8 +8,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "../lib/auth-context";
 import { useComplianceNotifications } from "../lib/compliance-notifications";
 import { useVehiclesNavUrgency } from "../lib/vehicles-nav-urgency";
+import { CompanyNameDialog } from "./company-name-dialog";
 import { NavIcon, navIconForHref } from "./nav-icons";
 import { NotificationControl } from "./notification-menu";
+import { AppFooter } from "./app-footer";
 import { Banner, BrandMark, OfflineBanner, PrimaryButton } from "./ui";
 
 function vehiclesNavClass(urgency: VehiclesNavUrgency, active: boolean): string {
@@ -91,15 +93,27 @@ export function AppShell({
     { href: "/home", label: "Home" },
     ...(!individual ? [{ href: "/drivers", label: "Drivers" }] : []),
     { href: "/vehicles", label: "Vehicles" },
+    { href: "/service-due", label: "Service due" },
+    ...(!individual ? [{ href: "/reports/daily-usage", label: "Usage report" }] : []),
     { href: "/security", label: "Security" },
     ...(!individual && me.role === "owner" ? [{ href: "/admins", label: "Admins" }] : []),
   ];
   const roleLabel = individual ? "Individual" : me.role === "owner" ? "Owner" : "Admin";
+  const companyLabel =
+    !individual && me.company_name && me.company_name.trim()
+      ? me.company_name.trim()
+      : null;
 
   return (
     <div className={`${themeClasses.shell} min-h-screen`}>
+      <CompanyNameDialog />
       <nav className={`${themeClasses.sidebar} p-2 gap-0.5`} aria-label="Main">
         <p className={themeClasses.sidebarRole}>{roleLabel}</p>
+        {companyLabel ? (
+          <p className={`${themeClasses.caption} px-2 truncate`} title={companyLabel}>
+            {companyLabel}
+          </p>
+        ) : null}
         {items.map((item) => {
           const active = path === item.href || path.startsWith(`${item.href}/`);
           const isVehicles = item.href === "/vehicles";
@@ -154,10 +168,11 @@ export function AppShell({
           <h1 className={themeClasses.pageTitle}>{title}</h1>
           {action ? <div className={themeClasses.pageHeaderActions}>{action}</div> : null}
         </div>
-        <main className={`${themeClasses.contentPadCompact} w-full flex flex-col gap-2`}>
+        <main className={`${themeClasses.contentPadCompact} w-full flex flex-col gap-2 flex-1`}>
           <OfflineBanner offline={offline} />
           {children}
         </main>
+        <AppFooter />
       </div>
     </div>
   );

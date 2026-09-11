@@ -6,18 +6,28 @@ import { IdentityService } from "../src/identity-service.ts";
 import { MemoryStore } from "../src/store.ts";
 import { addDays, utcToday } from "../src/domain.ts";
 import { sha256 } from "../src/crypto.ts";
-import type { InviteMail, Mailer } from "../src/mailer.ts";
+import type { ComplianceDigestMail, InviteMail, Mailer } from "../src/mailer.ts";
 import { MemoryVehicleImageStorage } from "../src/vehicle-image-storage.ts";
 
 const secret = new TextEncoder().encode("test-secret");
 
 class RecordingMailer implements Mailer {
   sent: InviteMail[] = [];
+  digests: ComplianceDigestMail[] = [];
   failNext = false;
+  failNextDigest = false;
   async sendDriverInvite(mail: InviteMail): Promise<boolean> {
     this.sent.push(mail);
     if (this.failNext) {
       this.failNext = false;
+      return false;
+    }
+    return true;
+  }
+  async sendComplianceDigest(mail: ComplianceDigestMail): Promise<boolean> {
+    this.digests.push(mail);
+    if (this.failNextDigest) {
+      this.failNextDigest = false;
       return false;
     }
     return true;
@@ -30,6 +40,7 @@ class RecordingMailer implements Mailer {
 }
 
 const companyFields = {
+  name: "Fleet Co",
   registration_number: "RO12345678",
   vat_number: "RO12345678",
   address: "1 Fleet Street, Bucharest",
@@ -107,6 +118,8 @@ describe("HTTP /v1 first slice", () => {
     });
     assert.equal(me.status, 200);
     assert.equal(me.body.account_kind, "company");
+    assert.equal(me.body.company_name, "Fleet Co");
+    assert.equal(me.body.company_name_required, false);
 
     const dup = await json(inject, {
       method: "POST",
@@ -115,6 +128,99 @@ describe("HTTP /v1 first slice", () => {
     });
     assert.equal(dup.status, 409);
     assert.equal(dup.body.error.code, "email_in_use");
+  });
+
+  it("US-01b company name required on register; Owner can set missing name", async () => {
+    const missingName = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        email: "noname-owner@fleet.example",
+        password: "password1",
+        registration_number: "RO999",
+        vat_number: "RO999",
+        address: "2 Name Street",
+      },
+    });
+    assert.equal(missingName.status, 400);
+
+    const ok = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        email: "legacy-name@fleet.example",
+        password: "password1",
+        ...companyFields,
+        name: "Temp Name",
+      },
+    });
+    assert.equal(ok.status, 201);
+    const companyId = ok.body.principal.company_id as string;
+    // Simulate legacy empty name
+    const company = await store.findCompany(companyId);
+    assert.ok(company);
+    await store.updateCompany({ ...company!, name: "" });
+
+    const meEmpty = await json(inject, {
+      method: "GET",
+      url: "/v1/me",
+      token: ok.body.access_token,
+    });
+    assert.equal(meEmpty.status, 200);
+    assert.equal(meEmpty.body.company_name, "");
+    assert.equal(meEmpty.body.company_name_required, true);
+
+    const adminToken = (
+      await json(inject, {
+        method: "POST",
+        url: "/v1/admins",
+        token: ok.body.access_token,
+        payload: { email: "legacy-admin@fleet.example", password: "password1" },
+      })
+    );
+    // create admin via owner
+    assert.equal(adminToken.status, 201);
+
+    const adminLogin = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "legacy-admin@fleet.example", password: "password1", client: "web" },
+    });
+    assert.equal(adminLogin.status, 200);
+    const adminAccess = adminLogin.body.access_token as string;
+
+    const adminMe = await json(inject, {
+      method: "GET",
+      url: "/v1/me",
+      token: adminAccess,
+    });
+    assert.equal(adminMe.body.company_name_required, false);
+
+    const adminPatch = await json(inject, {
+      method: "PATCH",
+      url: "/v1/company/name",
+      token: adminAccess,
+      payload: { name: "Should Fail" },
+    });
+    assert.equal(adminPatch.status, 403);
+
+    const set = await json(inject, {
+      method: "PATCH",
+      url: "/v1/company/name",
+      token: ok.body.access_token,
+      payload: { name: "  Legacy Fleet Ltd  " },
+    });
+    assert.equal(set.status, 200);
+    assert.equal(set.body.company_name, "Legacy Fleet Ltd");
+    assert.equal(set.body.company_name_required, false);
+
+    const meOk = await json(inject, {
+      method: "GET",
+      url: "/v1/me",
+      token: ok.body.access_token,
+    });
+    assert.equal(meOk.body.company_name, "Legacy Fleet Ltd");
+    assert.equal(meOk.body.company_name_required, false);
   });
 
   it("US-78 individual register creates individual owner; no legal fields; short password rejected", async () => {
@@ -2445,7 +2551,254 @@ describe("HTTP /v1 first slice", () => {
         "if-none-match": String(homeEtag),
       },
     });
+
     assert.equal(home304.statusCode, 304);
+  });
+
+  it("US-93–98 manager loop: docs, issues, service-due, usage report, digest", async () => {
+    const suffix = String(Date.now());
+    const ownerEmail = `mgr-owner-${suffix}@fleet.example`;
+    const driverEmail = `mgr-driver-${suffix}@fleet.example`;
+    const reg = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: { email: ownerEmail, password: "password1", ...companyFields },
+    });
+    assert.equal(reg.status, 201);
+    const ownerToken = reg.body.access_token as string;
+
+    const vehicle = await json(inject, {
+      method: "POST",
+      url: "/v1/vehicles",
+      token: ownerToken,
+      payload: {
+        make: "Manager",
+        model: "Loop",
+        license_plate: `MGR-${suffix.slice(-6)}`,
+        country_of_registration: "RO",
+        mileage: 1000,
+        insurance_on: addDays(utcToday(), -1),
+      },
+    });
+    assert.equal(vehicle.status, 201);
+    const vehicleId = vehicle.body.id as string;
+
+    // documents (use PNG — same multipart path as side images)
+    function docMultipart(fields: Record<string, string>, file: Uint8Array) {
+      const boundary = "----docbound";
+      const chunks: Buffer[] = [];
+      for (const [k, v] of Object.entries(fields)) {
+        chunks.push(
+          Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`,
+          ),
+        );
+      }
+      chunks.push(
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="p.png"\r\nContent-Type: image/png\r\n\r\n`,
+        ),
+      );
+      chunks.push(Buffer.from(file));
+      chunks.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+      return { boundary, body: Buffer.concat(chunks) };
+    }
+
+    const upMp = docMultipart({ doc_type: "insurance", label: "Policy" }, TINY_PNG);
+    const up = await inject({
+      method: "POST",
+      url: `/v1/vehicles/${vehicleId}/documents`,
+      headers: {
+        authorization: `Bearer ${ownerToken}`,
+        "content-type": `multipart/form-data; boundary=${upMp.boundary}`,
+      },
+      payload: upMp.body,
+    });
+    assert.equal(up.statusCode, 201, up.body);
+    const docBody = JSON.parse(up.body);
+    assert.equal(docBody.doc_type, "insurance");
+    assert.equal(docBody.label, "Policy");
+    assert.ok(docBody.url);
+
+    const docs = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}/documents`,
+      token: ownerToken,
+    });
+    assert.equal(docs.status, 200);
+    assert.equal(docs.body.items.length, 1);
+
+    // invite driver + travel + handover with damages → issue
+    const invite = await json(inject, {
+      method: "POST",
+      url: "/v1/drivers",
+      token: ownerToken,
+      payload: { email: driverEmail },
+    });
+    assert.equal(invite.status, 201);
+    const token = mailer.lastToken();
+    const accept = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/invite/accept",
+      payload: {
+        token,
+        email: driverEmail,
+        password: "password1",
+        client: "web",
+      },
+    });
+    assert.equal(accept.status, 200);
+    const driverToken = accept.body.access_token as string;
+
+    const travel = await json(inject, {
+      method: "PUT",
+      url: "/v1/driver/travel",
+      token: driverToken,
+      payload: { vehicle_id: vehicleId, odometer: 1000 },
+    });
+    assert.equal(travel.status, 200);
+
+    function handoverMultipart(fields: Record<string, string>) {
+      const b = "----handoverbound";
+      const parts = Object.entries(fields)
+        .map(
+          ([k, v]) =>
+            `--${b}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`,
+        )
+        .join("");
+      const body = `${parts}--${b}--\r\n`;
+      return { body, contentType: `multipart/form-data; boundary=${b}` };
+    }
+
+    const out = handoverMultipart({
+      type: "out",
+      mileage: "1000",
+      next_service_days: "1",
+      next_service_distance: "10",
+      damages_text: "Scratched bumper",
+    });
+    const outRes = await inject({
+      method: "POST",
+      url: "/v1/driver/handovers",
+      headers: {
+        authorization: `Bearer ${driverToken}`,
+        "content-type": out.contentType,
+      },
+      payload: out.body,
+    });
+    assert.equal(outRes.statusCode, 201);
+
+    const issues = await json(inject, {
+      method: "GET",
+      url: `/v1/vehicles/${vehicleId}/issues`,
+      token: ownerToken,
+    });
+    assert.equal(issues.status, 200);
+    assert.ok(issues.body.items.some((i: { source: string }) => i.source === "handover"));
+
+    const manual = await json(inject, {
+      method: "POST",
+      url: `/v1/vehicles/${vehicleId}/issues`,
+      token: ownerToken,
+      payload: { title: "Check lights", description: "Rear left" },
+    });
+    assert.equal(manual.status, 201);
+    assert.equal(manual.body.status, "open");
+
+    const closed = await json(inject, {
+      method: "POST",
+      url: `/v1/vehicles/${vehicleId}/issues/${manual.body.id}/close`,
+      token: ownerToken,
+    });
+    assert.equal(closed.status, 200);
+    assert.equal(closed.body.status, "closed");
+
+    // driver daily usage + owner report
+    const usage = await json(inject, {
+      method: "POST",
+      url: "/v1/driver/daily-usage",
+      token: driverToken,
+      payload: {
+        usage_date: utcToday(),
+        start_place: "A",
+        start_distance: 1000,
+        start_time: "08:00",
+        end_place: "B",
+        end_distance: 1010,
+        end_time: "09:00",
+      },
+    });
+    assert.equal(usage.status, 201);
+
+    const report = await json(inject, {
+      method: "GET",
+      url: "/v1/reports/daily-usage",
+      token: ownerToken,
+    });
+    assert.equal(report.status, 200);
+    assert.ok(report.body.items.length >= 1);
+    assert.equal(report.body.items[0].driver_email, driverEmail);
+
+    const csv = await inject({
+      method: "GET",
+      url: "/v1/reports/daily-usage.csv",
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(csv.statusCode, 200);
+    assert.match(csv.headers["content-type"] as string, /text\/csv/);
+    assert.match(csv.body, /driver_email/);
+
+    const driverReport = await json(inject, {
+      method: "GET",
+      url: "/v1/reports/daily-usage",
+      token: driverToken,
+    });
+    assert.equal(driverReport.status, 403);
+
+    // service due (next_service_days=1, handover today → due when days_elapsed >= 1? 
+    // days_elapsed from handover day to today is 0, so force by patching mileage high via owner)
+    const patch = await json(inject, {
+      method: "PATCH",
+      url: `/v1/vehicles/${vehicleId}`,
+      token: ownerToken,
+      payload: { mileage: 1020 },
+    });
+    assert.equal(patch.status, 200);
+
+    const due = await json(inject, {
+      method: "GET",
+      url: "/v1/service-due",
+      token: ownerToken,
+    });
+    assert.equal(due.status, 200);
+    assert.ok(due.body.items.some((i: { vehicle_id: string }) => i.vehicle_id === vehicleId));
+
+    // digest
+    mailer.digests = [];
+    const digest1 = await json(inject, {
+      method: "POST",
+      url: "/v1/compliance-digest/send",
+      token: ownerToken,
+    });
+    assert.equal(digest1.status, 200);
+    assert.equal(digest1.body.sent, 1);
+    assert.equal(mailer.digests.length, 1);
+
+    const digest2 = await json(inject, {
+      method: "POST",
+      url: "/v1/compliance-digest/send",
+      token: ownerToken,
+    });
+    assert.equal(digest2.status, 200);
+    assert.equal(digest2.body.sent, 0);
+    assert.equal(mailer.digests.length, 1);
+
+    const del = await inject({
+      method: "DELETE",
+      url: `/v1/vehicles/${vehicleId}/documents/${docBody.id}`,
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(del.statusCode, 204);
   });
 
 });

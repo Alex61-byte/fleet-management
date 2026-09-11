@@ -43,6 +43,15 @@ flowchart LR
 | Page header | `pageHeader` min 56px **below** Global Header. Left: `pageTitle` + optional `pageSubtitle`. Right: `pageHeaderActions` — secondary then primary. Page actions stay here, not in Global Header (except notifications). No floating FAB. |
 | Toolbar | On list pages only, under the page header: `toolbar` height 44px. First slice: **no search** (not in BA). May hold count caption (`caption` + tabular-nums) and nothing else. Do not invent filters. |
 
+
+### Application footer (web — US-100–US-103, US-106, US-108)
+
+Shared calm footer on **web** public, auth, Owner/Admin main column, and driver shell. Spec: [app-footer.md](app-footer.md). Terms: [terms.md](terms.md). Privacy: [privacy.md](privacy.md).
+
+| Region | Spec |
+| --- | --- |
+| Footer | `appFooter` at column end (`mt-auto` with parent `min-h-screen flex flex-col`). Copyright **© {year} Fleet**. Links session-aware: public/auth **Home**+**Pricing**; OA **Home**→`/home`+**Billing**; driver **Home**→`/driver`; **all** variants **Terms**→`/terms` and **Privacy**→`/privacy`. Spec: [app-footer.md](app-footer.md), [billing.md](billing.md), [terms.md](terms.md), [privacy.md](privacy.md). Not on Expo. |
+
 **Mobile Owner/Admin chrome**
 
 | Region | Spec |

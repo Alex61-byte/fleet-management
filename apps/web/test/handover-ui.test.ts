@@ -46,7 +46,8 @@ describe("vehicle handovers UI (US-51–US-60 web)", () => {
   it("owner vehicle form exposes read-only Handovers tab when vehicle exists", () => {
     assert.match(form, /VehicleHandoversTab/);
     assert.match(form, /Handovers/);
-    assert.match(form, /tab !== "handovers"/);
+    assert.match(form, /tab === "handovers"/);
+    assert.match(form, /companyTenant && tab === "handovers" && vehicle\?\.id/);
     assert.match(history, /listVehicleHandovers/);
     assert.match(history, /getVehicleHandover/);
     assert.match(history, /No handovers yet/);

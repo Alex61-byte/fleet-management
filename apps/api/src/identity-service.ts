@@ -49,11 +49,13 @@ export class IdentityService {
   async register(input: {
     email: string;
     password: string;
+    name: string;
     registration_number: string;
     vat_number: string;
     address: string;
   }) {
     requirePasswordLength(input.password);
+    const name = requireCompanyField(input.name, 120, "Company name");
     const registrationNumber = requireCompanyField(input.registration_number, 64, "Registration number");
     const vatNumber = requireCompanyField(input.vat_number, 64, "VAT number");
     const address = requireCompanyField(input.address, 500, "Address");
@@ -77,6 +79,7 @@ export class IdentityService {
         await tx.insertCompany({
           id: companyId,
           accountKind: "company",
+          name,
           registrationNumber,
           vatNumber,
           address,
@@ -117,6 +120,7 @@ export class IdentityService {
         await tx.insertCompany({
           id: companyId,
           accountKind: "individual",
+          name: "",
           registrationNumber: "",
           vatNumber: "",
           address: "",
@@ -230,17 +234,32 @@ export class IdentityService {
 
   async me(claims: AccessClaims) {
     const principal = await this.requirePrincipal(claims.sub);
-    const account_kind = await this.accountKindForCompany(principal.companyId);
+    const company = await this.store.findCompany(principal.companyId);
+    const account_kind = company?.accountKind === "individual" ? "individual" : "company";
+    const company_name = (company?.name ?? "").trim();
     return {
       id: principal.id,
       email: principal.email,
       role: principal.role,
       company_id: principal.companyId,
       account_kind,
+      company_name: account_kind === "company" ? company_name : null,
+      company_name_required:
+        account_kind === "company" && principal.role === "owner" && !company_name,
       must_change_password: principal.mustChangePassword,
       login_enabled: principal.loginEnabled,
       totp_enabled: principal.role === "driver" ? false : principal.totpEnabled,
     };
+  }
+
+  /** Owner-only: set display name when missing (legacy company tenants) or update name. */
+  async setCompanyName(claims: AccessClaims, nameRaw: string) {
+    if (claims.role !== "owner") throw errors.forbidden();
+    const company = await this.store.findCompany(claims.company_id);
+    if (!company || company.accountKind !== "company") throw errors.forbidden();
+    const name = requireCompanyField(nameRaw, 120, "Company name");
+    await this.store.updateCompany({ ...company, name });
+    return this.me(claims);
   }
 
   async previewInvite(token: string) {
