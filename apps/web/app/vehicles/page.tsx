@@ -114,7 +114,7 @@ export default function VehiclesPage() {
                 aria-label="Filter by custody"
                 value={custody}
                 onChange={(e) => setCustody(e.target.value as VehicleCustodyFilter)}
-                className="w-28"
+                className="min-w-[7.5rem]"
               >
                 <option value="all">All</option>
                 <option value="out">Out</option>
@@ -126,7 +126,7 @@ export default function VehiclesPage() {
               aria-label="Sort by expiration type"
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value as SortMode)}
-              className="w-44"
+              className="min-w-[11rem] max-w-full sm:max-w-[16rem]"
             >
               <option value="default">Default order</option>
               <option value="any">Any expiration</option>
@@ -149,7 +149,7 @@ export default function VehiclesPage() {
                 onChange={(e) =>
                   setSortDir(e.target.value as VehicleListSortDirection)
                 }
-                className="w-36"
+                className="min-w-[9.5rem]"
               >
                 <option value="asc">Soonest first</option>
                 <option value="desc">Furthest first</option>

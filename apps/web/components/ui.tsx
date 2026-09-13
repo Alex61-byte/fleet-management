@@ -6,12 +6,24 @@ import type { VehicleCustomExpiration, VehicleOpenOut, Warning } from "@fleet/sd
 import { warningFieldLabel } from "@fleet/sdk";
 import Link from "next/link";
 import {
+  Children,
   forwardRef,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
   type ButtonHTMLAttributes,
+  type ChangeEvent,
   type InputHTMLAttributes,
+  type ReactElement,
   type ReactNode,
   type SelectHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 
 export function Field({
   label,
@@ -71,9 +83,26 @@ function SelectChevron() {
   );
 }
 
+type SelectOption = { value: string; label: string; disabled?: boolean };
+
+function optionsFromChildren(children: ReactNode): SelectOption[] {
+  const out: SelectOption[] = [];
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child) || child.type !== "option") return;
+    const el = child as ReactElement<{ value?: string | number; disabled?: boolean; children?: ReactNode }>;
+    const value = el.props.value == null ? "" : String(el.props.value);
+    const label = Children.toArray(el.props.children)
+      .map((c) => (typeof c === "string" || typeof c === "number" ? String(c) : ""))
+      .join("")
+      .trim();
+    out.push({ value, label: label || value, disabled: Boolean(el.props.disabled) });
+  });
+  return out;
+}
+
 /**
- * Styled native select: raised control, custom chevron, optional overline label.
- * Use for toolbar filters/sorts and form fields (not bare browser chrome).
+ * Styled select: raised trigger + portaled listbox (stable anchor at any viewport size).
+ * Accepts native `<option>` children like a select. Use for toolbar filters/sorts and forms.
  */
 export function SelectInput({
   error,
@@ -81,34 +110,188 @@ export function SelectInput({
   label,
   children,
   id,
-  ...props
+  value,
+  defaultValue,
+  disabled,
+  name,
+  required,
+  onChange,
+  "aria-label": ariaLabel,
 }: SelectHTMLAttributes<HTMLSelectElement> & {
   error?: boolean;
   /** Optional overline above the control (e.g. Custody, Sort). */
   label?: string;
 }) {
-  const selectId = id ?? (label ? `select-${label.replace(/\s+/g, "-").toLowerCase()}` : undefined);
+  const reactId = useId();
+  const selectId = id ?? (label ? `select-${label.replace(/\s+/g, "-").toLowerCase()}` : `select-${reactId}`);
+  const listboxId = `${selectId}-listbox`;
+  const options = useMemo(() => optionsFromChildren(children), [children]);
+  const isControlled = value !== undefined;
+  const [internal, setInternal] = useState(() =>
+    defaultValue != null ? String(defaultValue) : (options[0]?.value ?? ""),
+  );
+  const current = isControlled ? String(value ?? "") : internal;
+  const selected = options.find((o) => o.value === current) ?? options[0];
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(
+    null,
+  );
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+
+  const updateMenuPos = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const gutter = 8;
+    const spaceBelow = window.innerHeight - rect.bottom - gutter;
+    const spaceAbove = rect.top - gutter;
+    const preferBelow = spaceBelow >= 160 || spaceBelow >= spaceAbove;
+    const maxHeight = Math.max(120, Math.min(320, preferBelow ? spaceBelow : spaceAbove));
+    const top = preferBelow ? rect.bottom + 4 : Math.max(gutter, rect.top - 4 - maxHeight);
+    let left = rect.left;
+    const width = Math.max(rect.width, 140);
+    if (left + width > window.innerWidth - gutter) {
+      left = Math.max(gutter, window.innerWidth - gutter - width);
+    }
+    if (left < gutter) left = gutter;
+    setMenuPos({ top, left, width, maxHeight });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuPos(null);
+      return;
+    }
+    updateMenuPos();
+    const onWin = () => updateMenuPos();
+    window.addEventListener("resize", onWin);
+    window.addEventListener("scroll", onWin, true);
+    return () => {
+      window.removeEventListener("resize", onWin);
+      window.removeEventListener("scroll", onWin, true);
+    };
+  }, [open, updateMenuPos]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || listRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  function commit(next: string) {
+    if (!isControlled) setInternal(next);
+    if (onChange) {
+      const synthetic = {
+        target: { value: next, name: name ?? "", required: Boolean(required) },
+        currentTarget: { value: next, name: name ?? "" },
+      } as unknown as ChangeEvent<HTMLSelectElement>;
+      onChange(synthetic);
+    }
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  const display = selected?.label ?? "";
+  const a11yName = ariaLabel ?? label ?? "Select";
+
   return (
-    <div className={`${themeClasses.selectField} ${className ?? ""}`}>
+    <div ref={rootRef} className={`${themeClasses.selectField} ${className ?? ""}`}>
       {label ? (
-        <label htmlFor={selectId} className={themeClasses.overline}>
+        <span id={`${selectId}-label`} className={themeClasses.overline}>
           {label}
-        </label>
+        </span>
       ) : null}
-      <span
-        className={`${themeClasses.selectControl} ${error ? themeClasses.selectControlError : ""} has-[:focus]:border-focus has-[:focus]:shadow-ring hover:bg-surface-sunken`}
+      {/* Keep name/value for progressive forms; hidden from a11y (listbox is the control). */}
+      {name ? <input type="hidden" name={name} value={current} required={required} /> : null}
+      <button
+        ref={triggerRef}
+        type="button"
+        id={selectId}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
+        aria-labelledby={label ? `${selectId}-label` : undefined}
+        aria-label={label ? undefined : a11yName}
+        aria-required={required || undefined}
+        aria-invalid={error || undefined}
+        className={`${themeClasses.selectControl} ${error ? themeClasses.selectControlError : ""} ${themeClasses.selectTrigger} ${
+          open ? "border-focus shadow-ring" : ""
+        } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((v) => !v);
+        }}
       >
-        <select
-          id={selectId}
-          className={themeClasses.selectNative}
-          {...props}
-        >
-          {children}
-        </select>
+        <span className={themeClasses.selectNative}>{display}</span>
         <span aria-hidden className={themeClasses.selectChevron}>
           <SelectChevron />
         </span>
-      </span>
+      </button>
+      {open && menuPos && typeof document !== "undefined"
+        ? createPortal(
+            <ul
+              ref={listRef}
+              id={listboxId}
+              role="listbox"
+              aria-labelledby={label ? `${selectId}-label` : undefined}
+              aria-label={label ? undefined : a11yName}
+              className={themeClasses.selectMenu}
+              style={{
+                position: "fixed",
+                top: menuPos.top,
+                left: menuPos.left,
+                width: menuPos.width,
+                maxHeight: menuPos.maxHeight,
+              }}
+            >
+              {options.map((opt) => {
+                const active = opt.value === current;
+                return (
+                  <li key={opt.value || "__empty"} role="presentation">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      disabled={opt.disabled}
+                      className={`${themeClasses.selectOption} ${active ? themeClasses.selectOptionSelected : ""}`}
+                      onClick={() => {
+                        if (opt.disabled) return;
+                        commit(opt.value);
+                      }}
+                    >
+                      <span className="truncate">{opt.label}</span>
+                      {active ? (
+                        <span className="text-brand font-semibold" aria-hidden>
+                          ✓
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

@@ -36,10 +36,14 @@ describe("vehicle handovers UI (US-51–US-60 mobile)", () => {
     assert.match(travel, /Keyboard\.dismiss/);
     assert.match(handoverPage, /DriverHandoverPanel/);
     assert.match(handoverPage, /onHandoverSaved/);
+    assert.match(handoverPage, /router\.replace\("\/\(driver\)"\)/);
     assert.match(handoverPage, /Go to Next travel/);
     assert.match(handoverPage, /ScrollView/);
     assert.match(handoverPage, /KeyboardAvoidingView/);
     assert.match(panel, /getDriverActiveHandover/);
+    assert.match(panel, /listDriverDailyUsage/);
+    assert.match(panel, /lastClosedEndDistance|end_distance/);
+    assert.match(panel, /Must be at least/);
     assert.match(panel, /createDriverHandover/);
     assert.match(panel, /Submit Handover Out/);
     assert.match(panel, /Submit Handover In/);

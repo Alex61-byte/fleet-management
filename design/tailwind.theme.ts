@@ -227,10 +227,19 @@ export const themeClasses = {
   selectControlHover: "border-border bg-surface-sunken",
   selectControlFocus: "border-focus shadow-ring",
   selectControlError: "border-danger",
+  /** Button trigger that owns the control chrome (listbox, not native select popup). */
+  selectTrigger:
+    "inline-flex w-full items-center text-left hover:bg-surface-sunken focus-visible:border-focus focus-visible:shadow-ring outline-none cursor-pointer",
   selectNative:
-    "appearance-none w-full min-h-hit pl-1.5 pr-2.5 rounded-md bg-transparent text-label font-medium text-text-primary outline-none cursor-pointer",
+    "appearance-none w-full min-h-hit pl-1.5 pr-2.5 rounded-md bg-transparent text-label font-medium text-text-primary outline-none cursor-pointer truncate flex items-center",
   selectChevron:
     "pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 text-text-secondary inline-flex items-center justify-center",
+  /** Portaled listbox menu — fixed coords set inline from trigger rect. */
+  selectMenu:
+    "z-40 m-0 p-0 list-none overflow-y-auto bg-surface-raised border border-border rounded-md shadow-overlay flex flex-col",
+  selectOption:
+    "min-h-hit w-full px-1.5 flex flex-row items-center justify-between gap-1 text-left text-label font-medium text-text-primary hover:bg-hover focus-visible:bg-hover focus-visible:outline-none disabled:text-disabled disabled:cursor-not-allowed",
+  selectOptionSelected: "bg-brand-subtle font-semibold",
   pricingGrid: "grid grid-cols-1 md:grid-cols-2 gap-3 w-full",
   pricingCard:
     "bg-surface-raised border border-border rounded-lg shadow-raised p-3 flex flex-col gap-2 h-full",

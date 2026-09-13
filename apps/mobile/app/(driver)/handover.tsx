@@ -66,7 +66,13 @@ export default function DriverHandoverScreen() {
               <PrimaryButton title="Go to Next travel" onPress={() => router.push("/(driver)/travel")} />
             </View>
           ) : (
-            <DriverHandoverPanel travel={travel} offline={offline} onHandoverSaved={() => void load()} />
+            <DriverHandoverPanel
+              travel={travel}
+              offline={offline}
+              onHandoverSaved={() => {
+                router.replace("/(driver)");
+              }}
+            />
           )}
         </ScrollView>
       </KeyboardAvoidingView>

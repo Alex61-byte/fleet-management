@@ -15,7 +15,8 @@ describe("vehicle make/model catalog select (web)", () => {
     assert.match(ui, /export function SelectInput/);
     assert.match(ui, /selectChevron|SelectChevron/);
     assert.match(theme, /selectChevron:[\s\S]*right-0\.5/);
-    assert.match(ui, /selectNative|selectControl|appearance-none/);
+    assert.match(ui, /selectNative|selectControl|listbox|createPortal/);
+    assert.match(theme, /selectMenu:|selectOption:/);
     assert.match(form, /vehicleCatalogMakes/);
     assert.match(form, /vehicleCatalogModelsForMake/);
     assert.match(form, /VEHICLE_CATALOG_OTHER/);

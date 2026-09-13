@@ -86,7 +86,13 @@ export default function DriverHandoverPage() {
           </Link>
         </section>
       ) : (
-        <DriverHandoverPanel travel={travel} offline={offline} onHandoverSaved={() => void load()} />
+        <DriverHandoverPanel
+          travel={travel}
+          offline={offline}
+          onHandoverSaved={() => {
+            router.replace("/driver");
+          }}
+        />
       )}
     </DriverShell>
   );
