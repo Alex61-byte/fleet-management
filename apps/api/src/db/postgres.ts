@@ -885,6 +885,36 @@ export class PostgresStore implements Store {
     return rows.map(mapDailyUsage);
   }
 
+
+  async listClosedDailyUsageServiceSignals(
+    companyId: string,
+  ): Promise<
+    Array<{
+      vehicleId: string;
+      endDistance: number;
+      usageDate: string;
+      createdAt: number;
+    }>
+  > {
+    const { rows } = await this.q(
+      `SELECT vehicle_id,
+              end_distance,
+              to_char(usage_date, 'YYYY-MM-DD') AS usage_date,
+              created_at
+       FROM driver_daily_usages
+       WHERE company_id=$1
+         AND status='closed'
+         AND end_distance IS NOT NULL`,
+      [companyId],
+    );
+    return rows.map((row) => ({
+      vehicleId: row.vehicle_id as string,
+      endDistance: Number(row.end_distance),
+      usageDate: row.usage_date as string,
+      createdAt: new Date(row.created_at as string | Date).getTime(),
+    }));
+  }
+
   async deleteDailyUsageForDriver(driverId: string): Promise<void> {
     await this.q("DELETE FROM driver_daily_usages WHERE driver_id=$1", [driverId]);
   }

@@ -30,6 +30,8 @@ describe("vehicle handovers UI (US-51–US-60 web)", () => {
 
   it("handover and travel are dedicated routes with back to home", () => {
     assert.match(travel, /putDriverTravel/);
+    assert.match(travel, /Continue to handover/);
+    assert.match(travel, /router\.replace\("\/driver\/handover"\)/);
     assert.match(travel, /Back to Home|DriverBackLink/);
     assert.match(handoverPage, /DriverHandoverPanel/);
     assert.match(handoverPage, /onHandoverSaved/);
@@ -53,6 +55,18 @@ describe("vehicle handovers UI (US-51–US-60 web)", () => {
     assert.match(history, /No handovers yet/);
     assert.match(history, /Close handover detail/);
     assert.doesNotMatch(history, /deleteHandover|editHandover|onDelete/);
+  });
+
+  it("US-119 owner list and Details show open Out custody cue", () => {
+    const list = readFileSync(join(root, "app/vehicles/page.tsx"), "utf8");
+    const ui = readFileSync(join(root, "components/ui.tsx"), "utf8");
+    assert.match(ui, /OpenOutCustodyCue/);
+    assert.match(ui, /Out open/);
+    assert.match(list, /OpenOutCustodyCue/);
+    assert.match(list, /open_out/);
+    assert.match(form, /OpenOutCustodyCue/);
+    assert.match(form, /vehicle\.open_out/);
+    assert.match(form, /Vehicle custody/);
   });
 
   it("damage viewer reuses side viewer with optional title", () => {

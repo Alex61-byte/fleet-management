@@ -1,10 +1,10 @@
 # Vehicles (list, create, edit)
 
-**Stories:** US-11, US-12, US-13, US-15, **US-28** (nav/tab urgency — chrome only; see [\_patterns.md](_patterns.md#vehicles-nav--tab-urgency-us-28--states--stacking)), **US-35–US-39** (optional side appearance images), **US-41–US-44** (larger side previews + view-only zoom viewer), **US-45–US-49** (optional vehicle mileage / kilometres), **US-55–US-57** (Owner/Admin **Handovers** tab — history + detail, read-only), **US-86–US-90** (custom expiration definitions on Details)  
+**Stories:** US-11, US-12, US-13, US-15, **US-28** (nav/tab urgency — chrome only; see [\_patterns.md](_patterns.md#vehicles-nav--tab-urgency-us-28--states--stacking)), **US-35–US-39** (optional side appearance images), **US-41–US-44** (larger side previews + view-only zoom viewer), **US-45–US-49** (optional vehicle mileage / kilometres), **US-55–US-57** (Owner/Admin **Handovers** tab — history + detail, read-only), **US-86–US-90** (custom expiration definitions on Details), **US-119** (Company Owner/Admin **open Out + holding driver** on list rows/cards **and** edit **Details** — not history-only)  
 **Density:** Web compact **table**; mobile comfortable **rows**. **Company** Owner/Admin **and** **Individual** Owner (own tenant only — US-81).  
-**Purpose:** Fleet records: **Make** + **Model** (two free-text fields), plate, optional **current mileage** (odometer reading; unit Miles/Kilometers from country), insurance, inspection, country of registration, road tax **dates**, optional **custom expiration** rows (label + date; max 10), plus optional **appearance photos** from four sides (**FRONT**, **LEFT**, **RIGHT**, **BACK**), plus **handover history** (Out/In) on a third tab. Warn on list **and** detail (BA Q8 — design: **both**). Country is a text field, not a catalog. Make/Model are free text — **no** make/model catalog dropdowns. Compliance stays **dates only** — **no** insurance/inspection/tax/registration/custom **document** upload (A2). Side images are **not** compliance documents (A35–A40). Handover damage photos are **not** side-appearance slots (A50, A56). **US-41–US-44:** larger Images-tab frames; filled sides open a **view-only** zoom viewer; dismiss leaves data unchanged. **US-45–US-49:** optional mileage on Details tab + list when present (rules 64–71). **US-55–US-56:** Handovers tab list + detail; **no** edit/delete (E57). **US-86–US-90:** custom expirations CRUD on **Details** only — same A1 badges as insurance/inspection/road tax; no separate pages; built-in four dates unchanged. Shared handover patterns: [handover.md](handover.md).  
+**Purpose:** Fleet records: **Make** + **Model** (two free-text fields), plate, optional **current mileage** (odometer reading; unit Miles/Kilometers from country), insurance, inspection, country of registration, road tax **dates**, optional **custom expiration** rows (label + date; max 10), plus optional **appearance photos** from four sides (**FRONT**, **LEFT**, **RIGHT**, **BACK**), plus **handover history** (Out/In) on a third tab. Warn on list **and** detail (BA Q8 — design: **both**). Country is a text field, not a catalog. Make/Model are free text — **no** make/model catalog dropdowns. Compliance stays **dates only** — **no** insurance/inspection/tax/registration/custom **document** upload (A2). Side images are **not** compliance documents (A35–A40). Handover damage photos are **not** side-appearance slots (A50, A56). **US-41–US-44:** larger Images-tab frames; filled sides open a **view-only** zoom viewer; dismiss leaves data unchanged. **US-45–US-49:** optional mileage on Details tab + list when present (rules 64–71). **US-55–US-56:** Handovers tab list + detail; **no** edit/delete (E57). **US-86–US-90:** custom expirations CRUD on **Details** only — same A1 badges as insurance/inspection/road tax; no separate pages; built-in four dates unchanged. **US-119:** when a company vehicle has an **open Handover Out** (In not done; not voided), show **Out open** + holding driver on the **list row/card** and on **edit Details** (Company OA only). Complements menu `open_out` ([global-header.md](global-header.md)); does **not** redesign Handovers history. Shared handover patterns: [handover.md](handover.md).  
 **Chrome:** Authenticated **management** shell. Sidebar / tab **Vehicles** selected when on this area. No search. **US-28:** Vehicles nav/tab may show red/orange urgency fill from **tenant**-wide worst section dates — pattern chrome, not list badges. **Should (US-89):** worst-wins urgency may include custom expiration dates with the same 7-day bands. **Individual:** same Vehicles area; no Drivers/Admins chrome beside it.  
-**Parity (A16):** Company Owner/Admin: list / create / edit / side-image manage **and** side-image viewer **and** Handovers history on web + management mobile. **Individual Owner:** same list / create / edit **Details** (identity, built-in dates, **custom expirations**, mileage) only — **omit Images and Handovers tabs** (A86, E80). Drivers have **no** side-image manage or viewer UI (A40, E38), **no** custom-expiration manage UI, and **no** Handovers history tab (E55). Management roles **do not** create handovers here (driver-only create — E54).
+**Parity (A16):** Company Owner/Admin: list / create / edit / side-image manage **and** side-image viewer **and** Handovers history on web + management mobile. **Individual Owner:** same list / create / edit **Details** (identity, built-in dates, **custom expirations**, mileage) only — **omit Images and Handovers tabs** (A86, E80); **US-119 custody cue N/A** (no company driver handovers). Drivers have **no** side-image manage or viewer UI (A40, E38), **no** custom-expiration manage UI, and **no** Handovers history tab (E55). Management roles **do not** create handovers here (driver-only create — E54).
 
 ## List — web
 
@@ -21,13 +21,13 @@ tableWrap sticky header
 
 | Column | Class | Content |
 | --- | --- | --- |
-| Vehicle | `tableCellLink` | Primary identity: **`{Make} {Model}`** (single space between make and model). No underline at rest; hover `tableCellLinkHover`. Plate stays `tableCellMuted` (not underlined). Empty make or model: still join with one space; trim ends (e.g. make-only shows make). **Should (US-39):** when the vehicle has **≥1** side image, show a compact **presence cue** immediately after the identity string in the same cell (not a new column). |
+| Vehicle | `tableCellLink` | Primary identity: **`{Make} {Model}`** (single space between make and model). No underline at rest; hover `tableCellLinkHover`. Plate stays `tableCellMuted` (not underlined). Empty make or model: still join with one space; trim ends (e.g. make-only shows make). **Should (US-39):** when the vehicle has **≥1** side image, show a compact **presence cue** immediately after the identity string in the same cell (not a new column). **Must (US-119, Company OA):** when the vehicle has an **open Out**, show custody chip + holder in the **same cell** (not a new column) — see [List open-Out custody (US-119)](#list-open-out-custody-us-119). |
 | Plate | `tableCellMuted` | License plate — secondary |
 | Mileage | `tableCellNum` / `caption` | **US-49:** when `mileage` is set, show `{n}` + unit short (`km` / `mi`) or full label; `font-tabular`. When null/unknown: **em dash** or empty cell — **no** fabricated `0`. Unit from `mileage_unit` / country (not editable on list). Displayed value is the latest of admin Details edit, handover submit, or driver next-travel odometer save — **no** new list controls. |
 | Country | `tableCellMuted` | Free text |
 | Date columns | `tableCellNum` | Tabular date; if due/expired, `badgeWarning` / `badgeExpired` **and** the date. Built-in Insurance / Inspection / Road tax only in these columns (Registration never badges). |
 
-Row hover `tableRowHover`; tap → edit. Do **not** use a card per vehicle on web. Do **not** split Make/Model into two list columns. Do **not** put four side thumbnails on the list (not a gallery). Do **not** add a fifth fixed column per custom label (variable count).
+Row hover `tableRowHover`; tap → edit. Do **not** use a card per vehicle on web. Do **not** split Make/Model into two list columns. Do **not** put four side thumbnails on the list (not a gallery). Do **not** add a fifth fixed column per custom label (variable count). Do **not** add a dedicated Custody column (US-119 stays in the Vehicle cell).
 
 ### List custom expiration badges (US-89 Should)
 
@@ -58,9 +58,72 @@ Compact “has photos” signal only — **not** four previews, **not** which si
 - Does **not** replace or restyle A1 date badges or US-28 nav urgency.
 - Tap still opens **edit** (whole row); cue is not a separate control.
 
+### List open-Out custody (US-119)
+
+**Audience:** **Company** Owner/Admin only (web + management mobile). **Individual:** cue **absent** (N/A). **Drivers:** out of scope (keep US-60 / US-110 on driver surfaces).
+
+**Lifecycle:** Same as **US-111** menu `open_out` — show while open Out (In not done; not voided); clear after In or void on refresh/reopen. Never invent a holder when none. Company isolation: never show another tenant’s open Out.
+
+**Chrome:** Reuse existing tokens only — `badgeNeutral` **Out open** (same string/chip as driver-home / [handover.md](handover.md) open-Out cue) + `caption` for driver identity. **No** new badge tokens, **no** hex, **no** second card/row system, **no** `bannerWarning` on the list (banner is driver need-In / form cue, not OA list density).
+
+| Surface | Placement | Treatment |
+| --- | --- | --- |
+| Web table | Same **Vehicle** cell, after identity and optional Photos presence, `gap-1` wrap | `badgeNeutral` **Out open** + adjacent `caption` holder line (see states). Compact density; may wrap under `{Make} {Model}` if the cell is narrow — still one row. |
+| Mobile row | Under plate / mileage captions, in the same badge wrap as compliance chips | Same `badgeNeutral` **Out open** + `caption` holder; comfortable density; hairline `listRow` unchanged — **not** a raised card |
+| No open Out | — | **No** chip, no empty “In” badge, no fabricated driver |
+| Loading list | Skeleton rows | Do **not** flash Out open until custody known |
+| Individual / other company | — | Cue never painted |
+
+**Holder `caption` (when open Out):**
+
+| State | Caption |
+| --- | --- |. **Edit + Company OA only (US-119):** optional open-Out custody strip at top of panel — see [Details open-Out custody (US-119)](#details-open-out-custody-us-119) | Visible |
+| **Images** | Side appearance only — same four-side grid (US-35–US-39) | Visible (**Company** only; **omit** for Individual — E80) |
+| **Handovers** (third) | Read-only Out/In **history** + drill-in **detail** (US-55–US-56) — **unchanged** by US-119 (no live custody strip here) | **Hidden** on this tab — history is not vehicle field save; **omit** tab for Individual (E80) |
+
+Tab chrome: `vehicleFormTabList` + `vehicleFormTab` / `vehicleFormTabSelected` (selected = bottom `border-brand` + semibold; not color-only). Panels: `vehicleFormTabPanel`. **Save vehicle** stays **below the tab strip** on **Details** and **Images** so field save is not buried under photos. On **Handovers**, omit Save (read-only). Same Details/Images field inventory for create and edit — **not** two visual systems. **Handovers** tab: **Owner/Admin only**; omit for drivers (E55). On **create** (no persisted vehicle yet), **omit or disable** Handovers — prefer **omit** until the vehicle exists; optional `caption` only if tab kept disabled: “Save the vehicle to view handovers.” **Create** also **omits** US-119 custody strip (no open Out possible). **Web (desktop) Must;** mobile **Should** use the same three tabs (comfortable density) rather than stacking Appearance/history under dates.
+
+**Cross-link:** list columns, empty/loading, detail chrome, damage thumbs, open-Out type chrome → [handover.md](handover.md). OA menu `open_out` → [global-header.md](global-header.md). Driver Out/In forms live on [driver-home.md](driver-home.md), not this page.
+
+### Details open-Out custody (US-119)
+
+**Audience / mode:** **Company** Owner/Admin on **edit** vehicle **Details** only (web compact + mobile comfortable). **Create:** omit strip entirely. **Individual:** omit (N/A). **Images / Handovers tabs:** do **not** repeat the live strip (Handovers stays history-only).
+
+**Placement:** First child inside `vehicleFormDetails` / `vehicleFormTabPanel` **Details**, **above** Make — still **one** raised `panel`; **no** nested card. Compact web: single horizontal wrap `gap-1` / `gap-2`. Mobile: same strip, may stack badge then caption.; **no** US-119 custody strip | `buttonPrimary` “Save vehicle” |
+| **Edit** | List row tap / identity link | “Edit vehicle” (subtitle optional: plate or `{Make} {Model}` once known) | **Prepopulated** from stored vehicle: make, model, plate, country, mileage (empty if null), each built-in section date, **custom expiration rows** (`id`, `label`, `expires_on`), **and** side images (filled preview or empty slot per side) as returned by API (US-39, US-46, rule 59, US-87). **Company OA (US-119):** open-Out custody strip on **Details** when applicable | Same `buttonPrimary` “Save vehicle” |
+
+- Edit must show stored values on first paint after load (no flash of empty then fill if avoidable; loading uses form skeleton in the same `panel`, including custom-expiration row skeletons and four side-slot skeletons).
+- Create must **not** inherit the last-edited vehicle, its images, its custom rows, or a custody strip.
+- Under each **warnable** date on **both** modes: if the current field value warrants it, badge + `caption` (“Insurance · Expired” / “Inspection · Due soon” / “{custom label} · Due soon”) — same A1 rules as list. Empty date → no badge. **Registration** never badges.
+- No separate “detail read-only” screen in this slice: row opens **edit** with prepopulated fields (Details/Images). **Handovers** is the read-only history surface for custody records only — live open-Out cue lives on **list + Details**, not as a Handovers-tab redesign.
+- Denied paths (driver create, other-company edit, driver Handovers history) → [denied.md](denied.md); form not shown with foreign data; **no** image manage controls for drivers (E38); **no** custom-expiration manage for drivers; **no** Handovers tab for drivers (E55); **no** US-119 custody cue for drivers or foreign tenants
+| Cleared (In / void) | Strip gone on refresh/reopen (same lifecycle as list + US-111) |
+
+```
+panel vehicleForm
+  tabList Details | Images | Handovers
+  tabPanel Details
+    [edit + open Out]  [Out open]  driver@co.com     ← US-119 strip
+    Make …
+    …
+    Save vehicle
+```
+
+- Tokens: existing `badgeNeutral` + `caption` only (same **Out open** as driver-home / handover open-Out). **No** new tokens; **no** hex.
+- Prefer chip+caption over `bannerWarning` on this OA edit surface (driver need-In banners stay on driver routes). If product later needs stronger emphasis, still reuse existing `bannerWarning` — do not invent a custody banner token this slice.
+- Strip is **read-only** status — not editable fields; does not block **Save vehicle**; not a second primary action.
+- Does **not** replace Handovers history rows or menu `open_out`
+```
+
+- Badge **plus** text — not color-only.
+- Chip is **informational**, not a separate control; whole row still opens **edit**.
+- Does **not** restyle A1 date badges, Photos presence, mileage, or US-28 nav urgency.
+- Does **not** replace [global-header.md](global-header.md) `open_out` menu items — list/detail are additional Must surfaces.
+- Handovers tab remains **history-only** (US-55–US-56); do not move live custody chrome into that tab.
+
 ## List — mobile
 
-`appBarMobile` “Vehicles” + Add. `listRow`: primary identity **`{Make} {Model}`** as `label`, plate as `caption` (muted secondary). **US-49:** when mileage present, second `caption` line or same caption trail: `Mileage {n} {km|mi}` / unit label — omit line when null. Badges wrap (`badgeWarning` / `badgeExpired` with date name **or custom label**). **Should:** `vehicleSidePresence` when any side image exists. **Should (US-89):** custom expiration chips in the same wrap. Hairline divider, not raised cards.
+`appBarMobile` “Vehicles” + Add. `listRow`: primary identity **`{Make} {Model}`** as `label`, plate as `caption` (muted secondary). **US-49:** when mileage present, second `caption` line or same caption trail: `Mileage {n} {km|mi}` / unit label — omit line when null. Badges wrap (`badgeWarning` / `badgeExpired` with date name **or custom label**). **Should:** `vehicleSidePresence` when any side image exists. **Should (US-89):** custom expiration chips in the same wrap. **Must (US-119, Company OA):** when open Out, `badgeNeutral` **Out open** + holder `caption` in the same wrap (see [List open-Out custody (US-119)](#list-open-out-custody-us-119)). Hairline divider, not raised cards.
 
 ## Empty / loading
 
@@ -570,6 +633,12 @@ Do **not** use a single form-level `inputError` for all sides. Failures are **sc
 
 ### Web vs mobile interaction
 
+| Open Out on list/Details (US-119) | `badgeNeutral` **Out open** + holder `caption`; see [List open-Out custody](#list-open-out-custody-us-119) / [Details open-Out custody](#details-open-out-custody-us-119) |
+| No open Out / cleared In or void | Custody cue **absent** on list and Details |
+| Open Out, driver unavailable | **Out open** + `caption` **Unavailable** |
+| Individual vehicles list/edit | US-119 cue **N/A** / absent |
+| Create vehicle | US-119 cue **omit** |
+| Other-company open Out | Never shown (isolation) |
 | | Web | Mobile |
 | --- | --- | --- |
 | Density | Compact; 2×2 in panel; slot **176px** height (`vehicle-side-slot`); grid max 400px | Comfortable; same 2×2; **176px** frames; full-width cells |
@@ -578,12 +647,13 @@ Do **not** use a single form-level `inputError` for all sides. Failures are **sc
 | Preview | CSS cover in slot; contain in viewer | RN cover in slot; contain in viewer |
 | Viewer | Centered modal + scrim; backdrop + Escape dismiss | **Full-screen** modal (not bottom sheet); Close + system back |
 | Zoom | +/− **Must**; wheel **Should** | +/− **Must**; pinch **Should** |
-| Clear | `buttonIcon` trash → **confirm modal** (not viewer) | Same icon → **confirm sheet**; no swipe-to-clear; no clear inside viewer |
+| Clear/ Details open-Out (US-119) | `badgeNeutral` (**Out open**) + `caption` (holder / **Unavailable**) — same classes as driver open-Out chip; **no** new tokens |
+| List presence (Should) | `vehicleSidePresence` `vehicleSidePresenceIcon` — **unchanged** by custom expirations or US-119 |
+| Loading | `skeleton` |
+| Spacing tokens | `vehicle-side-slot` **176px**; `vehicle-side-grid-max` **400px**; `vehicle-side-viewer-toolbar` **56px**; damage thumbs use spacing **`6`** (48px); custom rows use form `gap-2` only; US-119 strip uses existing `gap-1` / `gap-2` only |
+| Zoom tokens | `motion.vehicle-side-zoom` min **1** / max **3** / step **0.5** / default **1** |
 
-### What not to build
-
-- Four-up **list** gallery or hover lightbox of all sides  
-- List Photos cue opening the viewer  
+**No new color or spacing tokens** for US-86–US-90 or **US-119**
 - Compliance PDF/scan fields beside Appearance  
 - Per-side required asterisks  
 - Driver home / next-travel requiring or managing these images  
@@ -594,7 +664,14 @@ Do **not** use a single form-level `inputError` for all sides. Failures are **sc
 - Sticky zoom level across opens or across sides
 
 ## Warning rules (A1) — list & form only
-
+Row (open Out, driver known, US-119) | {Make} {Model}, {plate}, Out open, {driver}, {optional photos / date cues…} |
+| Row (open Out, driver unavailable, US-119) | {Make} {Model}, {plate}, Out open, driver unavailable, {optional…} |
+| Row (no open Out) | Omit Out open / holder phrases entirely |
+| List presence chip | Photos (decorative icon hidden) |
+| List Out open chip | Out open (not color-only; decorative if name is on the row) |
+| Details custody strip (open, known) | Out open, held by {driver} |
+| Details custody strip (open, unavailable) | Out open, driver unavailable |
+| Details custody (none / create / Individual) | Region not present — no name
 Applies to **Insurance, Inspection, Road tax**, and **each custom expiration** with a set `expires_on`. **Registration never shows** `badgeExpired` / `badgeWarning`.
 
 | Condition | Treatment |

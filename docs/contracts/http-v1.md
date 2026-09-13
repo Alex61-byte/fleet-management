@@ -451,7 +451,18 @@ Allowed while login disabled (accept still blocked).
       "url": "https://<supabase-signed-get>"
     },
     "BACK": null
-  }
+  },
+  "open_out": null
+}
+```
+
+When an open Handover Out exists (Company only):
+
+```json
+"open_out": {
+  "handover_id": "uuid",
+  "driver": { "id": "uuid", "email": "driver@fleet.example" },
+  "created_at": "2026-09-07T10:00:00.000Z"
 }
 ```
 
@@ -467,12 +478,13 @@ Allowed while login disabled (accept still blocked).
 | `warnings` | Server-computed on reads: insurance/inspection/road_tax **and** `custom:<uuid>` for each custom row in the A1 window. **`registration_on` never.** Same UTC 30-day rule (ADR-004). |
 | `has_side_images` | `true` if any side has a stored path (**Should** list presence cue) |
 | `side_images` | Always keys `FRONT` \| `LEFT` \| `RIGHT` \| `BACK`. Empty: `null`. Filled: `{ "path", "url" }` (`path` = Storage key; `url` = signed GET ~1h) |
+| `open_out` | Read-only. Always present on Vehicle reads. `null` = no open Out (never Out, closed In, voided) **or** Individual tenant. Object = open custody summary: `handover_id`, `driver` (`{id,email}` \| `null` if unknown/removed), `created_at` (Out created ISO). **Not** on write. Company OA list+detail (US-119, [ADR-028](../adr/ADR-028-vehicle-open-out-summary.md)). One open Out per vehicle. |
 | Image bytes | **Not** on POST/PATCH vehicle. Upload only via side routes after vehicle exists |
 
-**Removed:** `car`. Storage: [ADR-013](../adr/ADR-013-vehicle-side-images.md). Mileage: [ADR-014](../adr/ADR-014-vehicle-mileage.md). Custom expirations: [ADR-019](../adr/ADR-019-vehicle-custom-expirations.md). Owner/Admin only; drivers **403** on fleet vehicle + image routes.
+**Removed:** `car`. Storage: [ADR-013](../adr/ADR-013-vehicle-side-images.md). Mileage: [ADR-014](../adr/ADR-014-vehicle-mileage.md). Custom expirations: [ADR-019](../adr/ADR-019-vehicle-custom-expirations.md). Open Out summary: [ADR-028](../adr/ADR-028-vehicle-open-out-summary.md). Owner/Admin only; drivers **403** on fleet vehicle + image routes.
 
 ### `GET /v1/vehicles` · `GET /v1/vehicles?expiring=true`
-`{ "items": Vehicle[] }` — each item includes `mileage`, `mileage_unit`, `custom_expirations`, `has_side_images` and `side_images`. `expiring=true` filters `warnings.length > 0` (includes custom-only warnings).
+`{ "items": Vehicle[] }` — each item includes `mileage`, `mileage_unit`, `custom_expirations`, `has_side_images`, `side_images`, and **`open_out`**. `expiring=true` filters `warnings.length > 0` (includes custom-only warnings).
 
 **ETag** on 200 (distinct for `expiring`); `If-None-Match` → **304** empty (ADR-020). Optional `limit`/`cursor` → `{ items, next_cursor }`.
 
@@ -482,7 +494,7 @@ Allowed while login disabled (accept still blocked).
 Body: `make`, `model`, `license_plate` required; optional country, date fields, `mileage` (`number` \| `string` \| `null`; omit or null = unknown), and optional `custom_expirations` array (full list; omit = `[]`). **No** image parts. **No** `mileage_unit` on write. **201** Vehicle with empty sides and `custom_expirations` (minted ids when omitted). **400** `validation_error` if make/model/plate missing or blank after trim, mileage invalid (negative / non-numeric / >1 decimal), or custom expirations invalid (not array, >10, bad label/date/id, duplicate labels/ids).
 
 ### `GET /v1/vehicles/:id` · `PATCH /v1/vehicles/:id`
-PATCH body: write fields only (make, model, plate, country, dates, `mileage`, `custom_expirations`). Clear mileage with `null` or empty string. **`custom_expirations` when present = full replace**; omit = leave unchanged; `[]` = clear. Item: `{ id?: string\|null, label, expires_on }`; server mints UUID when `id` omitted/null. **Must not** accept `mileage_unit`, `side_images`, paths, or files. **200** Vehicle. **404** other company / missing.
+PATCH body: write fields only (make, model, plate, country, dates, `mileage`, `custom_expirations`). Clear mileage with `null` or empty string. **`custom_expirations` when present = full replace**; omit = leave unchanged; `[]` = clear. Item: `{ id?: string\|null, label, expires_on }`; server mints UUID when `id` omitted/null. **Must not** accept `mileage_unit`, `side_images`, `open_out`, paths, or files. **200** Vehicle (includes `open_out`). **404** other company / missing.
 
 ### `PUT /v1/vehicles/:id/sides/:side`
 
@@ -592,7 +604,7 @@ Driver-only. Owner/Admin → **403** `forbidden`. Drivers remain **403** on owne
 ```
 
 ### `GET /v1/driver/vehicles`
-`{ "items": DriverVehicle[] }` — all company vehicles (read-only).
+`{ "items": DriverVehicle[] }` — **available** company vehicles only (read-only): no open Handover Out on the vehicle (Handover In completed, or never checked out). Vehicles with open Out are omitted.
 
 **ETag** on 200; `If-None-Match` → **304** empty (ADR-020). Optional `limit`/`cursor` → `{ items, next_cursor }`.
 
@@ -605,6 +617,7 @@ Body: `{ "vehicle_id": "uuid", "odometer": number | string }`
 - **200** Travel (new active row; prior active deactivated). **Side effect:** sets `vehicles.mileage` to the parsed `odometer` in the **same transaction** (ADR-014 write-through; A43).
 - **400** `validation_error` — missing vehicle_id; odometer missing/negative/non-numeric; more than 1 decimal place on string input; **or** `vehicles.mileage` is non-null and `odometer < mileage` (monotonic floor).
 - **404** `not_found` — vehicle not in driver company.
+- **409** `handover_vehicle_open` — vehicle has an open Handover Out (not available until In).
 - Unit stored from vehicle country at write time (not from body).
 
 Odometer: ≥ 0; max 1 decimal; values may be sent as number or numeric string. When vehicle mileage is **null**, any valid odometer sets mileage. When set, odometer must be **≥** current mileage.
@@ -808,6 +821,8 @@ Driver only. Owner/Admin → **403**. JSON body:
 
 ### `POST /v1/driver/daily-usage/end` — End of Day
 
+
+**US-116–118:** Successful End of Day makes this row’s `end_distance` and `usage_date` visible to remaining-service derivation on read (`GET /v1/service-due` / OA service menu). **No** `vehicles.mileage` write. **No** new fields required on Daily usage responses. Open rows do not contribute progress. Failed EOD → no progress change.
 Driver only. Completes the caller’s **open** row (no id required).
 
 ```json
@@ -838,106 +853,3 @@ Driver only. Completes the caller’s **open** row (no id required).
 ---
 
 ## Manager loop (US-93–US-98)
-
-### Compliance document
-
-```json
-{
-  "id": "uuid",
-  "vehicle_id": "uuid",
-  "company_id": "uuid",
-  "doc_type": "insurance",
-  "label": "Policy 2026",
-  "content_type": "application/pdf",
-  "byte_size": 12345,
-  "path": "company/vehicle/docs/id.pdf",
-  "url": "https://signed...",
-  "created_at": "2026-04-01T12:00:00.000Z"
-}
-```
-
-`doc_type`: `insurance` | `inspection` | `road_tax` | `registration` | `other`.
-
-### `GET /v1/vehicles/:id/documents`
-
-Owner/Admin. **200** `{ "items": ComplianceDocument[] }` with signed `url` when storage available.
-
-### `POST /v1/vehicles/:id/documents`
-
-Owner/Admin. Multipart: `file` (required), `doc_type` (required), `label` (optional). PDF or image ≤ 10 MB. Hard cap **40** docs/vehicle → **400** `validation_error`.
-
-**201** ComplianceDocument.
-
-### `DELETE /v1/vehicles/:id/documents/:docId`
-
-Owner/Admin. **204**. Best-effort storage delete.
-
-### Vehicle issue
-
-```json
-{
-  "id": "uuid",
-  "vehicle_id": "uuid",
-  "company_id": "uuid",
-  "created_by_principal_id": "uuid",
-  "source": "manual",
-  "handover_id": null,
-  "title": "Left mirror cracked",
-  "description": "",
-  "status": "open",
-  "created_at": "2026-04-01T12:00:00.000Z",
-  "closed_at": null
-}
-```
-
-`source`: `manual` | `handover`. `status`: `open` | `closed`.
-
-### `GET /v1/vehicles/:id/issues`
-
-Owner/Admin: any vehicle in tenant. Driver: only active next-travel vehicle. **200** `{ "items": Issue[] }`.
-
-### `POST /v1/vehicles/:id/issues`
-
-JSON `{ "title": "...", "description?": "..." }`. Owner/Admin any vehicle; driver only active travel vehicle. **201** Issue (`source=manual`).
-
-Handover create with non-empty `damages_text` also inserts Issue (`source=handover`).
-
-### `POST /v1/vehicles/:id/issues/:issueId/close`
-
-Owner/Admin. **200** Issue (`status=closed`). Drivers → **403**.
-
-### `GET /v1/reports/daily-usage`
-
-Company Owner/Admin only (Individual → **403**). Query `from`/`to` optional `YYYY-MM-DD`.
-
-**200** `{ "items": [{ id, company_id, driver_id, driver_email, vehicle_id, usage_date, start_place, end_place, start_distance, end_distance, distance_unit, start_time, end_time, created_at, vehicle }] }` newest first.
-
-### `GET /v1/reports/daily-usage.csv`
-
-Same auth/filters. **200** `text/csv` attachment.
-
-### `GET /v1/service-due`
-
-Owner/Admin (Company and Individual). Latest non-voided handover baseline per vehicle.
-
-**Include** when `due_by_days` **or** `due_by_distance` **or** **approaching**: `distance_remaining != null` and `0 < distance_remaining ≤ 2000` (unit = `next_service_distance_unit`). Server owns the **2000** threshold.
-
-**`service_status`:** `"due"` if `due_by_days || due_by_distance`; else `"approaching"`.
-
-**200** `{ "items": [{ vehicle_id, vehicle, handover_id, handover_created_at, next_service_days, next_service_distance, next_service_distance_unit, days_elapsed, days_overdue, vehicle_mileage, handover_mileage, distance_remaining, due_by_days, due_by_distance, service_status }] }`.
-
-Sort: due/overdue before approaching; then `days_overdue` desc; `vehicle_id`.
-
-### `GET /v1/handovers/open`
-
-Company Owner/Admin only. Lists **open** Out handovers for the caller’s company (In not done; not voided).
-
-**Individual** → **403** `forbidden`. **Driver** → **403** `forbidden`.
-
-**200** `{ "items": [{ id, vehicle_id, company_id, type: "out", status: "open", driver: { id, email } | null, mileage, mileage_unit, created_at, vehicle: { id, make, model, license_plate, label } }] }`.
-
-Sort: `created_at` **ASC** (longest open first).
-
-### `POST /v1/compliance-digest/send`
-
-Owner/Admin. Sends at most one digest email per Owner/Admin principal per UTC day when warnings exist (cap 50 items). **200** `{ "sent", "skipped", "reason", "item_count?" }`.

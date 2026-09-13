@@ -58,6 +58,13 @@ import {
   toTravelJson,
 } from "./shared.ts";
 
+/** Read-only open Out custody summary on Vehicle JSON (US-119 / ADR-028). */
+export type VehicleOpenOutJson = {
+  handover_id: string;
+  driver: { id: string; email: string } | null;
+  created_at: string;
+};
+
 /** Shared store/images/mailer + helpers used by fleet ops modules. */
 export class FleetContext {
   constructor(
@@ -71,9 +78,13 @@ export class FleetContext {
     return this.images;
   }
 
-  async vehicleJson(vehicle: Vehicle) {
+  /**
+   * OA Vehicle JSON including read-only `open_out` (US-119 / ADR-028).
+   * Pass `openOut` when already known (list batch or forced null); omit to look up one open Out.
+   */
+  async vehicleJson(vehicle: Vehicle, openOut?: VehicleOpenOutJson | null) {
     const storage = this.images;
-    return toVehicleJson(
+    const base = await toVehicleJson(
       vehicle,
       undefined,
       storage
@@ -86,6 +97,41 @@ export class FleetContext {
           }
         : undefined,
     );
+    const open_out =
+      openOut !== undefined ? openOut : await this.lookupOpenOutSummary(vehicle);
+    return { ...base, open_out };
+  }
+
+  async lookupOpenOutSummary(vehicle: Vehicle): Promise<VehicleOpenOutJson | null> {
+    const company = await this.store.findCompany(vehicle.companyId);
+    if (company?.accountKind !== "company") return null;
+    const open = await this.store.findOpenOutForVehicle(vehicle.id, vehicle.companyId);
+    return this.toOpenOutJson(open);
+  }
+
+  async toOpenOutJson(
+    open: VehicleHandover | undefined | null,
+  ): Promise<VehicleOpenOutJson | null> {
+    if (!open || open.type !== "out" || open.status !== "open") return null;
+    return {
+      handover_id: open.id,
+      driver: await this.driverRef(open.driverId),
+      created_at: new Date(open.createdAt).toISOString(),
+    };
+  }
+
+  async openOutByVehicleId(
+    companyId: string,
+  ): Promise<Map<string, VehicleOpenOutJson>> {
+    const company = await this.store.findCompany(companyId);
+    const map = new Map<string, VehicleOpenOutJson>();
+    if (company?.accountKind !== "company") return map;
+    const rows = await this.store.listOpenOutsForCompany(companyId);
+    for (const row of rows) {
+      const summary = await this.toOpenOutJson(row);
+      if (summary) map.set(row.vehicleId, summary);
+    }
+    return map;
   }
 
   async driverRef(driverId: string | null) {

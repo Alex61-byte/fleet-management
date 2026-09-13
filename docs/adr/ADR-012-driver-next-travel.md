@@ -25,3 +25,11 @@ Drivers need to pick a company vehicle for the next travel and record odometer. 
 ## Amendment (mileage write-through)
 
 Successful `PUT /v1/driver/travel` **write-through** updates `vehicles.mileage` from `odometer` in the same transaction, with monotonic floor when mileage is set. See **ADR-014** amendment (**A43**). Drivers remain **403** on `POST/PATCH /v1/vehicles`.
+
+## Amendment (available vehicles only)
+
+`GET /v1/driver/vehicles` returns only vehicles **without** an open Handover Out (available after Handover In, or never checked out). `PUT /v1/driver/travel` rejects busy vehicles with **409** `handover_vehicle_open`.
+
+## Amendment (vehicle bind → handover)
+
+Clients treat next travel as **vehicle selection only**. After successful `PUT`, navigate to handover; mileage/odometer and service fields are entered on **Handover Out/In**. Clients may send current `vehicle.mileage` (or `0`) as the travel `odometer` payload to satisfy the existing API shape without a travel-screen odometer field. Do not prefill selection from active travel when that vehicle is no longer in the available list.

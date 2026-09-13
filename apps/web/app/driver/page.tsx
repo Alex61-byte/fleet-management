@@ -19,6 +19,7 @@ export default function DriverHomePage() {
 
   const [travel, setTravel] = useState<DriverTravel | null | undefined>(undefined);
   const [activeOut, setActiveOut] = useState<HandoverActive | null | undefined>(undefined);
+  const [openDay, setOpenDay] = useState<boolean | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,21 +37,18 @@ export default function DriverHomePage() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const t = await api.getDriverTravel();
+      const [t, usage, h] = await Promise.all([
+        api.getDriverTravel(),
+        api.listDriverDailyUsage().catch(() => ({ items: [] as { status: string }[] })),
+        api.getDriverActiveHandover().catch(() => ({ handover: null as HandoverActive | null })),
+      ]);
       setTravel(t.travel);
-      if (t.travel) {
-        try {
-          const h = await api.getDriverActiveHandover();
-          setActiveOut(h.handover);
-        } catch {
-          setActiveOut(null);
-        }
-      } else {
-        setActiveOut(null);
-      }
+      setOpenDay(usage.items.some((u) => u.status === "open"));
+      setActiveOut(h.handover);
     } catch (err) {
       setTravel(null);
       setActiveOut(null);
+      setOpenDay(false);
       setLoadError(err instanceof FleetApiError ? err.message : "Could not load home.");
     }
   }, []);
@@ -68,7 +66,8 @@ export default function DriverHomePage() {
     );
   }
 
-  const loading = travel === undefined;
+  const loading = travel === undefined || openDay === undefined || activeOut === undefined;
+  const travelLocked = Boolean(activeOut);
 
   return (
     <DriverShell title="Home" showSignOut>
@@ -105,54 +104,70 @@ export default function DriverHomePage() {
         </div>
       ) : (
         <>
-        {activeOut ? (
-          <div className={themeClasses.bannerWarning} role="status">
-            <p className={themeClasses.body}>
-              Out open — complete{" "}
-              <a href="/driver/handover" className="underline font-medium">
-                Handover In
-              </a>{" "}
-              when you return the vehicle.
-            </p>
-          </div>
-        ) : null}
-        <nav className="flex flex-col gap-2" aria-label="Driver start">
-          <DriverHubLink
-            href="/driver/travel"
-            title="Next travel"
-            description={
-              travel
-                ? `${travel.vehicle?.label ?? "Vehicle"} · ${travel.vehicle?.license_plate ?? "—"}`
-                : "Select a vehicle and odometer for your next travel."
-            }
-            badge={travel ? "Selected" : null}
-          />
-          <DriverHubLink
-            href="/driver/handover"
-            title="Vehicle handover"
-            description={
-              !travel
-                ? "Select next travel first, then complete Out or In."
-                : activeOut
-                  ? "Need Handover In to close custody."
-                  : "Record Handover Out when you take the vehicle, or In when you return."
-            }
-            badge={activeOut ? "Out open" : travel ? "Ready" : null}
-          />
-          <DriverHubLink
-            href="/driver/daily-usage"
-            title="Daily usage"
-            description={
-              travel
-                ? "Log date, places, distances, and times for today’s use."
-                : "Select next travel first, then log daily usage."
-            }
-            badge={travel ? "Ready" : null}
-          />
-        </nav>
+          {activeOut ? (
+            <div className={themeClasses.bannerWarning} role="status">
+              <p className={themeClasses.body}>
+                Out open — complete{" "}
+                <a href="/driver/handover" className="underline font-medium">
+                  Handover In
+                </a>{" "}
+                when you return the vehicle.
+              </p>
+            </div>
+          ) : null}
+          {openDay ? (
+            <div className={themeClasses.bannerWarning} role="status">
+              <p className={themeClasses.body}>
+                Day open — complete{" "}
+                <a href="/driver/daily-usage" className="underline font-medium">
+                  End of Day
+                </a>{" "}
+                when you finish using the vehicle.
+              </p>
+            </div>
+          ) : null}
+          <nav className="flex flex-col gap-2" aria-label="Driver start">
+            <DriverHubLink
+              href="/driver/travel"
+              title="Next travel"
+              description={
+                travelLocked
+                  ? "Complete Handover In before choosing another vehicle."
+                  : travel
+                    ? `${travel.vehicle?.label ?? "Vehicle"} · ${travel.vehicle?.license_plate ?? "—"}`
+                    : "Select an available vehicle for your next travel."
+              }
+              badge={travelLocked ? "Locked" : travel ? "Selected" : null}
+              disabled={travelLocked}
+            />
+            <DriverHubLink
+              href="/driver/handover"
+              title="Vehicle handover"
+              description={
+                !travel
+                  ? "Select next travel first, then complete Out or In."
+                  : activeOut
+                    ? "Need Handover In to close custody."
+                    : "Record Handover Out when you take the vehicle, or In when you return."
+              }
+              badge={activeOut ? "Out open" : travel ? "Ready" : null}
+            />
+            <DriverHubLink
+              href="/driver/daily-usage"
+              title="Daily usage"
+              description={
+                !travel
+                  ? "Select next travel first, then log daily usage."
+                  : openDay
+                    ? "Day started — save End of Day with end place, distance, and time."
+                    : "Log date, places, distances, and times for today’s use."
+              }
+              badge={openDay ? "Day open" : travel ? "Ready" : null}
+              emphasized={Boolean(openDay)}
+            />
+          </nav>
         </>
       )}
-
     </DriverShell>
   );
 }

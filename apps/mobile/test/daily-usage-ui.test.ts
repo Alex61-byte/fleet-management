@@ -18,6 +18,14 @@ describe("daily usage UI (US-61–US-67 · US-113–US-115 mobile)", () => {
     assert.doesNotMatch(signIn, /\/\(driver\)\/daily-usage/);
   });
 
+  it("driver home loads open daily usage and cues End of Day", () => {
+    assert.match(driver, /listDriverDailyUsage/);
+    assert.match(driver, /status === \"open\"/);
+    assert.match(driver, /Day open/);
+    assert.match(driver, /End of Day/);
+    assert.match(driver, /border-warning/);
+  });
+
   it("daily usage task screen has Day Start and End of Day panels", () => {
     assert.match(page, /createDriverDailyUsage/);
     assert.match(page, /endDriverDailyUsage/);
@@ -33,6 +41,7 @@ describe("daily usage UI (US-61–US-67 · US-113–US-115 mobile)", () => {
     assert.match(page, /ScrollView/);
     assert.match(page, /KeyboardAvoidingView/);
     assert.match(page, /odometerUnitLabel/);
+    assert.match(page, /router\.replace\(\"\/\(driver\)\"\)/);
     assert.doesNotMatch(page, /deleteDailyUsage|editDailyUsage/i);
   });
 

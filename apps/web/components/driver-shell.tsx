@@ -62,31 +62,59 @@ export function DriverHubLink({
   title,
   description,
   badge,
+  emphasized = false,
+  disabled = false,
 }: {
   href: string;
   title: string;
   description: string;
   badge?: string | null;
+  /** Highlight card when driver must act (e.g. open day / need End of Day). */
+  emphasized?: boolean;
+  /** Non-navigating locked card (e.g. next travel while Out is open). */
+  disabled?: boolean;
 }) {
+  const label = badge ? `${title}. ${badge}. ${description}` : `${title}. ${description}`;
+  const body = (
+    <div className="flex flex-row items-start justify-between gap-2">
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <p className={themeClasses.label}>{title}</p>
+        <p className={themeClasses.caption}>{description}</p>
+      </div>
+      {badge ? (
+        <span
+          className={`${emphasized ? themeClasses.badgeWarning : themeClasses.badgeNeutral} shrink-0`}
+        >
+          {badge}
+        </span>
+      ) : (
+        <span className={`${themeClasses.caption} shrink-0`} aria-hidden>
+          →
+        </span>
+      )}
+    </div>
+  );
+
+  if (disabled) {
+    return (
+      <div
+        className={`${themeClasses.panel} block opacity-60 cursor-not-allowed${emphasized ? " ring-2 ring-warning shadow-ring" : ""}`}
+        aria-disabled="true"
+        aria-label={label}
+        role="group"
+      >
+        {body}
+      </div>
+    );
+  }
+
   return (
     <Link
       href={href}
-      className={`${themeClasses.panel} block no-underline hover:bg-surface-raised focus-visible:shadow-ring outline-none`}
-      aria-label={badge ? `${title}. ${badge}. ${description}` : `${title}. ${description}`}
+      className={`${themeClasses.panel} block no-underline hover:bg-surface-raised focus-visible:shadow-ring outline-none${emphasized ? " ring-2 ring-warning shadow-ring" : ""}`}
+      aria-label={label}
     >
-      <div className="flex flex-row items-start justify-between gap-2">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <p className={themeClasses.label}>{title}</p>
-          <p className={themeClasses.caption}>{description}</p>
-        </div>
-        {badge ? (
-          <span className={`${themeClasses.badgeNeutral} shrink-0`}>{badge}</span>
-        ) : (
-          <span className={`${themeClasses.caption} shrink-0`} aria-hidden>
-            →
-          </span>
-        )}
-      </div>
+      {body}
     </Link>
   );
 }

@@ -15,26 +15,24 @@ export default function DriverHome() {
   const { me, signOut, offline } = useAuth();
   const [travel, setTravel] = useState<DriverTravel | null | undefined>(undefined);
   const [activeOut, setActiveOut] = useState<HandoverActive | null | undefined>(undefined);
+  const [openDay, setOpenDay] = useState<boolean | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const t = await api.getDriverTravel();
+      const [t, usage, h] = await Promise.all([
+        api.getDriverTravel(),
+        api.listDriverDailyUsage().catch(() => ({ items: [] as { status: string }[] })),
+        api.getDriverActiveHandover().catch(() => ({ handover: null as HandoverActive | null })),
+      ]);
       setTravel(t.travel);
-      if (t.travel) {
-        try {
-          const h = await api.getDriverActiveHandover();
-          setActiveOut(h.handover);
-        } catch {
-          setActiveOut(null);
-        }
-      } else {
-        setActiveOut(null);
-      }
+      setOpenDay(usage.items.some((u) => u.status === "open"));
+      setActiveOut(h.handover);
     } catch (err) {
       setTravel(null);
       setActiveOut(null);
+      setOpenDay(false);
       setLoadError(err instanceof FleetApiError ? err.message : "Could not load home.");
     }
   }, []);
@@ -43,7 +41,8 @@ export default function DriverHome() {
     void load();
   }, [load]);
 
-  const loading = travel === undefined;
+  const loading = travel === undefined || openDay === undefined || activeOut === undefined;
+  const travelLocked = Boolean(activeOut);
 
   return (
     <SafeAreaView className="flex-1 bg-surface p-2 gap-2">
@@ -52,7 +51,10 @@ export default function DriverHome() {
       </Text>
       {offline ? <Banner tone="warning">You are offline.</Banner> : null}
 
-      <View className="bg-surface-raised rounded-lg p-2 gap-1 border border-divider" accessibilityLabel="Driver profile">
+      <View
+        className="bg-surface-raised rounded-lg p-2 gap-1 border border-divider"
+        accessibilityLabel="Driver profile"
+      >
         <Text className="text-caption uppercase text-text-secondary">Driver</Text>
         <Text className="text-body font-medium text-text-primary">{me?.email}</Text>
         <Text className="text-caption text-text-secondary mt-1">
@@ -74,35 +76,60 @@ export default function DriverHome() {
               Out open — complete Handover In when you return the vehicle.
             </Banner>
           ) : null}
-          <Link href="/(driver)/travel" asChild>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                travel
-                  ? `Next travel. Selected. ${travel.vehicle?.label ?? "Vehicle"}, ${travel.vehicle?.license_plate ?? ""}`
-                  : "Next travel. Select a vehicle and odometer for your next travel."
-              }
-              className="bg-surface-raised rounded-lg p-2 gap-1 border border-divider"
+          {openDay ? (
+            <Banner tone="warning">
+              Day open — complete End of Day when you finish using the vehicle.
+            </Banner>
+          ) : null}
+
+          {travelLocked ? (
+            <View
+              accessibilityRole="text"
+              accessibilityState={{ disabled: true }}
+              accessibilityLabel="Next travel. Locked. Complete Handover In before choosing another vehicle."
+              className="bg-surface-raised rounded-lg p-2 gap-1 border border-divider opacity-60"
             >
               <View className="flex-row items-start justify-between gap-2">
                 <View className="flex-1 gap-0.5">
                   <Text className="text-body font-medium text-text-primary">Next travel</Text>
                   <Text className="text-caption text-text-secondary">
-                    {travel
-                      ? `${travel.vehicle?.label ?? "Vehicle"} · ${travel.vehicle?.license_plate ?? "—"}`
-                      : "Select a vehicle and odometer for your next travel."}
+                    Complete Handover In before choosing another vehicle.
                   </Text>
                 </View>
-                {travel ? (
-                  <Text className="text-caption text-text-secondary">Selected</Text>
-                ) : (
-                  <Text className="text-caption text-text-secondary" accessibilityElementsHidden>
-                    →
-                  </Text>
-                )}
+                <Text className="text-caption font-medium text-text-primary">Locked</Text>
               </View>
-            </Pressable>
-          </Link>
+            </View>
+          ) : (
+            <Link href="/(driver)/travel" asChild>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  travel
+                    ? `Next travel. Selected. ${travel.vehicle?.label ?? "Vehicle"}, ${travel.vehicle?.license_plate ?? ""}`
+                    : "Next travel. Select an available vehicle for your next travel."
+                }
+                className="bg-surface-raised rounded-lg p-2 gap-1 border border-divider"
+              >
+                <View className="flex-row items-start justify-between gap-2">
+                  <View className="flex-1 gap-0.5">
+                    <Text className="text-body font-medium text-text-primary">Next travel</Text>
+                    <Text className="text-caption text-text-secondary">
+                      {travel
+                        ? `${travel.vehicle?.label ?? "Vehicle"} · ${travel.vehicle?.license_plate ?? "—"}`
+                        : "Select an available vehicle for your next travel."}
+                    </Text>
+                  </View>
+                  {travel ? (
+                    <Text className="text-caption text-text-secondary">Selected</Text>
+                  ) : (
+                    <Text className="text-caption text-text-secondary" accessibilityElementsHidden>
+                      →
+                    </Text>
+                  )}
+                </View>
+              </Pressable>
+            </Link>
+          )}
 
           <Link href="/(driver)/handover" asChild>
             <Pressable
@@ -144,22 +171,30 @@ export default function DriverHome() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
-                travel
-                  ? "Daily usage. Log date, places, distances, and times for today’s use."
-                  : "Daily usage. Select next travel first, then log daily usage."
+                !travel
+                  ? "Daily usage. Select next travel first, then log daily usage."
+                  : openDay
+                    ? "Daily usage. Day open. Day started — save End of Day with end place, distance, and time."
+                    : "Daily usage. Log date, places, distances, and times for today’s use."
               }
-              className="bg-surface-raised rounded-lg p-2 gap-1 border border-divider"
+              className={`bg-surface-raised rounded-lg p-2 gap-1 border ${
+                openDay ? "border-warning border-2" : "border-divider"
+              }`}
             >
               <View className="flex-row items-start justify-between gap-2">
                 <View className="flex-1 gap-0.5">
                   <Text className="text-body font-medium text-text-primary">Daily usage</Text>
                   <Text className="text-caption text-text-secondary">
-                    {travel
-                      ? "Log date, places, distances, and times for today’s use."
-                      : "Select next travel first, then log daily usage."}
+                    {!travel
+                      ? "Select next travel first, then log daily usage."
+                      : openDay
+                        ? "Day started — save End of Day with end place, distance, and time."
+                        : "Log date, places, distances, and times for today’s use."}
                   </Text>
                 </View>
-                {travel ? (
+                {openDay ? (
+                  <Text className="text-caption font-medium text-warning">Day open</Text>
+                ) : travel ? (
                   <Text className="text-caption text-text-secondary">Ready</Text>
                 ) : (
                   <Text className="text-caption text-text-secondary" accessibilityElementsHidden>

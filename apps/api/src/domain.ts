@@ -290,6 +290,108 @@ export function utcToday(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
+
+/** US-97 approaching band; server-owned (rule 174). */
+export const SERVICE_APPROACHING_DISTANCE_REMAINING = 2000;
+
+export type ServiceProgressSignal = {
+  endDistance: number;
+  usageDate: string;
+  createdAt: number;
+};
+
+export type ServiceRemainingInput = {
+  handoverMileage: number;
+  nextServiceDays: number;
+  nextServiceDistance: number;
+  /** Epoch ms of baseline handover. */
+  handoverCreatedAt: number;
+  vehicleMileage: number | null;
+  /** Closed daily-usage ends for this vehicle (any time); filtered to after baseline inside. */
+  closedSignals: ServiceProgressSignal[];
+  /** UTC today YYYY-MM-DD */
+  today: string;
+};
+
+export type ServiceRemainingResult = {
+  service_progress_odometer: number | null;
+  distance_remaining: number | null;
+  as_of_date: string;
+  days_elapsed: number;
+  days_overdue: number | null;
+  due_by_days: boolean;
+  due_by_distance: boolean;
+  service_status: "due" | "approaching" | null;
+  include: boolean;
+};
+
+function wholeDaysBetween(fromIso: string, toIso: string): number {
+  const fromMs = Date.parse(`${fromIso}T00:00:00.000Z`);
+  const toMs = Date.parse(`${toIso}T00:00:00.000Z`);
+  return Math.floor((toMs - fromMs) / 86_400_000);
+}
+
+/**
+ * API-only remaining service (US-116–118 / rules 184–185).
+ * Does not write vehicle.mileage. Open rows must not appear in closedSignals.
+ */
+export function computeServiceRemaining(input: ServiceRemainingInput): ServiceRemainingResult {
+  const baselineDate = new Date(input.handoverCreatedAt).toISOString().slice(0, 10);
+  // Closed rows after the baseline handover event only (A140 / E111).
+  const afterBaseline = input.closedSignals.filter(
+    (s) => s.createdAt >= input.handoverCreatedAt,
+  );
+
+  const ends: number[] = [];
+  if (input.vehicleMileage != null) ends.push(input.vehicleMileage);
+  for (const s of afterBaseline) {
+    if (Number.isFinite(s.endDistance)) ends.push(s.endDistance);
+  }
+  const progress = ends.length > 0 ? Math.max(...ends) : null;
+
+  let distanceRemaining: number | null = null;
+  if (progress != null) {
+    const raw = input.handoverMileage + input.nextServiceDistance - progress;
+    distanceRemaining = Math.round(Math.max(0, raw) * 10) / 10;
+  }
+
+  let maxUsage: string | null = null;
+  for (const s of afterBaseline) {
+    if (!maxUsage || s.usageDate > maxUsage) maxUsage = s.usageDate;
+  }
+  const asOf = maxUsage && maxUsage > input.today ? maxUsage : input.today;
+  // as_of never before baseline
+  const asOfDate = asOf < baselineDate ? baselineDate : asOf;
+
+  const daysElapsed = wholeDaysBetween(baselineDate, asOfDate);
+  const dueByDays = daysElapsed >= input.nextServiceDays;
+  const dueByDistance = distanceRemaining != null && distanceRemaining <= 0;
+  const approaching =
+    distanceRemaining != null &&
+    distanceRemaining > 0 &&
+    distanceRemaining <= SERVICE_APPROACHING_DISTANCE_REMAINING;
+
+  const include = dueByDays || dueByDistance || approaching;
+  let service_status: "due" | "approaching" | null = null;
+  if (include) {
+    service_status = dueByDays || dueByDistance ? "due" : "approaching";
+  }
+  const daysOverdue = dueByDays ? daysElapsed - input.nextServiceDays : null;
+
+  return {
+    service_progress_odometer: progress != null ? Math.round(progress * 10) / 10 : null,
+    distance_remaining: distanceRemaining,
+    as_of_date: asOfDate,
+    days_elapsed: daysElapsed,
+    days_overdue: daysOverdue,
+    due_by_days: dueByDays,
+    due_by_distance: dueByDistance,
+    service_status,
+    include,
+  };
+}
+
+
 export function addDays(isoDate: string, days: number): string {
   const [y, m, d] = isoDate.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));

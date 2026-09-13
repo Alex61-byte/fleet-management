@@ -9,7 +9,14 @@ import { Link, Stack } from "expo-router";
 import { OwnerHeaderNotifications } from "../../../components/owner-header-notifications";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Banner, ExpiryBadges, PrimaryButton, PrimaryLink } from "../../../components/ui";
+import {
+  Banner,
+  ExpiryBadges,
+  OpenOutCustodyCue,
+  openOutCustodyA11y,
+  PrimaryButton,
+  PrimaryLink,
+} from "../../../components/ui";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
 
@@ -69,16 +76,24 @@ export default function VehiclesList() {
           <Link key={v.id} href={`/(owner)/vehicles/${v.id}`} asChild>
             <Pressable
               className="bg-surface-raised border border-border rounded-md p-2 min-h-hit gap-1"
-              accessibilityLabel={warningA11y(
-                `${vehicleLabel(v)}, ${v.license_plate}${v.has_side_images ? ", has photos" : ""}`,
-                v.warnings,
-                v.custom_expirations,
-              )}
+              accessibilityLabel={[
+                warningA11y(
+                  `${vehicleLabel(v)}, ${v.license_plate}${v.has_side_images ? ", has photos" : ""}`,
+                  v.warnings,
+                  v.custom_expirations,
+                ),
+                openOutCustodyA11y(v.open_out),
+              ]
+                .filter(Boolean)
+                .join(", ")}
             >
-              <Text className="font-medium text-label text-text-primary">
-                {vehicleLabel(v)}
-                {v.has_side_images === true ? " · Photos" : ""}
-              </Text>
+              <View className="flex-row flex-wrap items-center gap-1">
+                <Text className="font-medium text-label text-text-primary">
+                  {vehicleLabel(v)}
+                  {v.has_side_images === true ? " · Photos" : ""}
+                </Text>
+                <OpenOutCustodyCue openOut={v.open_out} />
+              </View>
               <Text className="text-caption text-text-secondary">{v.license_plate}</Text>
               {v.mileage != null ? (
                 <Text className="text-caption text-text-secondary">

@@ -37,6 +37,9 @@ describe("manager loop UI (US-93–99 web)", () => {
 
   it("service due and report pages load lists", () => {
     assert.match(serviceDue, /listServiceDue/);
+    assert.match(serviceDue, /service_progress_odometer/);
+    assert.match(serviceDue, /days_elapsed/);
+    assert.match(serviceDue, /distance_remaining/);
     assert.match(report, /listCompanyDailyUsage/);
     assert.match(report, /downloadCompanyDailyUsageCsv/);
   });

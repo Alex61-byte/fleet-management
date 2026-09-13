@@ -112,6 +112,17 @@ export interface Store {
     companyId: string,
     opts?: { from?: string; to?: string },
   ): Promise<DriverDailyUsage[]>;
+  /** Closed rows with end_distance for service progress (US-116–118). */
+  listClosedDailyUsageServiceSignals(
+    companyId: string,
+  ): Promise<
+    Array<{
+      vehicleId: string;
+      endDistance: number;
+      usageDate: string;
+      createdAt: number;
+    }>
+  >;
   deleteDailyUsageForDriver(driverId: string): Promise<void>;
   insertComplianceDocument(row: VehicleComplianceDocument): Promise<void>;
   listComplianceDocuments(vehicleId: string, companyId: string): Promise<VehicleComplianceDocument[]>;
@@ -539,6 +550,36 @@ export class MemoryStore implements Store {
       })
       .map((u) => ({ ...u }))
       .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+  }
+
+  async listClosedDailyUsageServiceSignals(
+    companyId: string,
+  ): Promise<
+    Array<{
+      vehicleId: string;
+      endDistance: number;
+      usageDate: string;
+      createdAt: number;
+    }>
+  > {
+    const out: Array<{
+      vehicleId: string;
+      endDistance: number;
+      usageDate: string;
+      createdAt: number;
+    }> = [];
+    for (const u of this.dailyUsages.values()) {
+      if (u.companyId !== companyId) continue;
+      if (u.status !== "closed") continue;
+      if (u.endDistance == null) continue;
+      out.push({
+        vehicleId: u.vehicleId,
+        endDistance: u.endDistance,
+        usageDate: u.usageDate,
+        createdAt: u.createdAt,
+      });
+    }
+    return out;
   }
 
   async insertComplianceDocument(row: VehicleComplianceDocument): Promise<void> {

@@ -47,17 +47,26 @@ describe("mobile shells (auth, driver hub, owner vehicles)", () => {
 
   it("driver home hub links travel/handover/daily-usage and loads travel", () => {
     assert.match(driverHome, /getDriverTravel/);
+    assert.match(driverHome, /getDriverActiveHandover/);
+    assert.match(driverHome, /listDriverDailyUsage/);
+    assert.match(driverHome, /travelLocked/);
+    assert.match(driverHome, /Complete Handover In before choosing another vehicle/);
     assert.match(driverHome, /href="\/\(driver\)\/travel"/);
     assert.match(driverHome, /href="\/\(driver\)\/handover"/);
     assert.match(driverHome, /href="\/\(driver\)\/daily-usage"/);
     assert.match(driverHome, /Next travel/);
     assert.match(driverHome, /Vehicle handover/);
+    assert.match(driverHome, /Day open/);
     assert.doesNotMatch(driverHome, /createDriverHandover|createDriverDailyUsage/);
   });
 
   it("driver travel/handover/daily-usage and denied wiring", () => {
     assert.match(travel, /listDriverVehicles/);
     assert.match(travel, /getDriverTravel/);
+    assert.match(travel, /putDriverTravel/);
+    assert.match(travel, /Continue to handover/);
+    assert.match(travel, /router\.replace\("\/\(driver\)\/handover"\)/);
+    assert.doesNotMatch(travel, /TextInput/);
     assert.match(travel, /router\.replace\("\/\(driver\)"\)/);
     assert.match(handover, /getDriverTravel/);
     assert.match(handover, /\/\(driver\)\/travel/);

@@ -24,7 +24,14 @@ import { VehicleDocumentsTab } from "./vehicle-documents-tab";
 import { VehicleHandoversTab } from "./vehicle-handovers-tab";
 import { VehicleIssuesTab } from "./vehicle-issues-tab";
 import { VehicleSideImageViewer } from "./vehicle-side-image-viewer";
-import { Field, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "./ui";
+import {
+  Field,
+  OpenOutCustodyCue,
+  PrimaryButton,
+  SecondaryButton,
+  SelectInput,
+  TextInput,
+} from "./ui";
 import { themeClasses } from "../../../design/tailwind.theme";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth-context";
@@ -88,6 +95,7 @@ function normalizeVehicle(v: Vehicle): Vehicle {
   return {
     ...v,
     custom_expirations: v.custom_expirations ?? [],
+    open_out: v.open_out ?? null,
     side_images,
     has_side_images:
       typeof v.has_side_images === "boolean"
@@ -516,6 +524,11 @@ export function VehicleForm({
           aria-labelledby={detailsTabId}
           className={`${themeClasses.vehicleFormTabPanel} ${themeClasses.vehicleFormDetails}`}
         >
+          {companyTenant && vehicle?.id && vehicle.open_out ? (
+            <div className="flex flex-wrap items-center gap-1" aria-label="Vehicle custody">
+              <OpenOutCustodyCue openOut={vehicle.open_out} layout="strip" />
+            </div>
+          ) : null}
           <Field label="Make">
             <SelectInput
               value={makeSelect}

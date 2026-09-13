@@ -10,7 +10,7 @@
 
 **Purpose:** One shared chrome strip for product identity + in-app **notification menu** (compliance dates, **service** approaching/due, Company **open_out**). Complements US-28 Vehicles nav urgency and [service-due.md](service-due.md); does **not** replace list/detail 30-day badges (A1) or nav orange/red rules. Individual menu items are **that tenant’s** vehicles only (A87). Drivers: **no** OA header (US-76 / US-109).
 
-**Stories addendum:** US-109 (service items), US-111 (open_out items). Cap **50**; urgency-first order below.
+**Stories addendum:** US-109 (service items), US-111 (open_out items); **US-116–US-118** (service feed uses same API remaining as Service due, including closed Daily usage progress). Cap **50**; urgency-first order below.
 
 ## Out of scope (explicit)
 
@@ -18,13 +18,15 @@
 | --- | --- |
 | Driver shell, public landing, auth canvas | Rules 101, 110; E68; driver open-Out = [driver-home.md](driver-home.md) / [handover.md](handover.md) |
 | Full notifications **page**, preferences, mute, mark-all-read | A73; menu only |
-| OS push / email / SMS | A81 / Won't; US-109–111 in-app only |
+| OS push / email / SMS | A81 / Won't; US-109–111 in-app only; no new push from Daily usage EOD |
 | Registration-date alerts | A13, A74; rule 106 |
 | Invite, mileage, generic “handover history” noise | Not menu kinds; **open_out** is custody-open only (US-111) |
+| Client remaining-service math | A139 / E108 — display API `service` fields only |
 | Individual **open_out** items | N/A — no company driver handover ops (US-111) |
 | Changing Home/Drivers/Vehicles/Admins/Security destinations or role gating | US-68 |
 | Dual product lockup (sidebar **and** header mark) | Resolved below — header owns identity |
 | Hex in class lists / one-off colors | Tokens only |
+| New screens / tokens this slice | Amend feed semantics only |
 
 ---
 
@@ -182,17 +184,17 @@ One row per **vehicle + section** in window (insurance | inspection | road tax o
 │ Insurance  [Expired]  12 Jan 2026       │
 ```
 
-#### Kind: `service` (vehicle) — US-109
+#### Kind: `service` (vehicle) — US-109 + US-116–US-118
 
-One row per qualifying vehicle (not per distance/days split). Buckets match [service-due.md](service-due.md).
+One row per qualifying vehicle (not per distance/days split). Buckets match [service-due.md](service-due.md). **Same API authority** as the Service due board (186–187): remaining/due/approaching come from the notifications/service feed (or shared service-due semantics) — **no** client formula from mileage + closed Daily usage.
 
 | Slot | Content | Token / class |
 | --- | --- | --- |
 | Primary | `{Make} {Model}` | `label` |
 | Secondary | Plate | `caption` |
 | Kind label | **Service** | `caption` |
-| Status | Badge **plus** text | Due/overdue: `badgeExpired` **Due** / **Overdue**; approaching: `badgeWarning` **Approaching** |
-| Meta | Distance and/or days reason; **unit label** when distance-based (mi/km from vehicle country) | `font-tabular` `caption` |
+| Status | Badge **plus** text | Due/overdue: `badgeExpired` **Due** / **Overdue**; approaching: `badgeWarning` **Approaching** — from API status |
+| Meta | Distance and/or days reason from API; **unit label** when distance-based (mi/km from vehicle country) | `font-tabular` `caption` |
 
 ```text
 │ {Make} {Model}                          │
@@ -201,7 +203,9 @@ One row per qualifying vehicle (not per distance/days split). Buckets match [ser
 │ Service  [Overdue]  by days             │
 ```
 
-**Individual Owner:** service items **allowed** for own vehicles only. **Driver:** no menu.
+**Progress note (design only):** Closed Daily usage may enrich API distance/days so items appear/update even when `vehicle.mileage` was not written (A62). UI still only **formats** API meta — never recomputes “km left.” No baseline from usage alone → still omitted.
+
+**Individual Owner:** service items **allowed** for own vehicles only (Individual baseline behavior; company-driver usage progress N/A this slice). **Driver:** no menu.
 
 #### Kind: `open_out` (vehicle) — US-111
 
@@ -221,7 +225,7 @@ One row per qualifying vehicle (not per distance/days split). Buckets match [ser
 │ Open out  [Out open]  driver@co.com     │
 ```
 
-No optional extra OA “open out board” this slice — menu item is the Must cue (BA optional board skipped).
+No optional extra OA “open out board” this slice. Menu item remains the **US-111** Must cue; **US-119** adds the same open-Out lifecycle on vehicle **list + Details** (`badgeNeutral` **Out open** + holder `caption` — see [vehicles.md](vehicles.md)). Menu chrome unchanged by US-119.
 
 ### Ordering (Must urgency-first; cap 50)
 
@@ -244,7 +248,7 @@ Single merged list, max **50** (A80). If truncated, footer “Showing 50 most ur
 | **Offline** | `bannerWarning` “You are offline.” + disabled retry or retry that fails closed (E71). |
 | **Populated** | Scrollable list; badge on bell matches item count (≤50). |
 
-Empty is **not** an error (E70). Closing and reopening may refresh; Architect owns fetch timing. open_out / service rows **drop** when Out closes or service no longer qualifies (refresh).
+Empty is **not** an error (E70). Closing and reopening may refresh; Architect owns fetch timing. open_out / service rows **drop** when Out closes or service no longer qualifies (refresh). After a company driver **End of Day**, service items may appear/change on next fetch from **API** remaining — no client-side recompute; **states matrix unchanged**.
 
 ---
 
