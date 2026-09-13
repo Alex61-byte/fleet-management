@@ -234,9 +234,9 @@ export default function DriverDailyUsageScreen() {
       if (startRefuelAmount.trim()) body.refuel_amount = startRefuelAmount.trim();
       if (startRefuelAt.trim()) body.refuel_at_mileage = startRefuelAt.trim();
       await api.createDriverDailyUsage(body);
-      resetStartFields(minStartDistance);
-      setSuccessMsg("Day Start saved.");
-      await load();
+      // Land on home with open-day cue (End of Day) — mirror open-Out pattern.
+      router.replace("/(driver)");
+      return;
     } catch (err) {
       setStartError(err instanceof FleetApiError ? err.message : "Could not save Day Start.");
     } finally {
@@ -488,6 +488,9 @@ export default function DriverDailyUsageScreen() {
                           accessibilityLabel={`Refuel at mileage (${unitLabel})`}
                         />
                       </Field>
+                      <Text className="text-caption text-text-secondary">
+                        Closing the day updates service remaining on the server for this vehicle.
+                      </Text>
                       <PrimaryButton
                         title={endBusy ? "Saving…" : "Save End of Day"}
                         onPress={() => void onEndSubmit()}

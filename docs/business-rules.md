@@ -185,7 +185,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 89. **Day Start required (Must):** **usage_date**, **start_place**, **start_distance**, **start_time**. Creates an **open** row. Missing/invalid → reject **(A59, E61)**. At most **one open** per driver; Day Start while open exists → reject **(A64, E68)**.
 90. **End of Day required (Must):** **end_place**, **end_distance**, **end_time**. Completes the driver’s **open** row. Missing/invalid → reject; open stays open **(A59, E61)**. **No open** → reject **(E69)**. Does **not** change start fields **(A66)**.
 91. **Units (Must):** Distance unit from vehicle country (**43 / A34**); store value + unit **(A60)**. Optional **refuel_amount** unit is **L** (km countries) or **gal** (mi countries) per same A34 map **(A60)**.
-92. **Distance values (Must):** ≥ 0, max **1** decimal. On End of Day: **end_distance ≥ start_distance**. On Day Start: **start_distance** ≥ max(**a** `vehicle.mileage` when set, **b** latest **closed** end_distance on same vehicle) **(A61, E62)**. Clients **Should** prefill start from that floor. Daily usage **must not** update `vehicle.mileage` **(A62)**.
+92. **Distance values (Must):** ≥ 0, max **1** decimal. On End of Day: **end_distance ≥ start_distance**. On Day Start: **start_distance** ≥ max(**a** `vehicle.mileage` when set, **b** latest **closed** end_distance on same vehicle) **(A61, E62)**. Clients **Should** prefill start from that floor. Daily usage **must not** update `vehicle.mileage` **(A62)**. Closed **end_distance** **may** feed **service progress odometer** for remaining service only (**184**); that is not a mileage write-through.
 93. **Date and times (Must):** `usage_date` local calendar (default **today** on Day Start). Times local `HH:mm`; on End of Day **end_time ≥ start_time** **(A63, E63)**.
 94. **Optional refuel (Must):** On **either** Day Start or End of Day, optional **`refuel_amount`** and/or **`refuel_at_mileage`**, independently. If present: ≥ 0, max 1 decimal **(E70)**. No fuel cost/type. Refuel does **not** write `vehicle.mileage` **(A62)**.
 95. **Multiplicity (Must):** Multiple **closed** rows per driver per date allowed; at most **one open** per driver **(A64)**.
@@ -217,7 +217,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | A59 | Day Start: usage_date, start_place, start_distance, start_time; End of Day: end_place, end_distance, end_time; refuel fields optional independently |
 | A60 | Distance unit = A34; refuel_amount unit L/gal from same A34 map; store value + unit |
 | A61 | end ≥ start on close; start ≥ max(vehicle.mileage when set, latest **closed** end on vehicle); ≥0 max 1 decimal |
-| A62 | Daily usage **never** writes `vehicle.mileage` |
+| A62 | Daily usage **never** writes `vehicle.mileage` (closed end_distance may feed service progress odometer **184** only) |
 | A63 | Date local calendar; times local HH:mm; end ≥ start same date on close; default date today on Day Start |
 | A64 | Multiple closed per day OK; at most one open per driver |
 | A65 | Driver own list; Company OA report + CSV include status + refuel |
@@ -468,7 +468,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 
 174. **Approaching service threshold (Must):** **2000** remaining distance in the **same unit** as `next_service_distance` / vehicle odometer (country of registration). Qualifies as **approaching** iff baseline exists and **`0 < distance_remaining ≤ 2000`** **(A128)**.
 
-175. **Due/overdue service unchanged (Must):** Fully **due/overdue** still when days elapsed ≥ `next_service_days` **or** distance used up (`distance_remaining ≤ 0` / mileage ≥ handover.mileage + next_service_distance when mileage set)—US-97. Approaching is an **additional** distance band; it does **not** replace days-based due **(A129)**.
+175. **Due/overdue service unchanged (Must):** Fully **due/overdue** still when days elapsed ≥ `next_service_days` **or** distance used up (`distance_remaining ≤ 0` / **service_progress_odometer** ≥ handover.mileage + next_service_distance when progress usable—**184**)—US-97. Approaching is an **additional** distance band; it does **not** replace days-based due **(A129)**.
 
 176. **Service-due board inclusion (Must):** Board **must** list **approaching** and **due/overdue**. Omit vehicles with no handover service baseline; omit when remaining **> 2000** and not due by days/distance; omit when distance_remaining unknown **and** not due by days **(E100)**.
 
@@ -476,7 +476,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 
 178. **Who is notified — service (Must):** **Owner/Admin** via **in-app notification menu** (and optional Service-due board/cue). **Driver** is **not** required to receive OA menu service rows this slice; driver service cue out unless later story **(A131)**.
 
-179. **Who is notified — open Out (Must):** **Driver** who holds the open Out: **driver home / handover cue** (US-60 Must, US-110). **Company Owner/Admin**: **in-app notification menu** item `open_out` (+ optional board/cue). Drivers **never** get OA Global Header **(110, E68)**. **Individual:** open-Out notify **N/A** (no company driver handovers) **(A132, E102)**.
+179. **Who is notified — open Out (Must):** **Driver** who holds the open Out: **driver home / handover cue** (US-60 Must, US-110). **Company Owner/Admin**: **in-app notification menu** item `open_out` (**US-111**) **and** open-Out + holding driver on **vehicle list** and **vehicle detail/form** (**US-119**, rule **191**). Drivers **never** get OA Global Header **(110, E68)**. **Individual:** open-Out notify **N/A** (no company driver handovers) **(A132, E102)**.
 
 180. **Channels (Won't this slice):** **No** OS push, **no** SMS, **no** new email for service approaching or open Out. Existing **compliance digest email** (US-95) is **not** extended to open Out or service approaching unless a later story says so **(A81, A133, E103)**.
 
@@ -502,3 +502,59 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | A132 | Individual keeps service-due on own vehicles; open Out driver/OA path N/A |
 | A133 | Do not invent handover/service email; US-95 stays compliance digest |
 | A134 | Soft cap 50 applies to mixed compliance+service+open_out feed |
+
+## OA vehicle custody on list & detail (US-119; extends US-111, rules 72–86, 177–179)
+
+191. **OA vehicle custody cue (Must):** For **Company** Owner/Admin, vehicle **list** (cards/rows) and vehicle **detail/form (Details)** **must** show whether the vehicle has an **open Out** and, when open, the **holding driver** when known. Semantics match **177** (open only; voided/closed = no cue). **Handovers** tab stays **history-only** (**82**, **86**, US-55)—this cue is summary custody, not a history rewrite. **Individual** N/A (**A132**). **Drivers** are not this surface (**E105**). Complements menu `open_out` (**US-111**); list/detail are **Must**, not optional Design-only.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E112 | Vehicle with no open Out | No Out/assigned-driver custody cue on list or detail |
+| E113 | Individual Owner on own vehicles | open_out list/detail cue absent / N/A |
+| E114 | Driver on OA vehicle admin list/detail | Cue not offered; own open-Out remains US-60/110 |
+
+| ID | Assumption |
+| --- | --- |
+| A141 | Holding driver “when known” = identity available on the open Out; if driver removed/unavailable after void path, cue follows void/clear rules (85) rather than inventing a name |
+| A142 | Create-vehicle form has no open Out (new asset); cue applies to list + existing vehicle detail/edit |
+
+## Daily usage → remaining service (US-116–US-118; extends US-61–67, US-97, US-109; A62 held)
+
+183. **Trigger (Must):** Authoritative remaining **distance to service** and **time to service** move when a Daily usage row is **closed** by **End of Day**. Inputs: closed **`end_distance`**; Day Start **`usage_date`** already on the row. Day Start alone does not apply **end_distance** progress **(A135, E106)**.
+
+184. **Service progress odometer (Must, API-only):** For a vehicle with latest **non-voided** handover service baseline (handover **mileage**, **next_service_days**, **next_service_distance**):
+   - **`service_progress_odometer`** = max of: (a) `vehicle.mileage` when set; (b) max **`end_distance`** among **closed** Daily usage rows on that vehicle after the baseline (same vehicle; unit A34).
+   - **`distance_remaining`** = `(handover.mileage + next_service_distance) − service_progress_odometer` when progress is usable; treat negative as **0** for due-by-distance.
+   - If neither (a) nor (b) yields a usable reading → `distance_remaining` **null** (days path may still due) **(A136, E107)**.
+   - Does **not** write `vehicle.mileage` **(A62)**.
+
+185. **Days elapsed (Must, API-only):** Baseline calendar date = date of the service-baseline handover (existing board clock). **`as_of_date`** = max(**UTC today**, max **`usage_date`** of **closed** Daily usage on that vehicle after the baseline). **`days_elapsed`** = whole calendar days from baseline date to **as_of_date** (same day-count convention as US-97). Due by days when `days_elapsed ≥ next_service_days` **(A137)**.
+
+186. **Where applied (Must):** Same semantics for **GET service-due**, OA **service** notification rows (US-109), and any API field exposing remaining/due flags. Recompute on read and/or immediately consistent after End of Day close — clients must not diverge **(A138)**.
+
+187. **API-only math (Must):** Clients **must not** compute remaining service, approaching band, or due flags. UI sends Day Start / End of Day payloads and **displays** API results **(A139, E108)**.
+
+188. **Baseline still handover (Must):** Closed Daily usage **never** creates a service baseline. No baseline → omit from service-due/service menu even if usage exists **(176, E100, E110)**. New handover baseline resets progress relative to **that** handover **(A140)**.
+
+189. **A62 held (Must):** End of Day / Day Start / refuel **must not** PATCH `vehicle.mileage`. Travel and handover write-through rules unchanged **(69, 78, A43, A52, A62)**.
+
+190. **Tenancy / actors (Must):** Only that company’s principals see resulting service state. Driver close affects company V; Owner/Admin consume board/menu. Cross-company denied **(22, A8, E104)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E106 | Day Start only / open row | No end_distance progress; service distance unchanged by that open row |
+| E107 | No usable progress odometer (no mileage, no closed end_distance) and not due by days | Not listed for distance approaching/due; days path independent |
+| E108 | Client submits or displays FE-computed remaining service | Not authoritative; server ignores client remaining; UI must use API |
+| E109 | End of Day fails validation / no open row | No close; no service progress from that attempt |
+| E110 | Closed usage on vehicle with no handover service baseline | No service-due row from usage alone |
+| E111 | New handover baseline after prior usage | Progress/days relative to **new** baseline only |
+
+| ID | Assumption |
+| --- | --- |
+| A135 | EOD close is the distance progress event; usage_date on the row drives day as-of together with UTC today |
+| A136 | Progress odometer prefers the **max** of vehicle.mileage and closed end_distance (odometer-like), aligned with A61 floor thinking |
+| A137 | as_of_date never before baseline; max(today, closed usage_dates) avoids remaining **increasing** when clocks move forward without usage |
+| A138 | One server semantics shared by board + menu + close consistency |
+| A139 | No FE remaining-service formulas; formatting/labels only |
+| A140 | Handover remains sole service baseline author |
+

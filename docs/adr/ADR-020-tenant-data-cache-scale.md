@@ -71,3 +71,7 @@ Any successful mutation that changes data visible on the above lists for that `c
 ## Amendment note
 
 Extends read path only. Does not change tenancy fail-closed rules (ADR-003) or modular monolith boundary (ADR-001).
+
+## Amendment — US-119 / ADR-028
+
+Vehicle list bodies include read-only `open_out`. Custody changes (handover Out/In, open-Out void) are list-visible and **must** bump the same tenant revision used for `GET /v1/vehicles` ETag. No new conditional path or list key.

@@ -3,12 +3,11 @@
 import {
   FleetApiError,
   formatVehicleMileage,
-  odometerUnitLabel,
   type DriverTravel,
   type DriverVehicle,
 } from "@fleet/sdk";
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { DriverBackLink, DriverShell } from "../../../components/driver-shell";
 import {
   Field,
@@ -16,7 +15,6 @@ import {
   SecondaryButton,
   Skeleton,
   SelectInput,
-  TextInput,
 } from "../../../components/ui";
 import { themeClasses } from "../../../../../design/tailwind.theme";
 import { api } from "../../../lib/api";
@@ -29,7 +27,6 @@ export default function DriverTravelPage() {
   const [vehicles, setVehicles] = useState<DriverVehicle[] | null>(null);
   const [travel, setTravel] = useState<DriverTravel | null | undefined>(undefined);
   const [vehicleId, setVehicleId] = useState("");
-  const [odometer, setOdometer] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,41 +46,44 @@ export default function DriverTravelPage() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [vRes, t] = await Promise.all([api.listDriverVehicles(), api.getDriverTravel()]);
+      const [vRes, t, h] = await Promise.all([
+        api.listDriverVehicles(),
+        api.getDriverTravel(),
+        api.getDriverActiveHandover().catch(() => ({ handover: null })),
+      ]);
+      // Open Out locks next travel — finish Handover In first.
+      if (h.handover) {
+        router.replace("/driver/handover");
+        return;
+      }
       const vItems = vRes.data?.items ?? [];
       setVehicles(vItems);
       setTravel(t.travel);
-      if (t.travel) {
-        setVehicleId(t.travel.vehicle_id);
-        setOdometer(String(t.travel.odometer));
-      } else if (vItems.length === 1) {
-        setVehicleId(vItems[0]!.id);
+      // Prefill only when the active selection is still available (not open Out).
+      const activeStillAvailable =
+        t.travel != null && vItems.some((v) => v.id === t.travel!.vehicle_id);
+      if (activeStillAvailable) {
+        setVehicleId(t.travel!.vehicle_id);
+      } else {
+        setVehicleId("");
       }
     } catch (err) {
       setVehicles([]);
       setTravel(null);
+      setVehicleId("");
       setLoadError(err instanceof FleetApiError ? err.message : "Could not load travel data.");
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (!ready || !me || me.role !== "driver") return;
     void load();
   }, [ready, me, load]);
 
-  const selected = useMemo(
-    () => vehicles?.find((v) => v.id === vehicleId) ?? null,
-    [vehicles, vehicleId],
-  );
-  const unit = selected?.odometer_unit ?? travel?.odometer_unit ?? "km";
-  const unitLabel = odometerUnitLabel(unit);
-  const floorMileage = selected?.mileage ?? null;
-  const odometerHint =
-    floorMileage != null
-      ? `Must be at least ${floorMileage} ${unit}`
-      : unitLabel;
   const emptyFleet = vehicles !== null && vehicles.length === 0;
   const loading = vehicles === null || travel === undefined;
+  const selectedAvailable =
+    travel != null && vehicles != null && vehicles.some((v) => v.id === travel.vehicle_id);
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -92,29 +92,17 @@ export default function DriverTravelPage() {
       setFormError("Select a vehicle.");
       return;
     }
-    if (odometer.trim() === "") {
-      setFormError("Enter the odometer reading.");
+    const selected = vehicles?.find((v) => v.id === vehicleId);
+    if (!selected) {
+      setFormError("Select an available vehicle.");
       return;
     }
     setBusy(true);
     try {
-      const saved = await api.putDriverTravel({ vehicle_id: vehicleId, odometer: odometer.trim() });
-      setTravel(saved);
-      setOdometer(String(saved.odometer));
-      // Travel write-through updates vehicle.mileage — refresh list for floor + labels.
-      setVehicles((prev) =>
-        prev
-          ? prev.map((v) =>
-              v.id === saved.vehicle_id
-                ? {
-                    ...v,
-                    mileage: saved.odometer,
-                    mileage_unit: saved.odometer_unit,
-                  }
-                : v,
-            )
-          : prev,
-      );
+      // Odometer is captured on handover; travel binds vehicle only (use known mileage or 0).
+      const odometer = selected.mileage != null ? String(selected.mileage) : "0";
+      await api.putDriverTravel({ vehicle_id: vehicleId, odometer });
+      router.replace("/driver/handover");
     } catch (err) {
       setFormError(err instanceof FleetApiError ? err.message : "Could not save selection.");
     } finally {
@@ -148,24 +136,25 @@ export default function DriverTravelPage() {
           <div className="flex flex-col gap-1">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
           </div>
         ) : (
           <>
-            {travel ? (
+            {selectedAvailable && travel ? (
               <div className="mb-2 flex flex-col gap-0.5">
                 <p className={themeClasses.label}>{travel.vehicle?.label ?? "Vehicle"}</p>
-                <p className={themeClasses.caption}>
-                  {travel.vehicle?.license_plate ?? "—"} · Odometer {travel.odometer}{" "}
-                  {travel.odometer_unit}
-                </p>
+                <p className={themeClasses.caption}>{travel.vehicle?.license_plate ?? "—"}</p>
               </div>
             ) : (
-              <p className={`${themeClasses.body} mb-2`}>No vehicle selected for your next travel.</p>
+              <p className={`${themeClasses.body} mb-2`}>
+                Select an available vehicle, then complete handover with odometer and service data.
+              </p>
             )}
 
             {emptyFleet ? (
-              <p className={themeClasses.body}>No vehicles available. Ask your company to add a vehicle.</p>
+              <p className={themeClasses.body}>
+                No vehicles available. Ask your company to add a vehicle, or wait until Handover In
+                is completed.
+              </p>
             ) : (
               <form className="flex flex-col gap-2" onSubmit={(e) => void onSave(e)}>
                 <Field label="Vehicle for next travel">
@@ -190,23 +179,13 @@ export default function DriverTravelPage() {
                     })}
                   </SelectInput>
                 </Field>
-                <Field label={`Odometer (${unitLabel.toLowerCase()})`} hint={odometerHint}>
-                  <TextInput
-                    inputMode="decimal"
-                    value={odometer}
-                    onChange={(e) => setOdometer(e.target.value)}
-                    disabled={offline || busy}
-                    aria-label={`Odometer in ${unitLabel.toLowerCase()}`}
-                    placeholder="0"
-                  />
-                </Field>
                 {formError ? (
                   <p className={themeClasses.errorText} role="alert">
                     {formError}
                   </p>
                 ) : null}
                 <PrimaryButton type="submit" busy={busy} disabled={offline || busy || !vehicleId}>
-                  {travel ? "Update selection" : "Save selection"}
+                  Continue to handover
                 </PrimaryButton>
               </form>
             )}

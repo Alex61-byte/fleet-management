@@ -63,7 +63,13 @@ export class FleetDriver {
   constructor(private readonly ctx: FleetContext) {}
   async listDriverVehicles(claims: AccessClaims) {
     assertDriver(claims);
-    const items = (await this.ctx.store.listVehicles(claims.company_id)).map(toDriverVehicleJson);
+    // Available for next travel = no open Handover Out (In completed or never checked out).
+    const [vehicles, openOuts] = await Promise.all([
+      this.ctx.store.listVehicles(claims.company_id),
+      this.ctx.store.listOpenOutsForCompany(claims.company_id),
+    ]);
+    const busy = new Set(openOuts.map((h) => h.vehicleId));
+    const items = vehicles.filter((v) => !busy.has(v.id)).map(toDriverVehicleJson);
     return { items };
   }
 
@@ -91,6 +97,8 @@ export class FleetDriver {
     // Existence check outside txn; monotonic mileage + travel row commit atomically inside.
     const vehicle = await this.ctx.store.findVehicle(vehicleId, claims.company_id);
     if (!vehicle) throw errors.notFound();
+    const openOut = await this.ctx.store.findOpenOutForVehicle(vehicle.id, claims.company_id);
+    if (openOut) throw errors.handoverVehicleOpen();
     const unit = odometerUnitForCountry(vehicle.countryOfRegistration);
     const row: DriverTravelSelection = {
       id: newId(),

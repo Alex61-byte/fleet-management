@@ -2,7 +2,7 @@
 
 import { themeClasses } from "../../../design/tailwind.theme";
 import { AppFooter } from "./app-footer";
-import type { VehicleCustomExpiration, Warning } from "@fleet/sdk";
+import type { VehicleCustomExpiration, VehicleOpenOut, Warning } from "@fleet/sdk";
 import { warningFieldLabel } from "@fleet/sdk";
 import Link from "next/link";
 import {
@@ -195,6 +195,46 @@ export function ExpiryBadges({
           {w.state === "expired" ? "Expired" : "Due soon"}
         </span>
       ))}
+    </span>
+  );
+}
+
+/** US-119 — open Out + holding driver on OA vehicle list/Details. */
+export function openOutHolderLabel(openOut: VehicleOpenOut | null | undefined): string | null {
+  if (!openOut) return null;
+  return openOut.driver?.email?.trim() ? openOut.driver.email : "Unavailable";
+}
+
+export function openOutCustodyA11y(openOut: VehicleOpenOut | null | undefined): string {
+  const holder = openOutHolderLabel(openOut);
+  if (!holder) return "";
+  return holder === "Unavailable"
+    ? "Out open, assigned driver unavailable"
+    : `Out open, assigned to ${holder}`;
+}
+
+export function OpenOutCustodyCue({
+  openOut,
+  layout = "inline",
+}: {
+  openOut: VehicleOpenOut | null | undefined;
+  /** inline = list wrap; strip = Details top row */
+  layout?: "inline" | "strip";
+}) {
+  const holder = openOutHolderLabel(openOut);
+  if (!holder) return null;
+  const a11y = openOutCustodyA11y(openOut);
+  return (
+    <span
+      className={
+        layout === "strip"
+          ? "inline-flex flex-wrap items-center gap-1"
+          : "inline-flex flex-wrap items-center gap-1"
+      }
+      aria-label={a11y}
+    >
+      <span className={themeClasses.badgeNeutral}>Out open</span>
+      <span className={themeClasses.caption}>{holder}</span>
     </span>
   );
 }

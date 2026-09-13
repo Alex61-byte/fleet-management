@@ -7,7 +7,7 @@
 - **Mobile:** `appBarMobile` only — **no** tab bar, **no** sidebar, **no** OA notification menu (US-109/US-111 N/A).  
 - **Web:** top driver header strip only — **no** Owner `sidebar`, **no** Global Header bell.  
 **Handover shared spec:** [handover.md](handover.md) (fields, damage grid, validation, viewer).  
-**Daily usage shared spec:** [daily-usage.md](daily-usage.md) (create + own list, gate, offline).  
+**Daily usage shared spec:** [daily-usage.md](daily-usage.md) (create + own list, gate, offline; US-116–118: EOD may advance **API** remaining service — **no** driver service counters on hub or Daily usage).  
 Task screens own forms; this page owns **start placement** and hub cues. Open-Out / need-In is **in-app only** (no push/email/SMS).
 
 ## Information architecture
@@ -62,7 +62,7 @@ contentPadCompact max-w-auth-card mx-auto flex flex-col gap-2
   buttonSecondary Sign out
 ```
 
-**No** next-travel, handover, or Daily usage **forms** on Start. Status badges only (Selected / Ready / Out open). Daily usage does **not** use Out open.
+**No** next-travel, handover, or Daily usage **forms** on Start. Status badges only (Selected / Ready / Out open / Day open). Daily usage uses **Day open**, not Out open.
 
 ### Open-Out / need-In cue (US-60 Must + US-110)
 
@@ -78,6 +78,18 @@ Visible on **Start** as soon as session lands (sign-in / invite) when **this** d
 
 Banner + hub badge **together** strengthen awareness (Must); either alone is insufficient if the other fits the layout — **require both** when open Out.
 
+### Open day / need End of Day cue
+
+Visible on **Start** when **this** driver has an **open** Daily usage row (`status === open`). Independent of open Out — **both** banners may show. After successful **Day Start**, clients **navigate to Start/Home** so this cue is the primary confirmation (not a stay-on-form toast).
+
+| Element | Spec |
+| --- | --- |
+| Page banner | `bannerWarning`: “Day open — complete **End of Day** when you finish using the vehicle.” Link/control → Daily usage route |
+| Hub card | Daily usage: badge **Day open** (`badgeWarning` when emphasized) + caption need End of Day; **emphasized** ring/border (`ring-warning` web / `border-warning` mobile) — text + badge, not color-only |
+| Cleared | After End of Day closes the row: banner gone; hub returns to **Ready** or travel-first |
+| No open day | No day banner; eligible hub **Ready** / chevron |
+| Data | Hub loads own list (`listDriverDailyUsage`); open = any `status === open` |
+
 ## Layout — Next travel screen
 
 ```
@@ -85,12 +97,11 @@ Back to Home (buttonSecondary / link)
 panel Next travel
   sectionTitle Next travel
   [active summary or empty copy]
-  Field Vehicle
-  Field Odometer — unit locked from country
-  buttonPrimary Save selection | Update selection
+  Field Vehicle — **available only** (no open Handover Out)
+  buttonPrimary Continue to handover
 ```
 
-Same field inventory as before (US-33/34). Does **not** auto-open handover after save.
+Vehicle select only. **No** odometer on this screen — mileage/service fields are on **Handover**. Successful continue **navigates to Handover**. Do **not** prefill a busy/unavailable vehicle from stale active travel.
 
 ## Layout — Handover screen
 
@@ -186,10 +197,11 @@ Full field inventory, list, validation, gated/offline states: **[daily-usage.md]
 | Hub card | Caption / badge |
 | --- | --- |
 | No next-travel | Caption: select next travel first; chevron only (no Ready) |
-| Next-travel active | Caption: log places and distances for the selected vehicle; **Should** `badgeNeutral` **Ready** |
+| Next-travel active, no open day | Caption: log places and distances; **Should** `badgeNeutral` **Ready** |
+| Open day | Caption: Day started — save End of Day…; badge **Day open**; emphasized card |
 | Offline on start | No special hub lock; task screen disables submit |
 
-Daily usage hub never shows **Out open** (that cue is handover-only).
+Daily usage hub never shows **Out open** (that cue is handover-only). Open day uses **Day open**.
 
 ## States
 
@@ -198,8 +210,10 @@ Daily usage hub never shows **Out open** (that cue is handover-only).
 | Loading start | App bar real; skeleton identity + hub cards |
 | Start default | Identity + hub links (no forms) + Sign out |
 | Start, open Out (me) | `bannerWarning` need-In + handover hub **Out open**; visible after sign-in without OA chrome |
-| Start, travel selected | Next travel badge **Selected**; handover **Ready** or **Out open**; Daily usage **Ready** (Should) |
+| Start, open day (me) | `bannerWarning` need End of Day + Daily usage hub **Day open** + emphasized card |
+| Start, travel selected | Next travel badge **Selected**; handover **Ready** or **Out open**; Daily usage **Ready** or **Day open** |
 | Start, Out cleared | Banner gone; hub not **Out open** |
+| Start, day closed | Day banner gone; Daily usage not **Day open** |
 | Start, no travel | Handover + Daily usage cards explain select travel first |
 | Travel screen empty / form / error | As prior next-travel states |
 | Handover screen no travel | CTA to Next travel only |

@@ -789,6 +789,13 @@ export function odometerUnitForCountry(country: string | null | undefined): Odom
   return "km";
 }
 
+/** Open Handover Out summary on OA Vehicle reads (US-119 / ADR-028). */
+export type VehicleOpenOut = {
+  handover_id: string;
+  driver: { id: string; email: string } | null;
+  created_at: string;
+};
+
 export type Vehicle = {
   id: string;
   company_id: string;
@@ -809,6 +816,11 @@ export type Vehicle = {
   warnings: Warning[];
   has_side_images: boolean;
   side_images: Record<VehicleSide, SideImage | null>;
+  /**
+   * Read-only open custody. `null` = no open Out or Individual tenant.
+   * Always present on Vehicle reads (ADR-028).
+   */
+  open_out: VehicleOpenOut | null;
 };
 
 export type VehicleWrite = {
@@ -1061,8 +1073,12 @@ export type ServiceDueItem = {
   next_service_distance_unit: OdometerUnit;
   days_elapsed: number;
   days_overdue: number | null;
+  /** UTC calendar date used for days_elapsed (US-116–118). */
+  as_of_date: string;
   vehicle_mileage: number | null;
   handover_mileage: number;
+  /** max(vehicle.mileage, closed end_distance after baseline); may exceed vehicle_mileage. */
+  service_progress_odometer: number | null;
   distance_remaining: number | null;
   due_by_days: boolean;
   due_by_distance: boolean;

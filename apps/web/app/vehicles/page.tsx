@@ -10,7 +10,13 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell, ErrorRetry } from "../../components/app-shell";
-import { ExpiryBadges, PrimaryLink, Skeleton } from "../../components/ui";
+import {
+  ExpiryBadges,
+  OpenOutCustodyCue,
+  openOutCustodyA11y,
+  PrimaryLink,
+  Skeleton,
+} from "../../components/ui";
 import { themeClasses } from "../../../../design/tailwind.theme";
 import { useAuth } from "../../lib/auth-context";
 import { queryVehicles } from "../../lib/fleet-queries";
@@ -63,17 +69,23 @@ export default function VehiclesPage() {
               <Link
                 href={`/vehicles/${v.id}`}
                 className={`${themeClasses.raised} p-2 min-h-hit flex flex-col gap-0.5`}
-                aria-label={warningA11y(
-                  `${vehicleLabel(v)}, ${v.license_plate}${v.has_side_images ? ", has photos" : ""}`,
-                  v.warnings,
-                  v.custom_expirations,
-                )}
+                aria-label={[
+                  warningA11y(
+                    `${vehicleLabel(v)}, ${v.license_plate}${v.has_side_images ? ", has photos" : ""}`,
+                    v.warnings,
+                    v.custom_expirations,
+                  ),
+                  openOutCustodyA11y(v.open_out),
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
               >
                 <span className={`${themeClasses.label} inline-flex flex-wrap items-center gap-1`}>
                   {vehicleLabel(v)}
                   {v.has_side_images === true ? (
                     <span className={themeClasses.vehicleSidePresence}>Photos</span>
                   ) : null}
+                  <OpenOutCustodyCue openOut={v.open_out} />
                 </span>
                 <span className={themeClasses.caption}>{v.license_plate}</span>
                 {v.mileage != null ? (

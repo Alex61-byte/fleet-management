@@ -16,6 +16,7 @@ import type {
   Warning,
 } from "../domain.ts";
 import {
+  computeServiceRemaining,
   computeWarnings,
   odometerUnitForCountry,
   parseOdometer,
@@ -63,8 +64,10 @@ export class FleetVehicles {
   constructor(private readonly ctx: FleetContext) {}
   async list(claims: AccessClaims, expiring?: boolean) {
     assertCompanyUser(claims);
+    const vehicles = await this.ctx.store.listVehicles(claims.company_id);
+    const openByVehicle = await this.ctx.openOutByVehicleId(claims.company_id);
     let items = await Promise.all(
-      (await this.ctx.store.listVehicles(claims.company_id)).map((v) => this.ctx.vehicleJson(v)),
+      vehicles.map((v) => this.ctx.vehicleJson(v, openByVehicle.get(v.id) ?? null)),
     );
     if (expiring) items = items.filter((v) => v.warnings.length > 0);
     return { items };
@@ -82,7 +85,7 @@ export class FleetVehicles {
       license_plate: licensePlate,
     });
     await this.ctx.store.insertVehicle(vehicle);
-    return this.ctx.vehicleJson(vehicle);
+    return this.ctx.vehicleJson(vehicle, null);
   }
 
   async get(claims: AccessClaims, id: string) {
@@ -172,9 +175,12 @@ export class FleetVehicles {
   async home(claims: AccessClaims) {
     assertCompanyUser(claims);
     const { drivers, vehicles } = await this.ctx.store.counts(claims.company_id);
+    // Home expiring strip does not surface open_out; skip custody lookup.
     const expiring_vehicles = (
       await Promise.all(
-        (await this.ctx.store.listVehicles(claims.company_id)).map((v) => this.ctx.vehicleJson(v)),
+        (await this.ctx.store.listVehicles(claims.company_id)).map((v) =>
+          this.ctx.vehicleJson(v, null),
+        ),
       )
     )
       .filter((v) => v.warnings.length > 0)
@@ -201,9 +207,13 @@ export class FleetVehicles {
       if (!latestByVehicle.has(h.vehicleId)) latestByVehicle.set(h.vehicleId, h);
     }
     const today = utcToday();
-    const todayMs = Date.parse(`${today}T00:00:00.000Z`);
-    /** Server-owned approaching band (US-97 / US-109; rule 174). */
-    const APPROACHING_REMAINING = 2000;
+    const signals = await this.ctx.store.listClosedDailyUsageServiceSignals(claims.company_id);
+    const signalsByVehicle = new Map<string, typeof signals>();
+    for (const s of signals) {
+      const list = signalsByVehicle.get(s.vehicleId) ?? [];
+      list.push(s);
+      signalsByVehicle.set(s.vehicleId, list);
+    }
     type ServiceDueRow = {
       vehicle_id: string;
       vehicle: ReturnType<FleetVehicles["ctx"]["vehicleSummary"]>;
@@ -214,8 +224,10 @@ export class FleetVehicles {
       next_service_distance_unit: VehicleHandover["nextServiceDistanceUnit"];
       days_elapsed: number;
       days_overdue: number | null;
+      as_of_date: string;
       vehicle_mileage: number | null;
       handover_mileage: number;
+      service_progress_odometer: number | null;
       distance_remaining: number | null;
       due_by_days: boolean;
       due_by_distance: boolean;
@@ -225,25 +237,16 @@ export class FleetVehicles {
     for (const vehicle of vehicles) {
       const h = latestByVehicle.get(vehicle.id);
       if (!h) continue;
-      const handoverDay = new Date(h.createdAt).toISOString().slice(0, 10);
-      const handoverMs = Date.parse(`${handoverDay}T00:00:00.000Z`);
-      const daysElapsed = Math.floor((todayMs - handoverMs) / 86_400_000);
-      const dueByDays = daysElapsed >= h.nextServiceDays;
-      let dueByDistance = false;
-      let distanceRemaining: number | null = null;
-      if (vehicle.mileage != null) {
-        const threshold = h.mileage + h.nextServiceDistance;
-        distanceRemaining = Math.round((threshold - vehicle.mileage) * 10) / 10;
-        dueByDistance = vehicle.mileage >= threshold;
-      }
-      const approaching =
-        distanceRemaining != null &&
-        distanceRemaining > 0 &&
-        distanceRemaining <= APPROACHING_REMAINING;
-      if (!dueByDays && !dueByDistance && !approaching) continue;
-      const daysOverdue = dueByDays ? daysElapsed - h.nextServiceDays : null;
-      const service_status: "due" | "approaching" =
-        dueByDays || dueByDistance ? "due" : "approaching";
+      const remaining = computeServiceRemaining({
+        handoverMileage: h.mileage,
+        nextServiceDays: h.nextServiceDays,
+        nextServiceDistance: h.nextServiceDistance,
+        handoverCreatedAt: h.createdAt,
+        vehicleMileage: vehicle.mileage,
+        closedSignals: signalsByVehicle.get(vehicle.id) ?? [],
+        today,
+      });
+      if (!remaining.include || remaining.service_status == null) continue;
       items.push({
         vehicle_id: vehicle.id,
         vehicle: this.ctx.vehicleSummary(vehicle),
@@ -252,14 +255,16 @@ export class FleetVehicles {
         next_service_days: h.nextServiceDays,
         next_service_distance: h.nextServiceDistance,
         next_service_distance_unit: h.nextServiceDistanceUnit,
-        days_elapsed: daysElapsed,
-        days_overdue: daysOverdue,
+        days_elapsed: remaining.days_elapsed,
+        days_overdue: remaining.days_overdue,
+        as_of_date: remaining.as_of_date,
         vehicle_mileage: vehicle.mileage,
         handover_mileage: h.mileage,
-        distance_remaining: distanceRemaining,
-        due_by_days: dueByDays,
-        due_by_distance: dueByDistance,
-        service_status,
+        service_progress_odometer: remaining.service_progress_odometer,
+        distance_remaining: remaining.distance_remaining,
+        due_by_days: remaining.due_by_days,
+        due_by_distance: remaining.due_by_distance,
+        service_status: remaining.service_status,
       });
     }
     items.sort((a, b) => {
@@ -276,5 +281,6 @@ export class FleetVehicles {
     });
     return { items };
   }
+
 
 }

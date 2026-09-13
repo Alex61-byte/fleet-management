@@ -1,11 +1,11 @@
 # Vehicle handovers (shared)
 
-**Stories:** US-51–US-60, **US-110** (driver open-Out notify), **US-111** (OA menu `open_out` — see [global-header.md](global-header.md); no extra OA board this slice)  
+**Stories:** US-51–US-60, **US-110** (driver open-Out notify), **US-111** (OA menu `open_out` — see [global-header.md](global-header.md); no extra OA board this slice), **US-119** (OA vehicle **list + Details** live open-Out cue — see [vehicles.md](vehicles.md); Handovers tab stays history-only)  
 **Rules:** 72–86; **A:** A45–A56; **E:** E45–E58  
-**Surfaces:** Driver create Out/In — [driver-home.md](driver-home.md). Owner/Admin history + detail — [vehicles.md](vehicles.md) **Handovers** tab.  
+**Surfaces:** Driver create Out/In — [driver-home.md](driver-home.md). Owner/Admin history + detail — [vehicles.md](vehicles.md) **Handovers** tab. Owner/Admin **live** open Out + holder — [vehicles.md](vehicles.md) list rows/cards + edit **Details** (**US-119**; not a Handovers-tab redesign).  
 **Density:** Driver web compact / mobile comfortable. Owner/Admin web compact table or list; mobile comfortable rows.  
-**Purpose:** Record **Out** (custody start) and **In** (return) against the driver’s **active next-travel** vehicle; Owner/Admin review **immutable** history per vehicle.  
-**Not in scope:** Edit/delete past handovers; unit picker; side-appearance slots; compliance docs; driver history tab; Owner/Admin create handover; OS push/email/SMS.
+**Purpose:** Record **Out** (custody start) and **In** (return) against the driver’s **active next-travel** vehicle; Owner/Admin review **immutable** history per vehicle; Company OA also sees **current** open Out on fleet list/Details without opening history.  
+**Not in scope:** Edit/delete past handovers; unit picker; side-appearance slots; compliance docs; driver history tab; Owner/Admin create handover; OS push/email/SMS; new open-Out badge tokens beyond existing `badgeNeutral` **Out open**.
 
 Reuse chrome from [_patterns.md](_patterns.md). **No hex** — classes from [tailwind.theme.ts](../tailwind.theme.ts). Prefer existing `panel`, `banner*`, `badge*`, `emptyState`, `vehicleFormTab*`, `buttonPrimary`, `errorText`, `skeleton`. Damage enlarge reuses a **simplified** side-image viewer (`vehicleSideViewer*`).
 
@@ -29,6 +29,7 @@ Reuse chrome from [_patterns.md](_patterns.md). **No hex** — classes from [tai
 | **Out** | Badge **Out** | `badgeNeutral` + text | Custody start; open until In |
 | **In** | Badge **In** | `badgeOk` + text | Closes paired Out |
 | Open Out (driver cue, US-60 / US-110) | Banner + badge | `bannerWarning` + `badgeNeutral` **Out open** | Not color-only; body says complete **Handover In**; same pattern on Start hub |
+| Open Out (OA list/Details, US-119) | Badge + holder caption | `badgeNeutral` **Out open** + `caption` driver / **Unavailable** | Same chip string as driver cue; placement on [vehicles.md](vehicles.md) only — **not** history tab; **not** color-only |
 
 Do **not** invent `badgeOut` / `badgeIn` / `badgeOpenOut` tokens — reuse neutral / success / warning chips.
 

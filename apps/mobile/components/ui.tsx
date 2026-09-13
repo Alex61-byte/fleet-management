@@ -1,4 +1,4 @@
-import type { VehicleCustomExpiration, Warning } from "@fleet/sdk";
+import type { VehicleCustomExpiration, VehicleOpenOut, Warning } from "@fleet/sdk";
 import { warningFieldLabel } from "@fleet/sdk";
 import { Link } from "expo-router";
 import { forwardRef, useState, type ComponentProps, type ReactNode } from "react";
@@ -261,6 +261,36 @@ export function ExpiryBadges({
           </Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+/** US-119 — open Out + holding driver on OA vehicle list/Details. */
+export function openOutHolderLabel(openOut: VehicleOpenOut | null | undefined): string | null {
+  if (!openOut) return null;
+  return openOut.driver?.email?.trim() ? openOut.driver.email : "Unavailable";
+}
+
+export function openOutCustodyA11y(openOut: VehicleOpenOut | null | undefined): string {
+  const holder = openOutHolderLabel(openOut);
+  if (!holder) return "";
+  return holder === "Unavailable"
+    ? "Out open, assigned driver unavailable"
+    : `Out open, assigned to ${holder}`;
+}
+
+export function OpenOutCustodyCue({ openOut }: { openOut: VehicleOpenOut | null | undefined }) {
+  const holder = openOutHolderLabel(openOut);
+  if (!holder) return null;
+  return (
+    <View
+      className="flex-row flex-wrap items-center gap-1"
+      accessibilityLabel={openOutCustodyA11y(openOut)}
+    >
+      <View className="px-1 py-0.5 rounded-sm bg-surface-sunken">
+        <Text className="text-caption font-medium text-text-secondary">Out open</Text>
+      </View>
+      <Text className="text-caption text-text-secondary">{holder}</Text>
     </View>
   );
 }

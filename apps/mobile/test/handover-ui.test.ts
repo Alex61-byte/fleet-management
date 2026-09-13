@@ -29,6 +29,11 @@ describe("vehicle handovers UI (US-51–US-60 mobile)", () => {
   it("handover and travel are dedicated screens with back to home", () => {
     assert.match(travel, /putDriverTravel/);
     assert.match(travel, /Back to Home/);
+    assert.match(travel, /Continue to handover/);
+    assert.match(travel, /router\.replace\("\/\(driver\)\/handover"\)/);
+    assert.match(travel, /KeyboardAvoidingView/);
+    assert.match(travel, /keyboardShouldPersistTaps="handled"/);
+    assert.match(travel, /Keyboard\.dismiss/);
     assert.match(handoverPage, /DriverHandoverPanel/);
     assert.match(handoverPage, /onHandoverSaved/);
     assert.match(handoverPage, /Go to Next travel/);
@@ -52,6 +57,18 @@ describe("vehicle handovers UI (US-51–US-60 mobile)", () => {
     assert.match(history, /No handovers yet/);
     assert.match(history, /Close handover detail/);
     assert.doesNotMatch(history, /deleteHandover|editHandover|onDelete/);
+  });
+
+  it("US-119 owner list and Details show open Out custody cue", () => {
+    const list = readFileSync(join(root, "app/(owner)/vehicles/index.tsx"), "utf8");
+    const ui = readFileSync(join(root, "components/ui.tsx"), "utf8");
+    assert.match(ui, /OpenOutCustodyCue/);
+    assert.match(ui, /Out open/);
+    assert.match(list, /OpenOutCustodyCue/);
+    assert.match(list, /open_out/);
+    assert.match(form, /OpenOutCustodyCue/);
+    assert.match(form, /vehicle\.open_out/);
+    assert.match(form, /Vehicle custody/);
   });
 
   it("damage viewer supports optional title override", () => {

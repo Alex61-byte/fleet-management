@@ -609,15 +609,19 @@ When page specs exist, next specialist is **Senior Software Architect**.
 
 **Acceptance**
 
-- **Given** I am signed in as a driver and my company has at least one vehicle  
+- **Given** I am signed in as a driver and my company has at least one **available** vehicle (no open Handover Out)  
   **When** I open driver home / next travel  
-  **Then** I see company vehicles I can select (make, model, plate).
+  **Then** I see those vehicles I can select (make, model, plate).
 
-- **Given** I select a vehicle  
-  **When** I confirm selection with a valid odometer reading  
-  **Then** that vehicle is my **active** next-travel vehicle and previous active selection (if any) is replaced.
+- **Given** a company vehicle has an open Handover Out (In not completed)  
+  **When** I open next travel  
+  **Then** that vehicle is **not** listed; selecting it via API fails.
 
-- **Given** my company has no vehicles  
+- **Given** I select an available vehicle  
+  **When** I continue  
+  **Then** that vehicle is my **active** next-travel vehicle, previous active selection (if any) is replaced, and I am taken to **Handover** to enter mileage and service data (odometer is not collected on next travel).
+
+- **Given** my company has no available vehicles  
   **When** I open next travel  
   **Then** I see empty state and cannot select.
 
@@ -2284,7 +2288,8 @@ Contracts for docs, issues, owner daily-usage report/CSV, service-due list, dige
 
 - **Given** a company vehicle has an **open Out** (In not done; not voided)  
   **When** I open the OA notification menu  
-  **Then** I see an **open_out** item (vehicle identity; driver identity when known) and may use an optional board/list cue if Design adds one; **no** OS push/email/SMS this slice.
+  **Then** I see an **open_out** item (vehicle identity; driver identity when known); **no** OS push/email/SMS this slice.  
+  **And** vehicle **list/detail** custody cues are **Must** under **US-119** (not menu-only).
 
 - **Given** the Out is closed by In or voided  
   **When** I open the menu (refreshed)  
@@ -2309,3 +2314,129 @@ Contracts for docs, issues, owner daily-usage report/CSV, service-due list, dige
 - **Given** I activate **Privacy**  
   **When** navigation completes  
   **Then** I reach `/privacy`.
+
+## US-119 — Owner/Admin vehicle list & detail show open Out + assigned driver **(Must)**
+
+**As** a Company Owner or Admin  
+**I need** to see when a company vehicle is **Out** (open Handover Out) and **which driver** holds it on the **vehicles list (cards/rows)** and the **vehicle page (detail/form Details)**  
+**So that** custody is visible while browsing or opening a vehicle without relying only on the notification menu or Handovers history.
+
+**Account kind:** **Company** only. **Individual** open-Out path **N/A** (no company driver handovers). **Drivers:** not this surface.
+
+**Cross-links:** Complements **US-111** (menu `open_out`). Does **not** change **US-55/US-56** (Handovers tab = history only). Open/closed/voided = rules **177**, **191**.
+
+**Acceptance**
+
+- **Given** company vehicle V has an **open Out** (In not done; not voided) held by driver D  
+  **When** I view the Owner/Admin **vehicles list** (web or mobile)  
+  **Then** V’s card/row shows **Out** (open custody) and D’s identity when known.
+
+- **Given** the same open Out on V  
+  **When** I open V’s **vehicle page** (detail or edit/form **Details**) as Owner/Admin  
+  **Then** I see **Out** (open custody) and D when known on that surface—not only inside Handovers history rows.
+
+- **Given** V has **no** open Out (never Out, **closed** by In, or **voided**)  
+  **When** I view the list card/row or vehicle page  
+  **Then** the open-Out / assigned-driver custody cue is **absent** (no fabricated holder).
+
+- **Given** the open Out is closed by In or voided  
+  **When** list or detail is refreshed/reopened  
+  **Then** the custody cue is cleared (same lifecycle as **US-111**).
+
+- **Given** Individual Owner  
+  **When** I use my vehicles list or vehicle page  
+  **Then** open-Out / assigned-driver custody cue is **N/A** / absent.
+
+- **Given** open Out exists only in another company  
+  **When** I view my list or detail  
+  **Then** I never see that custody state (company isolation).
+
+- **Given** I am a driver  
+  **When** fleet OA vehicle list/detail applies  
+  **Then** this cue is out of scope (drivers keep **US-60/US-110** only).
+
+## US-116 — End of Day advances remaining service (API) **(Must)**
+
+**As** a Company driver  
+**I need** closing Daily usage (End of Day) to reduce remaining **distance to service** and **time to service** on the vehicle I logged  
+**So that** Service due / maintenance signals track real day-use without me doing math.
+
+**Account kind:** **Company** (driver Daily usage). Individual N/A for driver path.
+
+**Acceptance**
+
+- **Given** I have an **open** Daily usage on vehicle V with stored **usage_date** (Day Start) and I submit valid **End of Day** including **end_distance**  
+  **When** the API closes the row successfully  
+  **Then** authoritative **remaining service** for V is updated/recomputed **on the API only** from that close (distance via **end_distance**; days via **usage_date** calendar vs handover service baseline) per business rules **183–190**.
+
+- **Given** a successful End of Day close  
+  **When** any client displays service remaining / due state  
+  **Then** it uses **API-provided** service-due (or equivalent) fields only — **no** client-side remaining-service formula.
+
+- **Given** End of Day succeeds  
+  **When** the close transaction finishes  
+  **Then** **`vehicle.mileage` is not written** by Daily usage (**A62** unchanged).
+
+- **Given** End of Day is rejected (validation, no open row, offline client block, authz)  
+  **When** the operation fails  
+  **Then** service remaining for V is unchanged by that attempt.
+
+- **Given** Day Start only (row still **open**)  
+  **When** no End of Day has closed the row  
+  **Then** that open row does **not** advance distance-to-service via **end_distance** (no end yet); days logic does not treat an open row as closed progress.
+
+## US-117 — Service due & notifications use daily-usage progress **(Must)**
+
+**As** an Owner or Admin  
+**I need** Service due and service notification items to reflect distance/days progress from **closed** Daily usage  
+**So that** approaching/due stay accurate between handovers even when `vehicle.mileage` was not updated by day logs.
+
+**Acceptance**
+
+- **Given** vehicle V has a latest non-voided handover service baseline (`next_service_days`, `next_service_distance`, handover mileage) **and** one or more **closed** Daily usage rows on V whose **end_distance** / **usage_date** contribute to progress  
+  **When** I open **Service due** (US-97)  
+  **Then** `days_elapsed`, `distance_remaining`, `due_by_days`, `due_by_distance`, and `service_status` (**approaching** | **due**) are computed with **service progress odometer** and **as-of date** rules (**184–185**), not handover+`vehicle.mileage` alone when daily-usage progress is higher.
+
+- **Given** closed Daily usage **end_distance** is the best progress reading and `vehicle.mileage` is null or lower  
+  **When** service-due is listed  
+  **Then** distance remaining still resolves (not forced null solely because `vehicle.mileage` is null) when **end_distance** is usable vs baseline.
+
+- **Given** progress makes `0 < distance_remaining ≤ 2000` or due/overdue by days or distance  
+  **When** I open the OA notification menu  
+  **Then** **service** items follow US-109 using the same API semantics (US-109 unchanged as channel; inputs enriched).
+
+- **Given** no handover service baseline  
+  **When** Daily usage closes on V  
+  **Then** V is still omitted from service-due/service menu (usage alone does not create a service baseline).
+
+- **Given** Individual Owner  
+  **When** Service due runs  
+  **Then** company-driver Daily usage progress is N/A; existing Individual baseline behavior unchanged this slice.
+
+## US-118 — Remaining service authz & non-goals **(Must)**
+
+**As** the product  
+**I need** clear boundaries on who triggers progress and what is out of scope  
+**So that** tenancy and A62 stay intact.
+
+**Acceptance**
+
+- **Given** Driver A closes Daily usage on company vehicle V  
+  **When** Owner/Admin of that company loads service-due  
+  **Then** they see V’s updated remaining service; other companies never do.
+
+- **Given** FE/mobile Daily usage or Service due UI  
+  **When** remaining distance/days are shown or implied  
+  **Then** values come from API responses only (display/formatting allowed; **no** remaining-service arithmetic on clients).
+
+- **Given** this slice  
+  **When** scope is applied  
+  **Then** out of scope: OS push/SMS/new service email; Day Start create field changes beyond existing stored **usage_date**; writing **`vehicle.mileage`** from Daily usage; FE-invented baselines.
+
+## Design Specialist handoff — Daily usage → remaining service (US-116–US-118)
+
+No new screens. Confirm Service due / notification menu copy still API-driven; Daily usage unchanged field set. Optional one-line that EOD advances service on server (no driver service counters).
+
+## Architect handoff — Daily usage → remaining service (US-116–US-118)
+
+Contract/ADR: service-due uses service_progress_odometer + as_of_date including closed Daily usage; A62 held; API-only math.

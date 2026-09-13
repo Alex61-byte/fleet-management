@@ -19,32 +19,53 @@ function statusLabel(row: ServiceDueItem): { text: string; badge: string } {
   return { text: "Due", badge: themeClasses.badgeExpired };
 }
 
+/** Days left / overdue from API days_elapsed only (subtract interval; no FE date math). */
+function daysRemainingLabel(row: ServiceDueItem): string | null {
+  if (row.due_by_days) {
+    if (row.days_overdue != null && row.days_overdue > 0) {
+      return `${row.days_overdue}d overdue`;
+    }
+    return "0d remaining";
+  }
+  const left = row.next_service_days - row.days_elapsed;
+  if (!Number.isFinite(left)) return null;
+  if (left <= 0) return "0d remaining";
+  return `${left}d remaining`;
+}
+
 function reasonLine(row: ServiceDueItem): string {
   const unit = odometerUnitLabel(row.next_service_distance_unit);
   const parts: string[] = [];
-  if (row.service_status === "approaching" && !row.due_by_days && !row.due_by_distance) {
-    if (row.distance_remaining != null) {
-      parts.push(`${row.distance_remaining} ${unit} remaining`);
+  if (row.distance_remaining != null) {
+    if (row.due_by_distance || row.distance_remaining <= 0) {
+      parts.push(`0 ${unit} remaining`);
     } else {
-      parts.push("Approaching by distance");
+      parts.push(`${row.distance_remaining} ${unit} remaining`);
     }
-    return parts.join(" · ");
+  } else if (row.due_by_distance) {
+    parts.push("Due by distance");
   }
-  if (row.due_by_days) {
-    parts.push(
-      row.days_overdue != null && row.days_overdue > 0
-        ? `${row.days_overdue}d overdue`
-        : "Due by days",
-    );
-  }
-  if (row.due_by_distance) {
-    parts.push(
-      row.distance_remaining != null && row.distance_remaining <= 0
-        ? "Due by distance"
-        : "Due by distance",
-    );
-  }
+  const daysPart = daysRemainingLabel(row);
+  if (daysPart) parts.push(daysPart);
   return parts.join(" · ") || "Due";
+}
+
+/** Meta: API progress odometer (closed EOD ends) + baseline interval. */
+function progressLine(row: ServiceDueItem): string {
+  const unit = odometerUnitLabel(row.next_service_distance_unit);
+  const progress =
+    row.service_progress_odometer != null
+      ? row.service_progress_odometer
+      : row.vehicle_mileage;
+  const bits: string[] = [];
+  if (progress != null) {
+    bits.push(`progress odo ${progress}`);
+  }
+  bits.push(`interval ${row.next_service_days}d / ${row.next_service_distance} ${unit}`);
+  if (row.as_of_date) {
+    bits.push(`as of ${row.as_of_date}`);
+  }
+  return bits.join(" · ");
 }
 
 export default function ServiceDuePage() {
@@ -71,6 +92,15 @@ export default function ServiceDuePage() {
     if (ready && me && me.role !== "driver") void load();
   }, [ready, me, load]);
 
+  useEffect(() => {
+    if (!ready || !me || me.role === "driver") return;
+    function onFocus() {
+      void load();
+    }
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [ready, me, load]);
+
   return (
     <AppShell title="Service due">
       {loading ? (
@@ -91,7 +121,6 @@ export default function ServiceDuePage() {
             const label = row.vehicle?.label ?? "Vehicle";
             const plate = row.vehicle?.license_plate ?? "";
             const status = statusLabel(row);
-            const unit = odometerUnitLabel(row.next_service_distance_unit);
             return (
               <li key={row.vehicle_id}>
                 <Link
@@ -106,11 +135,8 @@ export default function ServiceDuePage() {
                     </span>
                     <span className={status.badge}>{status.text}</span>
                   </span>
-                  <span className={themeClasses.caption}>{reasonLine(row)}</span>
-                  <span className={themeClasses.caption}>
-                    Interval {row.next_service_days}d / {row.next_service_distance} {unit}
-                    {row.vehicle_mileage != null ? ` · odo ${row.vehicle_mileage}` : ""}
-                  </span>
+                  <span className={`${themeClasses.caption} font-tabular`}>{reasonLine(row)}</span>
+                  <span className={themeClasses.caption}>{progressLine(row)}</span>
                 </Link>
               </li>
             );

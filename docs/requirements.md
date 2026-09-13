@@ -32,8 +32,8 @@ A company that runs vehicles and drivers has no shared place to:
 - A signed-in **driver** can **select a company vehicle for their next travel** and record the current **odometer** reading. Odometer unit is **miles or kilometres** based on the vehicle’s **country of registration** (not a free choice by the driver). Successful next-travel save **updates vehicle current mileage** so Owner/Admin list/detail reflect it (monotonic when mileage already set).
 - With an active next-travel vehicle, a driver can complete **Handover Out** and **Handover In** (required mileage, next service days, next service distance; optional damages text/images). Successful handover **updates vehicle current mileage**.
 - **Service approaching / due:** Owner/Admin **Service due** board and **notification menu** signal vehicles **approaching** service when remaining distance is **≤ 2000** (same unit as odometer / next_service_distance) and still list fully **due/overdue** from handover next-service days/distance. In-app only this slice (no OS push/SMS; compliance digest email not extended).
-- **Open Out incomplete:** Driver who holds an **open Out** (In not done) gets a clear **driver home / handover** cue. **Company** Owner/Admin see **open_out** items in the **notification menu** (vehicle + driver when known). No OS push/email/SMS for open Out this slice. Individual open-Out path N/A.
-- With an active next-travel vehicle, a driver can log **Daily usage** as **Day Start** then **End of Day** (independently savable). Day Start requires date, start place, start distance, start time (creates **open** row). End of Day requires end place, end distance, end time (closes the open row). Optional **refuel amount** and **refuel at mileage** on either save. Multiple **closed** entries per day allowed; at most one **open** per driver. **Does not** update vehicle mileage. Driver lists **own** entries (open + closed).
+- **Open Out incomplete:** Driver who holds an **open Out** (In not done) gets a clear **driver home / handover** cue. **Company** Owner/Admin see **open Out + assigned driver** on **vehicle list cards** and **vehicle detail/form** (US-119), and **open_out** items in the **notification menu** (vehicle + driver when known, US-111). No OS push/email/SMS for open Out this slice. Individual open-Out path N/A.
+- With an active next-travel vehicle, a driver can log **Daily usage** as **Day Start** then **End of Day** (independently savable). Day Start requires date, start place, start distance, start time (creates **open** row). End of Day requires end place, end distance, end time (closes the open row). Optional **refuel amount** and **refuel at mileage** on either save. Multiple **closed** entries per day allowed; at most one **open** per driver. **Does not** update vehicle mileage. **Closed** Daily usage advances **API-side** remaining service (distance from `end_distance`; days from `usage_date` vs handover baseline) for Service due / service notifications without FE math (US-116–118). Driver lists **own** entries (open + closed).
 - Owner/Admin vehicle UI has a **third tab Handovers** (history + detail, read-only). **Drivers do not** see that tab. **Company** Owner/Admin Daily usage report + CSV include status and refuel fields (US-96).
 - An unsigned-in person can choose **Company** or **Individual** account creation.
 - **Company** path still creates an organization with registration number, VAT, address, and first **Owner**.
@@ -162,7 +162,7 @@ Paid **pricing plans** (2 Individual + 2 Company) are defined in [pricing-plans.
 - **Billing implementation** (payment provider, invoices, entitlement hard-blocks in API); marketing CMS. **Plan catalog** lives in [pricing-plans.md](pricing-plans.md). **Public pricing page** (`/pricing`, US-91–US-92) is in scope as static catalog UI only—not checkout
 - Dispatch, live tracking, geofence, multi-stop trip planning. **Exception:** structured **Handover Out/In** (US-51+) and **Daily usage** day logs (US-61+) are in scope (not full dispatch)
 - Edit/delete historical handovers; Owner/Admin-created handovers; driver access to Owner Handovers admin tab
-- Owner/Admin Daily usage reporting/export; edit/delete of Daily usage; GPS auto-fill of places; photos on Daily usage; auto write-through of Daily usage distances to `vehicle.mileage`
+- Edit/delete of Daily usage; GPS auto-fill of places; photos on Daily usage; auto write-through of Daily usage distances to `vehicle.mileage`; FE-computed remaining service; OS push for service from Daily usage
 - Dispatcher or mechanic roles
 - Two separate mobile store listings / two apps
 - Driver fleet / Owner-Admin management UI (drivers still get auth + minimal home only on web)
@@ -243,6 +243,8 @@ Paid **pricing plans** (2 Individual + 2 Company) are defined in [pricing-plans.
 | **Must** | Distance unit from country (A34); end ≥ start on close; start ≥ max(vehicle.mileage, latest closed end on vehicle); end time ≥ start time same date |
 | **Must** | At most one open per driver; multiple closed per day OK; driver lists own open+closed; closed immutable; open only via End of Day |
 | **Must** | Daily usage does **not** update `vehicle.mileage` |
+| **Must** | On End of Day close, API advances authoritative remaining service (distance + days) from end_distance + usage_date; no FE remaining-service math (US-116–118) |
+| **Must** | Service due + service menu use service_progress_odometer / as_of_date including closed Daily usage (US-97/109 extended) |
 | **Must** | Offline: Day Start and End of Day submit disabled with warning |
 | **Must** | Company OA Daily usage report/CSV includes status + refuel fields |
 | **Should** | Driver home hub cue for Daily usage when next-travel active |

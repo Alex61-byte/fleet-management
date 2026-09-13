@@ -24,7 +24,14 @@ type VehicleFormTab = "details" | "images" | "handovers";
 import { ConfirmDeleteDialog, TrashIcon } from "./confirm-delete-dialog";
 import { VehicleHandoversTab } from "./vehicle-handovers-tab";
 import { VehicleSideImageViewer } from "./vehicle-side-image-viewer";
-import { Field, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "./ui";
+import {
+  Field,
+  OpenOutCustodyCue,
+  PrimaryButton,
+  SecondaryButton,
+  SelectInput,
+  TextInput,
+} from "./ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { prepareVehicleSideImageForUpload } from "../lib/prepare-side-image";
@@ -83,6 +90,7 @@ function normalizeVehicle(v: Vehicle): Vehicle {
   return {
     ...v,
     custom_expirations: v.custom_expirations ?? [],
+    open_out: v.open_out ?? null,
     side_images,
     has_side_images:
       typeof v.has_side_images === "boolean"
@@ -518,6 +526,11 @@ export function VehicleForm({
 
       {tab === "details" ? (
         <View className="gap-2 pt-2">
+          {companyTenant && vehicle?.id && vehicle.open_out ? (
+            <View accessibilityLabel="Vehicle custody">
+              <OpenOutCustodyCue openOut={vehicle.open_out} />
+            </View>
+          ) : null}
           <Field label="Make">
             <SelectInput
               label="Make"
