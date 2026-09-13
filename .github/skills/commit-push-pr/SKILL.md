@@ -26,26 +26,33 @@ Ship local work safely: review → commit → push → pull request. Do **not** 
 | Explicit HEREDOC messages | Always create commits with a HEREDOC body so subject/body formatting is reliable |
 | Push after commit | After a successful commit, push the current branch (auto-push). Then open or update a PR |
 
+## Token discipline (this skill)
+
+- **Commit tier only** — no feature pipeline, Explore, product-doc reads, or specialists.
+- Inspect with **cheap git** (below). Do **not** open `stories.md`, ADRs, or app sources to “understand the diff” unless the user asked for a detailed PR body and `diff --stat` is insufficient.
+- Chat: branch, staged names, subject, push/PR URL — **≤10 lines**.
+
 ## Procedure
 
 ### 1. Inspect repository state
 
-Run in parallel:
+**Default (parallel, lean):**
 
 ```bash
 git status -sb
-git remote -v
 git branch -vv
-git log -8 --oneline
-git diff
-git diff --cached
+git log -5 --oneline
+git diff --stat
+git diff --cached --stat
 ```
 
-Note:
+Add only if needed:
 
-- Current branch and upstream tracking
-- Whether `main`/`master` has no commits yet or remote ref is gone (bootstrap case)
-- Untracked vs modified vs staged paths
+- `git remote -v` — first push / no upstream / remote unclear
+- `git diff -- <path>` — single path when staging scope is ambiguous (not full-tree diff by default)
+- `git diff --cached` — full cached diff only to draft an accurate message when stat is opaque
+
+Note: branch/upstream, untracked vs modified, nothing to commit.
 
 ### 2. Secret and safety scan
 

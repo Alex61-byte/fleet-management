@@ -26,16 +26,22 @@ Start work on a **new topic branch** that shares history with the repo default b
 | No commit here | Do not stage/commit unless the user also asked to ship (hand off to `commit-push-pr`) |
 | Clean rename | Branch names: lowercase, hyphens, slash prefix; no spaces or uppercase |
 
+## Token discipline
+
+- **Commit/git tier** — git commands only; no product docs, Explore, specialists, or feature pipeline.
+- Chat: branch name + base + upstream — **≤6 lines**.
+
 ## Procedure
 
 ### 1. Inspect state
 
 ```bash
 git status -sb
-git remote -v
 git branch -vv
 git rev-parse --abbrev-ref HEAD
 ```
+
+Add `git remote -v` only if upstream/remote is unclear.
 
 Note:
 

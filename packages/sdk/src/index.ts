@@ -196,6 +196,206 @@ export function vehiclesNavA11yLabel(urgency: VehiclesNavUrgency): string {
   }
 }
 
+/** US-120 — custody filter on OA vehicles list (Company). */
+export type VehicleCustodyFilter = "all" | "out" | "in";
+
+/**
+ * US-120 — which expiration drives list sort.
+ * `any` = min/max across insurance, inspection, road tax, customs (not registration).
+ * Built-ins include registration when sorting that field only.
+ * Customs use `custom:<uuid>`.
+ */
+export type VehicleListSortField =
+  | "any"
+  | "insurance_on"
+  | "inspection_on"
+  | "road_tax_on"
+  | "registration_on"
+  | `custom:${string}`;
+
+export type VehicleListSortDirection = "asc" | "desc";
+
+/** Composite list sort; `default` keeps load order. */
+export type VehicleListSort =
+  | "default"
+  | "expiration_asc"
+  | "expiration_desc"
+  | {
+      field: VehicleListSortField;
+      direction: VehicleListSortDirection;
+    };
+
+/** Built-in sort field labels (US-120). */
+export const VEHICLE_LIST_SORT_BUILTIN_FIELDS: readonly {
+  field: Exclude<VehicleListSortField, "any" | `custom:${string}`>;
+  label: string;
+}[] = [
+  { field: "insurance_on", label: "Insurance" },
+  { field: "inspection_on", label: "Inspection" },
+  { field: "road_tax_on", label: "Road tax" },
+  { field: "registration_on", label: "Registration" },
+];
+
+type VehicleListViewRow = {
+  id: string;
+  make?: string | null;
+  model?: string | null;
+  license_plate?: string | null;
+  insurance_on?: string | null;
+  inspection_on?: string | null;
+  road_tax_on?: string | null;
+  registration_on?: string | null;
+  custom_expirations?: Iterable<
+    Pick<VehicleCustomExpiration, "id" | "label" | "expires_on">
+  > | null;
+  open_out?: { handover_id: string } | null;
+};
+
+/** Normalize legacy string sorts and object form. */
+export function normalizeVehicleListSort(
+  sort: VehicleListSort | undefined,
+): { field: VehicleListSortField; direction: VehicleListSortDirection } | "default" {
+  if (!sort || sort === "default") return "default";
+  if (sort === "expiration_asc") return { field: "any", direction: "asc" };
+  if (sort === "expiration_desc") return { field: "any", direction: "desc" };
+  return sort;
+}
+
+/** Relevant expiration ISO dates for `any` sort (registration excluded). */
+export function vehicleExpirationDates(
+  vehicle: VehicleListViewRow,
+): string[] {
+  const dates: string[] = [];
+  for (const field of VEHICLE_SECTION_FIELDS) {
+    const value = vehicle[field];
+    if (value) dates.push(value);
+  }
+  for (const row of vehicle.custom_expirations ?? []) {
+    if (row.expires_on) dates.push(row.expires_on);
+  }
+  return dates;
+}
+
+/** Date ISO for a specific sort field, or null when missing. */
+export function vehicleExpirationForSortField(
+  vehicle: VehicleListViewRow,
+  field: VehicleListSortField,
+): string | null {
+  if (field === "any") return null;
+  if (field === "insurance_on") return vehicle.insurance_on ?? null;
+  if (field === "inspection_on") return vehicle.inspection_on ?? null;
+  if (field === "road_tax_on") return vehicle.road_tax_on ?? null;
+  if (field === "registration_on") return vehicle.registration_on ?? null;
+  const customId = field.slice("custom:".length);
+  for (const row of vehicle.custom_expirations ?? []) {
+    if (row.id === customId && row.expires_on) return row.expires_on;
+  }
+  return null;
+}
+
+/** Soonest (min) expiration ISO among any-sort fields, or null when undated. */
+export function vehicleSoonestExpiration(
+  vehicle: VehicleListViewRow,
+): string | null {
+  const dates = vehicleExpirationDates(vehicle);
+  if (!dates.length) return null;
+  return dates.reduce((a, b) => (a < b ? a : b));
+}
+
+/** Furthest (max) expiration ISO among any-sort fields, or null when undated. */
+export function vehicleFurthestExpiration(
+  vehicle: VehicleListViewRow,
+): string | null {
+  const dates = vehicleExpirationDates(vehicle);
+  if (!dates.length) return null;
+  return dates.reduce((a, b) => (a > b ? a : b));
+}
+
+/** Sort key date for field + direction; null ⇒ undated (sort last). */
+export function vehicleListSortKeyDate(
+  vehicle: VehicleListViewRow,
+  field: VehicleListSortField,
+  direction: VehicleListSortDirection,
+): string | null {
+  if (field === "any") {
+    return direction === "asc"
+      ? vehicleSoonestExpiration(vehicle)
+      : vehicleFurthestExpiration(vehicle);
+  }
+  return vehicleExpirationForSortField(vehicle, field);
+}
+
+export function filterVehiclesByCustody<T extends VehicleListViewRow>(
+  vehicles: Iterable<T>,
+  filter: VehicleCustodyFilter,
+): T[] {
+  const items = Array.from(vehicles);
+  if (filter === "all") return items;
+  if (filter === "out") return items.filter((v) => v.open_out != null);
+  return items.filter((v) => v.open_out == null);
+}
+
+function vehicleIdentityKey(v: VehicleListViewRow): string {
+  const label = `${(v.make ?? "").trim()} ${(v.model ?? "").trim()}`.trim().toLowerCase();
+  const plate = (v.license_plate ?? "").trim().toLowerCase();
+  return `${label}\0${plate}\0${v.id}`;
+}
+
+/**
+ * US-120 — sort vehicles. `default` preserves input order.
+ * Field sorts: missing dates last; tie-break identity.
+ */
+export function sortVehiclesByExpiration<T extends VehicleListViewRow>(
+  vehicles: Iterable<T>,
+  sort: VehicleListSort,
+): T[] {
+  const items = Array.from(vehicles);
+  const normalized = normalizeVehicleListSort(sort);
+  if (normalized === "default") return items;
+  const { field, direction } = normalized;
+  const asc = direction === "asc";
+  return items.slice().sort((a, b) => {
+    const da = vehicleListSortKeyDate(a, field, direction);
+    const db = vehicleListSortKeyDate(b, field, direction);
+    if (da == null && db == null) {
+      return vehicleIdentityKey(a).localeCompare(vehicleIdentityKey(b));
+    }
+    if (da == null) return 1;
+    if (db == null) return -1;
+    if (da !== db) {
+      if (asc) return da < db ? -1 : 1;
+      return da > db ? -1 : 1;
+    }
+    return vehicleIdentityKey(a).localeCompare(vehicleIdentityKey(b));
+  });
+}
+
+/** Unique custom expiration definitions across a list (stable by first-seen id). */
+export function collectVehicleListCustomSortFields(
+  vehicles: Iterable<VehicleListViewRow>,
+): { field: `custom:${string}`; label: string }[] {
+  const out: { field: `custom:${string}`; label: string }[] = [];
+  const seen = new Set<string>();
+  for (const v of vehicles) {
+    for (const row of v.custom_expirations ?? []) {
+      if (!row.id || seen.has(row.id)) continue;
+      seen.add(row.id);
+      const label = (row.label ?? "").trim() || "Custom";
+      out.push({ field: `custom:${row.id}`, label });
+    }
+  }
+  return out;
+}
+
+/** Filter then sort for list views (US-120). */
+export function projectVehiclesList<T extends VehicleListViewRow>(
+  vehicles: Iterable<T>,
+  opts: { custody?: VehicleCustodyFilter; sort?: VehicleListSort } = {},
+): T[] {
+  const filtered = filterVehiclesByCustody(vehicles, opts.custody ?? "all");
+  return sortVehiclesByExpiration(filtered, opts.sort ?? "default");
+}
+
 /** US-72 / US-89 compliance notification menu item (client-derived; ADR-017 / ADR-019). */
 export type ComplianceNotificationField = Exclude<
   WarningField,

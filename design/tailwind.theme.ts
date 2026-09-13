@@ -214,11 +214,23 @@ export const themeClasses = {
   publicDescriptionTitle: "font-sans text-section font-semibold text-text-primary",
   publicDescriptionBody: "font-sans text-body font-regular text-text-primary",
   publicDescriptionMeta: "font-sans text-caption font-regular text-text-secondary",
+  /** Pricing kind toggle chips (Individual / Company). */
   pricingKindToggle: "flex flex-row flex-wrap gap-1 items-center",
   pricingKindOption:
     "min-h-hit px-2 rounded-md text-label font-medium border border-border bg-surface-raised text-text-primary inline-flex items-center justify-center",
   pricingKindOptionSelected:
     "min-h-hit px-2 rounded-md text-label font-semibold border border-brand bg-brand-subtle text-text-primary inline-flex items-center justify-center",
+  /** Labeled select control (list toolbar US-120, forms). */
+  selectField: "flex flex-col gap-0.5 min-w-0 shrink-0",
+  selectControl:
+    "relative block w-full min-h-hit rounded-md border border-border bg-surface-raised",
+  selectControlHover: "border-border bg-surface-sunken",
+  selectControlFocus: "border-focus shadow-ring",
+  selectControlError: "border-danger",
+  selectNative:
+    "appearance-none w-full min-h-hit pl-1.5 pr-2.5 rounded-md bg-transparent text-label font-medium text-text-primary outline-none cursor-pointer",
+  selectChevron:
+    "pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 text-text-secondary inline-flex items-center justify-center",
   pricingGrid: "grid grid-cols-1 md:grid-cols-2 gap-3 w-full",
   pricingCard:
     "bg-surface-raised border border-border rounded-lg shadow-raised p-3 flex flex-col gap-2 h-full",
@@ -320,6 +332,11 @@ export const themeClasses = {
   pageHeaderActions: "flex flex-row items-center gap-1",
   toolbar:
     "h-hit flex flex-row items-center gap-1 px-1.5 bg-surface-raised border-b border-divider",
+  /** List filter/sort bar — auto height (labeled selects); do not use fixed `toolbar` h-hit. */
+  listToolbar:
+    "flex flex-row flex-wrap items-end gap-2 px-1.5 py-1.5 bg-surface-raised border-b border-divider",
+  listToolbarCount:
+    "font-sans text-caption font-regular text-text-secondary font-tabular tabular-nums shrink-0 pb-1.5",
   raised: "bg-surface-raised border border-border rounded-lg shadow-raised",
   panel: "bg-surface-raised border border-border rounded-lg shadow-raised p-3",
   kpi: "bg-surface-raised border border-border rounded-lg shadow-raised p-2 min-h-hit",
@@ -376,7 +393,10 @@ export const themeClasses = {
   buttonFocus: "shadow-ring",
   input:
     "min-h-hit px-1.5 rounded-md bg-surface-raised border border-border text-body text-text-primary",
-  /** Web native <select>: hide UA arrow; reserve end padding for custom chevron at right-0.5 (4px). */
+  /**
+   * Web native `<select>` addon when used bare with `input`.
+   * Prefer `selectControl` + `selectNative` + `SelectInput` for toolbar/forms.
+   */
   selectInput: "appearance-none pr-2.5",
   inputHover: "bg-surface-sunken border-border",
   inputFocus: "border-focus shadow-ring",

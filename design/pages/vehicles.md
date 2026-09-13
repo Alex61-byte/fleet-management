@@ -1,9 +1,9 @@
 # Vehicles (list, create, edit)
 
-**Stories:** US-11, US-12, US-13, US-15, **US-28** (nav/tab urgency — chrome only; see [\_patterns.md](_patterns.md#vehicles-nav--tab-urgency-us-28--states--stacking)), **US-35–US-39** (optional side appearance images), **US-41–US-44** (larger side previews + view-only zoom viewer), **US-45–US-49** (optional vehicle mileage / kilometres), **US-55–US-57** (Owner/Admin **Handovers** tab — history + detail, read-only), **US-86–US-90** (custom expiration definitions on Details), **US-119** (Company Owner/Admin **open Out + holding driver** on list rows/cards **and** edit **Details** — not history-only)  
+**Stories:** US-11, US-12, US-13, US-15, **US-28** (nav/tab urgency — chrome only; see [\_patterns.md](_patterns.md#vehicles-nav--tab-urgency-us-28--states--stacking)), **US-35–US-39** (optional side appearance images), **US-41–US-44** (larger side previews + view-only zoom viewer), **US-45–US-49** (optional vehicle mileage / kilometres), **US-55–US-57** (Owner/Admin **Handovers** tab — history + detail, read-only), **US-86–US-90** (custom expiration definitions on Details), **US-119** (Company Owner/Admin **open Out + holding driver** on list rows/cards **and** edit **Details** — not history-only), **US-120** (list **filter In/Out** + **sort by expirations** including custom)  
 **Density:** Web compact **table**; mobile comfortable **rows**. **Company** Owner/Admin **and** **Individual** Owner (own tenant only — US-81).  
-**Purpose:** Fleet records: **Make** + **Model** (two free-text fields), plate, optional **current mileage** (odometer reading; unit Miles/Kilometers from country), insurance, inspection, country of registration, road tax **dates**, optional **custom expiration** rows (label + date; max 10), plus optional **appearance photos** from four sides (**FRONT**, **LEFT**, **RIGHT**, **BACK**), plus **handover history** (Out/In) on a third tab. Warn on list **and** detail (BA Q8 — design: **both**). Country is a text field, not a catalog. Make/Model are free text — **no** make/model catalog dropdowns. Compliance stays **dates only** — **no** insurance/inspection/tax/registration/custom **document** upload (A2). Side images are **not** compliance documents (A35–A40). Handover damage photos are **not** side-appearance slots (A50, A56). **US-41–US-44:** larger Images-tab frames; filled sides open a **view-only** zoom viewer; dismiss leaves data unchanged. **US-45–US-49:** optional mileage on Details tab + list when present (rules 64–71). **US-55–US-56:** Handovers tab list + detail; **no** edit/delete (E57). **US-86–US-90:** custom expirations CRUD on **Details** only — same A1 badges as insurance/inspection/road tax; no separate pages; built-in four dates unchanged. **US-119:** when a company vehicle has an **open Handover Out** (In not done; not voided), show **Out open** + holding driver on the **list row/card** and on **edit Details** (Company OA only). Complements menu `open_out` ([global-header.md](global-header.md)); does **not** redesign Handovers history. Shared handover patterns: [handover.md](handover.md).  
-**Chrome:** Authenticated **management** shell. Sidebar / tab **Vehicles** selected when on this area. No search. **US-28:** Vehicles nav/tab may show red/orange urgency fill from **tenant**-wide worst section dates — pattern chrome, not list badges. **Should (US-89):** worst-wins urgency may include custom expiration dates with the same 7-day bands. **Individual:** same Vehicles area; no Drivers/Admins chrome beside it.  
+**Purpose:** Fleet records: **Make** + **Model** (two free-text fields), plate, optional **current mileage** (odometer reading; unit Miles/Kilometers from country), insurance, inspection, country of registration, road tax **dates**, optional **custom expiration** rows (label + date; max 10), plus optional **appearance photos** from four sides (**FRONT**, **LEFT**, **RIGHT**, **BACK**), plus **handover history** (Out/In) on a third tab. Warn on list **and** detail (BA Q8 — design: **both**). Country is a text field, not a catalog. Make/Model are free text — **no** make/model catalog dropdowns. Compliance stays **dates only** — **no** insurance/inspection/tax/registration/custom **document** upload (A2). Side images are **not** compliance documents (A35–A40). Handover damage photos are **not** side-appearance slots (A50, A56). **US-41–US-44:** larger Images-tab frames; filled sides open a **view-only** zoom viewer; dismiss leaves data unchanged. **US-45–US-49:** optional mileage on Details tab + list when present (rules 64–71). **US-55–US-56:** Handovers tab list + detail; **no** edit/delete (E57). **US-86–US-90:** custom expirations CRUD on **Details** only — same A1 badges as insurance/inspection/road tax; no separate pages; built-in four dates unchanged. **US-119:** when a company vehicle has an **open Handover Out** (In not done; not voided), show **Out open** + holding driver on the **list row/card** and on **edit Details** (Company OA only). Complements menu `open_out` ([global-header.md](global-header.md)); does **not** redesign Handovers history. **US-120:** list toolbar filter custody **All / Out / In** (Company) and sort by expirations (Company + Individual). Shared handover patterns: [handover.md](handover.md).  
+**Chrome:** Authenticated **management** shell. Sidebar / tab **Vehicles** selected when on this area. **No free-text search** this slice. **US-28:** Vehicles nav/tab may show red/orange urgency fill from **tenant**-wide worst section dates — pattern chrome, not list badges. **Should (US-89):** worst-wins urgency may include custom expiration dates with the same 7-day bands. **Individual:** same Vehicles area; no Drivers/Admins chrome beside it; **no** In/Out filter (US-120).  
 **Parity (A16):** Company Owner/Admin: list / create / edit / side-image manage **and** side-image viewer **and** Handovers history on web + management mobile. **Individual Owner:** same list / create / edit **Details** (identity, built-in dates, **custom expirations**, mileage) only — **omit Images and Handovers tabs** (A86, E80); **US-119 custody cue N/A** (no company driver handovers). Drivers have **no** side-image manage or viewer UI (A40, E38), **no** custom-expiration manage UI, and **no** Handovers history tab (E55). Management roles **do not** create handovers here (driver-only create — E54).
 
 ## List — web
@@ -13,11 +13,29 @@ pageHeader
   pageTitle Vehicles
   pageSubtitle Insurance, inspection, road tax, registration, and other dates
   pageHeaderActions buttonPrimary Add vehicle
-toolbar
-  caption font-tabular “{n} vehicles”
+listToolbar (US-120) — auto height; not fixed toolbar h-hit
+  listToolbarCount “{n} vehicles” | “{shown} of {total}”
+  [Company] Custody · SelectInput All | Out | In
+  Sort by · SelectInput Default order | Any expiration | Insurance | Inspection | Road tax | Registration | {custom labels in fleet}
+  [when Sort by ≠ Default] Order · SelectInput Soonest first | Furthest first
 tableWrap sticky header
   Vehicle | Plate | Mileage | Country | Insurance | Inspection | Road tax | Registration
 ```
+
+### List filter & sort toolbar (US-120)
+
+| Control | Audience | Options | Notes |
+| --- | --- | --- | --- |
+| **Custody** filter | **Company** OA only | **All** (default) · **Out** · **In** | **`SelectInput`** overline **Custody**. Out = `open_out`; In = no open Out. **Individual:** omit. |
+| **Sort by** | Company + Individual | **Default order** · **Any expiration** · **Insurance** · **Inspection** · **Road tax** · **Registration** · each distinct **custom** label on the loaded fleet | Overline **Sort by**. **Any** = min/max of insurance, inspection, road tax, customs (**not** registration). Single-field sorts use that date only (registration OK only when Sort by = Registration). Missing date last. Tie-break identity. |
+| **Order** | When Sort by ≠ Default | **Soonest first** · **Furthest first** | Overline **Order**. Hidden for Default. |
+| Count caption | All | `{n} vehicles` or `{shown} of {total}` when filter active | `listToolbarCount` |
+| Empty filter | Fleet non-empty, filter matches 0 | Title **No vehicles match.** sentence **Try a different custody filter or sort.** **No** primary Add CTA | Distinct from global empty |
+| Tokens | — | `listToolbar` + `listToolbarCount` + `selectField` / `selectControl` / `selectNative` / `selectChevron` + `overline` | Auto-height bar (**not** fixed `toolbar` `h-hit`). Styled select; **no** hex; mobile sheet ≥44pt |
+
+- Filter + sort apply to the **in-memory list** after load (client projection). Changing filter/sort does not re-fetch unless product later adds server params.
+- Controls sit in list toolbar **above** rows; do not replace page header Add.
+- Mobile: same labeled selects stacked under app bar (raised trigger + bottom sheet).
 
 | Column | Class | Content |
 | --- | --- | --- |

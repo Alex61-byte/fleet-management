@@ -2355,6 +2355,46 @@ Contracts for docs, issues, owner daily-usage report/CSV, service-due list, dige
   **When** fleet OA vehicle list/detail applies  
   **Then** this cue is out of scope (drivers keep **US-60/US-110** only).
 
+## US-120 — Owner/Admin vehicles list filter (In/Out) and sort by expirations **(Must)**
+
+**As** a Company Owner or Admin (and Individual Owner for sort)  
+**I need** to **filter** the vehicles list by custody (**Out** = open Handover Out; **In** = no open Out) and **sort** by expiration urgency including **custom expirations**  
+**So that** I can find out-with-driver assets and nearest compliance dates without scanning the full list.
+
+**Account kind:** **Filter In/Out** — **Company** only (Individual open-Out N/A; filter control omitted or All-only). **Sort by expirations** — Company **and** Individual. **Drivers:** not this surface.
+
+**Cross-links:** Uses list `open_out` (**US-119** / ADR-028). Expiration sort fields = **Any** (insurance/inspection/road tax/customs; **not** registration), each built-in including **registration**, and each custom id/label on the fleet (**US-86–US-89**). Client-side on already-loaded list is OK this slice (no required new list query params).
+
+**Acceptance**
+
+- **Given** I open the Owner/Admin **vehicles list** (web or mobile) as **Company** OA with a non-empty fleet  
+  **When** the list chrome is ready  
+  **Then** I can set custody filter **All** | **Out** | **In**, **Sort by** (Default · Any · each built-in type · each custom label present), and **Order** Soonest/Furthest when Sort by ≠ Default.
+
+- **Given** some vehicles have **open Out** and others do not  
+  **When** I filter **Out**  
+  **Then** only vehicles with open Out remain; **In** shows only vehicles without open Out; **All** shows the full set (subject to sort).
+
+- **Given** vehicles have mixed built-in and **custom** expiration dates  
+  **When** I Sort by **Any expiration** + Soonest first  
+  **Then** order uses the **earliest** relevant date per vehicle among insurance, inspection, road tax, and custom `expires_on` (registration excluded from **Any**); vehicles with **no** such dates sort after dated ones (stable secondary key OK).
+
+- **Given** I Sort by a **single** type (e.g. Insurance, Registration, or a custom label) + Furthest first  
+  **When** the list updates  
+  **Then** order uses only that field’s date (asc/desc per Order); missing that date sorts after dated vehicles.
+
+- **Given** Individual Owner  
+  **When** I use the vehicles list  
+  **Then** expiration **sort** is available; **In/Out filter** is **N/A** / omitted (no company handovers).
+
+- **Given** filter yields zero rows while the fleet is non-empty  
+  **When** I view the list  
+  **Then** I see an empty-filter state (not the global “No vehicles yet” create CTA) and can change filter/sort.
+
+- **Given** I am a driver  
+  **When** OA vehicles list applies  
+  **Then** filter/sort chrome is out of scope.
+
 ## US-116 — End of Day advances remaining service (API) **(Must)**
 
 **As** a Company driver  

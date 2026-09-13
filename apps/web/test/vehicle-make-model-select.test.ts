@@ -9,11 +9,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 describe("vehicle make/model catalog select (web)", () => {
   const form = readFileSync(join(root, "components/vehicle-form.tsx"), "utf8");
   const ui = readFileSync(join(root, "components/ui.tsx"), "utf8");
+  const theme = readFileSync(join(root, "../../design/tailwind.theme.ts"), "utf8");
 
   it("uses shared catalog selects with Other free-text fallback", () => {
     assert.match(ui, /export function SelectInput/);
-    assert.match(ui, /right-0\.5/);
-    assert.match(ui, /appearance-none|selectInput/);
+    assert.match(ui, /selectChevron|SelectChevron/);
+    assert.match(theme, /selectChevron:[\s\S]*right-0\.5/);
+    assert.match(ui, /selectNative|selectControl|appearance-none/);
     assert.match(form, /vehicleCatalogMakes/);
     assert.match(form, /vehicleCatalogModelsForMake/);
     assert.match(form, /VEHICLE_CATALOG_OTHER/);

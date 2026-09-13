@@ -16,9 +16,10 @@ Follow [.github/copilot-instructions.md](../copilot-instructions.md). **Auto-adv
 4. Product/UX/contract change only if Architect flags → minimal BA/Design delta, then implement.
 
 ## Token rules
-- Grep/read failing file first; no monorepo tour
-- Tests: pattern or file under test; tail output
-- User reply: cause → fix path → verify
+- **Micro first** (see copilot-instructions size tier)
+- Grep/read failing file first; no monorepo tour; no Explore if path known
+- Tests: pattern or file under test; tail -30
+- User reply ≤10 lines: cause → fix path → verify
 
 ## Done
 Root cause stated, fix verified, owners match assignment.
