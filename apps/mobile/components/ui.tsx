@@ -58,6 +58,15 @@ export const TextInput = forwardRef<
   );
 });
 
+function SelectChevronGlyph() {
+  return (
+    <Text className="text-caption text-text-secondary" accessibilityElementsHidden>
+      ▾
+    </Text>
+  );
+}
+
+/** Styled select trigger + sheet (overline label, raised control, chevron). */
 export function SelectInput({
   label,
   value,
@@ -78,20 +87,29 @@ export function SelectInput({
   const display = selected?.label || placeholder;
 
   return (
-    <>
+    <View className="gap-0.5 min-w-0">
+      <Text className="text-overline font-semibold uppercase tracking-wide text-text-secondary">
+        {label}
+      </Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityState={{ disabled: Boolean(disabled), expanded: open }}
         disabled={disabled}
         onPress={() => setOpen(true)}
-        className={`min-h-hit px-2 rounded-md bg-surface border border-border justify-center ${
+        className={`min-h-hit px-1.5 rounded-md bg-surface-raised border border-border flex-row items-center justify-between gap-1 shadow-raised ${
           disabled ? "opacity-50" : ""
         }`}
       >
-        <Text className={`text-body ${selected ? "text-text-primary" : "text-text-secondary"}`}>
+        <Text
+          className={`text-label font-medium flex-1 ${
+            selected ? "text-text-primary" : "text-text-secondary"
+          }`}
+          numberOfLines={1}
+        >
           {display}
         </Text>
+        <SelectChevronGlyph />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable
@@ -100,10 +118,10 @@ export function SelectInput({
           accessibilityLabel={`Dismiss ${label}`}
         >
           <Pressable
-            className="max-h-[70%] bg-surface rounded-t-lg border border-border"
+            className="max-h-[70%] bg-surface-raised rounded-t-lg border border-border shadow-raised"
             onPress={(e) => e.stopPropagation()}
           >
-            <View className="px-2 py-2 border-b border-border flex-row items-center justify-between">
+            <View className="px-2 py-2 border-b border-divider flex-row items-center justify-between">
               <Text className="font-semibold text-title text-text-primary">{label}</Text>
               <Pressable accessibilityRole="button" onPress={() => setOpen(false)} className="min-h-hit px-2 justify-center">
                 <Text className="font-medium text-label text-brand">Done</Text>
@@ -121,8 +139,8 @@ export function SelectInput({
                       onChange(option.value);
                       setOpen(false);
                     }}
-                    className={`min-h-hit px-2 justify-center border-b border-divider ${
-                      active ? "bg-selected" : "bg-surface"
+                    className={`min-h-hit px-2 flex-row items-center justify-between border-b border-divider ${
+                      active ? "bg-brand-subtle" : "bg-surface-raised"
                     }`}
                   >
                     <Text
@@ -130,6 +148,11 @@ export function SelectInput({
                     >
                       {option.label}
                     </Text>
+                    {active ? (
+                      <Text className="text-label font-semibold text-brand" accessibilityElementsHidden>
+                        ✓
+                      </Text>
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -137,7 +160,7 @@ export function SelectInput({
           </Pressable>
         </Pressable>
       </Modal>
-    </>
+    </View>
   );
 }
 

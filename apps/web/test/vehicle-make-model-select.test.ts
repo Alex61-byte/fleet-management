@@ -13,7 +13,7 @@ describe("vehicle make/model catalog select (web)", () => {
   it("uses shared catalog selects with Other free-text fallback", () => {
     assert.match(ui, /export function SelectInput/);
     assert.match(ui, /right-0\.5/);
-    assert.match(ui, /appearance-none|selectInput/);
+    assert.match(ui, /selectNative|selectControl|appearance-none/);
     assert.match(form, /vehicleCatalogMakes/);
     assert.match(form, /vehicleCatalogModelsForMake/);
     assert.match(form, /VEHICLE_CATALOG_OTHER/);

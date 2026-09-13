@@ -13,8 +13,8 @@ Owner/Admin need to filter the vehicles list by custody (In vs open Out) and sor
 
 1. **Client projection** over `GET /v1/vehicles` (full tenant list or current page). No new server query params this slice.
 2. **Custody filter (Company only):** `all` | `out` (`open_out != null`) | `in` (`open_out == null`). Individual omits filter.
-3. **Expiration sort:** `default` | `expiration_asc` (soonest) | `expiration_desc` (furthest). Per vehicle key = min/max of non-null `insurance_on`, `inspection_on`, `road_tax_on`, each custom `expires_on`. **Never** `registration_on`. Undated after dated; tie-break label then plate.
-4. **SDK** owns pure helpers so web and mobile stay consistent.
+3. **Expiration sort:** composite `{ field, direction }` (legacy strings `expiration_asc` / `expiration_desc` ≡ `any` + asc/desc). **Fields:** `any` | `insurance_on` | `inspection_on` | `road_tax_on` | `registration_on` | `custom:<uuid>`. **`any`** key = min/max of insurance, inspection, road tax, customs — **not** registration. Field sorts use that date only. Undated after dated; tie-break label then plate. UI: **Sort by** + **Order** (Order hidden when Default).
+4. **SDK** owns pure helpers (`projectVehiclesList`, `collectVehicleListCustomSortFields`) so web and mobile stay consistent.
 5. **`?expiring=true`** unchanged (warnings-only server filter for other consumers).
 
 ## Consequences

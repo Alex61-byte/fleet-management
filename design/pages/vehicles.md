@@ -13,10 +13,11 @@ pageHeader
   pageTitle Vehicles
   pageSubtitle Insurance, inspection, road tax, registration, and other dates
   pageHeaderActions buttonPrimary Add vehicle
-toolbar (US-120)
-  caption font-tabular “{n} vehicles” | optional “{shown} of {total}”
-  [Company] Filter custody: All | Out | In   ← select or segmented; label “Custody”
-  Sort: Default | Soonest expiration | Furthest expiration   ← select; label “Sort”
+listToolbar (US-120) — auto height; not fixed toolbar h-hit
+  listToolbarCount “{n} vehicles” | “{shown} of {total}”
+  [Company] Custody · SelectInput All | Out | In
+  Sort by · SelectInput Default order | Any expiration | Insurance | Inspection | Road tax | Registration | {custom labels in fleet}
+  [when Sort by ≠ Default] Order · SelectInput Soonest first | Furthest first
 tableWrap sticky header
   Vehicle | Plate | Mileage | Country | Insurance | Inspection | Road tax | Registration
 ```
@@ -25,15 +26,16 @@ tableWrap sticky header
 
 | Control | Audience | Options | Notes |
 | --- | --- | --- | --- |
-| **Custody** filter | **Company** OA only | **All** (default) · **Out** · **In** | Out = `open_out` present; In = no open Out. **Individual:** omit control. Not color-only — text labels. |
-| **Sort** | Company + Individual | **Default** · **Soonest expiration** · **Furthest expiration** | Sort key = min/max of non-null `insurance_on`, `inspection_on`, `road_tax_on`, custom `expires_on`. **Never** `registration_on`. Undated vehicles after dated. Secondary: `{Make} {Model}` then plate. |
-| Count caption | All | `{n} vehicles` or `{shown} of {total}` when filter active | `font-tabular` `caption` |
-| Empty filter | Fleet non-empty, filter matches 0 | Title **No vehicles match.** sentence **Try a different custody filter or sort.** **No** primary Add CTA (fleet already exists) | Distinct from global empty |
-| Tokens | — | `toolbar` + existing `label` / native `select` / `input` / `caption` | **No** new tokens; **no** hex; compact web, comfortable mobile |
+| **Custody** filter | **Company** OA only | **All** (default) · **Out** · **In** | **`SelectInput`** overline **Custody**. Out = `open_out`; In = no open Out. **Individual:** omit. |
+| **Sort by** | Company + Individual | **Default order** · **Any expiration** · **Insurance** · **Inspection** · **Road tax** · **Registration** · each distinct **custom** label on the loaded fleet | Overline **Sort by**. **Any** = min/max of insurance, inspection, road tax, customs (**not** registration). Single-field sorts use that date only (registration OK only when Sort by = Registration). Missing date last. Tie-break identity. |
+| **Order** | When Sort by ≠ Default | **Soonest first** · **Furthest first** | Overline **Order**. Hidden for Default. |
+| Count caption | All | `{n} vehicles` or `{shown} of {total}` when filter active | `listToolbarCount` |
+| Empty filter | Fleet non-empty, filter matches 0 | Title **No vehicles match.** sentence **Try a different custody filter or sort.** **No** primary Add CTA | Distinct from global empty |
+| Tokens | — | `listToolbar` + `listToolbarCount` + `selectField` / `selectControl` / `selectNative` / `selectChevron` + `overline` | Auto-height bar (**not** fixed `toolbar` `h-hit`). Styled select; **no** hex; mobile sheet ≥44pt |
 
 - Filter + sort apply to the **in-memory list** after load (client projection). Changing filter/sort does not re-fetch unless product later adds server params.
 - Controls sit in list toolbar **above** rows; do not replace page header Add.
-- Mobile: same two controls stacked or wrap under app bar; ≥44pt hits.
+- Mobile: same labeled selects stacked under app bar (raised trigger + bottom sheet).
 
 | Column | Class | Content |
 | --- | --- | --- |

@@ -124,10 +124,10 @@ test("US-120 projectVehiclesList filter custody and sort expirations", () => {
     model: "1",
     license_plate: "AAA",
     insurance_on: "2026-12-01",
-    inspection_on: null,
+    inspection_on: "2026-08-01",
     road_tax_on: null,
     registration_on: "2020-01-01",
-    custom_expirations: [{ expires_on: "2026-06-01" }],
+    custom_expirations: [{ id: "c1", label: "Vignette", expires_on: "2026-06-01" }],
     open_out: { handover_id: "h1" },
   };
   const b = {
@@ -136,10 +136,10 @@ test("US-120 projectVehiclesList filter custody and sort expirations", () => {
     model: "2",
     license_plate: "BBB",
     insurance_on: "2026-03-01",
-    inspection_on: null,
+    inspection_on: "2026-10-01",
     road_tax_on: null,
-    registration_on: null,
-    custom_expirations: [],
+    registration_on: "2021-06-01",
+    custom_expirations: [{ id: "c1", label: "Vignette", expires_on: "2026-09-01" }],
     open_out: null,
   };
   const c = {
@@ -170,6 +170,30 @@ test("US-120 projectVehiclesList filter custody and sort expirations", () => {
   );
   assert.deepEqual(
     projectVehiclesList([a, b, c], { sort: "expiration_desc" }).map((v) => v.id),
+    ["a", "b", "c"],
+  );
+  assert.deepEqual(
+    projectVehiclesList([a, b, c], {
+      sort: { field: "insurance_on", direction: "asc" },
+    }).map((v) => v.id),
+    ["b", "a", "c"],
+  );
+  assert.deepEqual(
+    projectVehiclesList([a, b, c], {
+      sort: { field: "inspection_on", direction: "asc" },
+    }).map((v) => v.id),
+    ["a", "b", "c"],
+  );
+  assert.deepEqual(
+    projectVehiclesList([a, b, c], {
+      sort: { field: "registration_on", direction: "asc" },
+    }).map((v) => v.id),
+    ["c", "a", "b"],
+  );
+  assert.deepEqual(
+    projectVehiclesList([a, b, c], {
+      sort: { field: "custom:c1", direction: "asc" },
+    }).map((v) => v.id),
     ["a", "b", "c"],
   );
 });

@@ -1,14 +1,17 @@
 "use client";
 
 import {
+  collectVehicleListCustomSortFields,
   formatVehicleMileage,
   odometerUnitLabel,
   projectVehiclesList,
+  VEHICLE_LIST_SORT_BUILTIN_FIELDS,
   warningA11y,
   vehicleLabel,
   type Vehicle,
   type VehicleCustodyFilter,
-  type VehicleListSort,
+  type VehicleListSortDirection,
+  type VehicleListSortField,
 } from "@fleet/sdk";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -25,13 +28,16 @@ import { themeClasses } from "../../../../design/tailwind.theme";
 import { useAuth } from "../../lib/auth-context";
 import { queryVehicles } from "../../lib/fleet-queries";
 
+type SortMode = "default" | VehicleListSortField;
+
 export default function VehiclesPage() {
   const { me, ready } = useAuth();
   const [items, setItems] = useState<Vehicle[] | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [custody, setCustody] = useState<VehicleCustodyFilter>("all");
-  const [sort, setSort] = useState<VehicleListSort>("default");
+  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [sortDir, setSortDir] = useState<VehicleListSortDirection>("asc");
 
   const isCompany = me?.account_kind === "company";
 
@@ -55,10 +61,20 @@ export default function VehiclesPage() {
 
   const effectiveCustody: VehicleCustodyFilter = isCompany ? custody : "all";
 
+  const customSortFields = useMemo(
+    () => (items ? collectVehicleListCustomSortFields(items) : []),
+    [items],
+  );
+
+  const listSort = useMemo(() => {
+    if (sortMode === "default") return "default" as const;
+    return { field: sortMode, direction: sortDir };
+  }, [sortMode, sortDir]);
+
   const visible = useMemo(() => {
     if (!items) return [];
-    return projectVehiclesList(items, { custody: effectiveCustody, sort });
-  }, [items, effectiveCustody, sort]);
+    return projectVehiclesList(items, { custody: effectiveCustody, sort: listSort });
+  }, [items, effectiveCustody, listSort]);
 
   const filterActive = isCompany && custody !== "all";
   const total = items?.length ?? 0;
@@ -81,45 +97,64 @@ export default function VehiclesPage() {
           <PrimaryLink href="/vehicles/new">Add vehicle</PrimaryLink>
         </div>
       ) : (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-2">
           <div
-            className={`${themeClasses.toolbar} flex-wrap h-auto min-h-hit py-1`}
+            className={themeClasses.listToolbar}
             role="group"
             aria-label="Vehicles list filter and sort"
           >
-            <span className={`${themeClasses.caption} font-tabular shrink-0`}>
+            <span className={themeClasses.listToolbarCount}>
               {filterActive
                 ? `${visible.length} of ${total} vehicles`
                 : `${total} vehicles`}
             </span>
             {isCompany ? (
-              <label className="flex flex-row items-center gap-1 min-w-0">
-                <span className={themeClasses.label}>Custody</span>
-                <SelectInput
-                  aria-label="Filter by custody"
-                  value={custody}
-                  onChange={(e) => setCustody(e.target.value as VehicleCustodyFilter)}
-                  className="min-w-[7rem]"
-                >
-                  <option value="all">All</option>
-                  <option value="out">Out</option>
-                  <option value="in">In</option>
-                </SelectInput>
-              </label>
-            ) : null}
-            <label className="flex flex-row items-center gap-1 min-w-0">
-              <span className={themeClasses.label}>Sort</span>
               <SelectInput
-                aria-label="Sort by expiration"
-                value={sort}
-                onChange={(e) => setSort(e.target.value as VehicleListSort)}
-                className="min-w-[11rem]"
+                label="Custody"
+                aria-label="Filter by custody"
+                value={custody}
+                onChange={(e) => setCustody(e.target.value as VehicleCustodyFilter)}
+                className="w-28"
               >
-                <option value="default">Default</option>
-                <option value="expiration_asc">Soonest expiration</option>
-                <option value="expiration_desc">Furthest expiration</option>
+                <option value="all">All</option>
+                <option value="out">Out</option>
+                <option value="in">In</option>
               </SelectInput>
-            </label>
+            ) : null}
+            <SelectInput
+              label="Sort by"
+              aria-label="Sort by expiration type"
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              className="w-44"
+            >
+              <option value="default">Default order</option>
+              <option value="any">Any expiration</option>
+              {VEHICLE_LIST_SORT_BUILTIN_FIELDS.map((f) => (
+                <option key={f.field} value={f.field}>
+                  {f.label}
+                </option>
+              ))}
+              {customSortFields.map((f) => (
+                <option key={f.field} value={f.field}>
+                  {f.label}
+                </option>
+              ))}
+            </SelectInput>
+            {sortMode !== "default" ? (
+              <SelectInput
+                label="Order"
+                aria-label="Sort direction"
+                value={sortDir}
+                onChange={(e) =>
+                  setSortDir(e.target.value as VehicleListSortDirection)
+                }
+                className="w-36"
+              >
+                <option value="asc">Soonest first</option>
+                <option value="desc">Furthest first</option>
+              </SelectInput>
+            ) : null}
           </div>
           {visible.length === 0 ? (
             <div className="flex flex-col gap-1 py-2">

@@ -71,28 +71,45 @@ function SelectChevron() {
   );
 }
 
-/** Native select with chevron inset `spacing.0.5` (4px) from the right edge. */
+/**
+ * Styled native select: raised control, custom chevron, optional overline label.
+ * Use for toolbar filters/sorts and form fields (not bare browser chrome).
+ */
 export function SelectInput({
   error,
   className,
+  label,
   children,
+  id,
   ...props
-}: SelectHTMLAttributes<HTMLSelectElement> & { error?: boolean }) {
+}: SelectHTMLAttributes<HTMLSelectElement> & {
+  error?: boolean;
+  /** Optional overline above the control (e.g. Custody, Sort). */
+  label?: string;
+}) {
+  const selectId = id ?? (label ? `select-${label.replace(/\s+/g, "-").toLowerCase()}` : undefined);
   return (
-    <span className="relative block w-full">
-      <select
-        className={`${themeClasses.input} ${themeClasses.selectInput} ${error ? themeClasses.inputError : ""} focus:border-focus outline-none w-full ${className ?? ""}`}
-        {...props}
-      >
-        {children}
-      </select>
+    <div className={`${themeClasses.selectField} ${className ?? ""}`}>
+      {label ? (
+        <label htmlFor={selectId} className={themeClasses.overline}>
+          {label}
+        </label>
+      ) : null}
       <span
-        aria-hidden
-        className="pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 text-text-secondary"
+        className={`${themeClasses.selectControl} ${error ? themeClasses.selectControlError : ""} has-[:focus]:border-focus has-[:focus]:shadow-ring hover:bg-surface-sunken`}
       >
-        <SelectChevron />
+        <select
+          id={selectId}
+          className={themeClasses.selectNative}
+          {...props}
+        >
+          {children}
+        </select>
+        <span aria-hidden className={themeClasses.selectChevron}>
+          <SelectChevron />
+        </span>
       </span>
-    </span>
+    </div>
   );
 }
 

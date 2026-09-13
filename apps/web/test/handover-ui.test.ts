@@ -71,11 +71,19 @@ describe("vehicle handovers UI (US-51–US-60 web)", () => {
 
   it("US-120 list filter custody and sort by expiration", () => {
     const list = readFileSync(join(root, "app/vehicles/page.tsx"), "utf8");
+    const ui = readFileSync(join(root, "components/ui.tsx"), "utf8");
     assert.match(list, /projectVehiclesList/);
-    assert.match(list, /Filter by custody/);
-    assert.match(list, /Sort by expiration/);
-    assert.match(list, /Soonest expiration/);
-    assert.match(list, /Furthest expiration/);
+    assert.match(list, /collectVehicleListCustomSortFields/);
+    assert.match(list, /VEHICLE_LIST_SORT_BUILTIN_FIELDS/);
+    assert.match(list, /SelectInput/);
+    assert.match(ui, /selectControl|selectNative/);
+    assert.match(list, /label="Custody"/);
+    assert.match(list, /label="Sort by"/);
+    assert.match(list, /label="Order"/);
+    assert.match(list, /Any expiration/);
+    assert.match(list, /Soonest first/);
+    assert.match(list, /Furthest first/);
+    assert.doesNotMatch(list, /SegmentedControl/);
     assert.match(list, /No vehicles match/);
     assert.match(list, /account_kind === "company"/);
   });

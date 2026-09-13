@@ -522,7 +522,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 
 192. **List custody filter (Must, Company):** Owner/Admin vehicles list **must** allow filtering by custody: **All**, **Out** (open Out present), **In** (no open Out). Semantics match **177** / **191**. **Individual:** filter **N/A** (**A132**). **Drivers:** not this surface.
 
-193. **List expiration sort (Must):** Owner/Admin (Company and Individual) vehicles list **must** support sorting by expiration using the **soonest** or **furthest** relevant date among non-null **insurance_on**, **inspection_on**, **road_tax_on**, and each **custom** `expires_on`. **`registration_on` never** participates. Vehicles with no relevant dates sort after dated vehicles. Default order remains product default (e.g. load order / identity) when sort is unset.
+193. **List expiration sort (Must):** Owner/Admin (Company and Individual) vehicles list **must** support **Sort by** expiration type: **Default order**, **Any expiration**, each built-in date (**insurance**, **inspection**, **road tax**, **registration**), and each **custom** expiration definition present on the loaded fleet; plus **Order** soonest/furthest when not Default. **Any** uses min/max across insurance, inspection, road tax, and customs — **`registration_on` does not** participate in **Any**. Single-field sorts (including registration and a specific custom id) use that field only. Vehicles missing the chosen date sort after dated ones. Default keeps product load order.
 
 194. **Client projection (Must this slice):** Filter/sort **may** run on the client over `GET /v1/vehicles` payloads (`open_out`, dates, `custom_expirations`). No required new server query params this slice (**A143**).
 
@@ -530,7 +530,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | --- | --- | --- |
 | E115 | Filter Out with no open Outs | Empty-filter state; not “No vehicles yet” create empty |
 | E116 | Individual seeks In/Out filter | Control absent / N/A |
-| E117 | Sort key would use registration only | Registration ignored; undated if no other dates |
+| E117 | Sort by **Any** with only registration set | Registration ignored for **Any**; vehicle undated for that sort |
 
 | ID | Assumption |
 | --- | --- |

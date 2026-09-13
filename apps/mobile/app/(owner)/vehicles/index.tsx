@@ -1,12 +1,15 @@
 import {
+  collectVehicleListCustomSortFields,
   formatVehicleMileage,
   odometerUnitLabel,
   projectVehiclesList,
+  VEHICLE_LIST_SORT_BUILTIN_FIELDS,
   warningA11y,
   vehicleLabel,
   type Vehicle,
   type VehicleCustodyFilter,
-  type VehicleListSort,
+  type VehicleListSortDirection,
+  type VehicleListSortField,
 } from "@fleet/sdk";
 import { Link, Stack } from "expo-router";
 import { OwnerHeaderNotifications } from "../../../components/owner-header-notifications";
@@ -24,13 +27,16 @@ import {
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
 
+type SortMode = "default" | VehicleListSortField;
+
 export default function VehiclesList() {
   const { offline, me } = useAuth();
   const [items, setItems] = useState<Vehicle[] | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [custody, setCustody] = useState<VehicleCustodyFilter>("all");
-  const [sort, setSort] = useState<VehicleListSort>("default");
+  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [sortDir, setSortDir] = useState<VehicleListSortDirection>("asc");
 
   const isCompany = me?.account_kind === "company";
 
@@ -52,13 +58,36 @@ export default function VehiclesList() {
 
   const effectiveCustody: VehicleCustodyFilter = isCompany ? custody : "all";
 
+  const customSortFields = useMemo(
+    () => (items ? collectVehicleListCustomSortFields(items) : []),
+    [items],
+  );
+
+  const listSort = useMemo(() => {
+    if (sortMode === "default") return "default" as const;
+    return { field: sortMode, direction: sortDir };
+  }, [sortMode, sortDir]);
+
   const visible = useMemo(() => {
     if (!items) return [];
-    return projectVehiclesList(items, { custody: effectiveCustody, sort });
-  }, [items, effectiveCustody, sort]);
+    return projectVehiclesList(items, { custody: effectiveCustody, sort: listSort });
+  }, [items, effectiveCustody, listSort]);
 
   const filterActive = isCompany && custody !== "all";
   const total = items?.length ?? 0;
+
+  const sortByOptions = useMemo(
+    () => [
+      { value: "default", label: "Default order" },
+      { value: "any", label: "Any expiration" },
+      ...VEHICLE_LIST_SORT_BUILTIN_FIELDS.map((f) => ({
+        value: f.field,
+        label: f.label,
+      })),
+      ...customSortFields.map((f) => ({ value: f.field, label: f.label })),
+    ],
+    [customSortFields],
+  );
 
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerClassName="p-2 gap-2">
@@ -92,7 +121,7 @@ export default function VehiclesList() {
       ) : (
         <>
           <View
-            className="bg-surface-raised border-b border-divider px-1.5 py-1 gap-1"
+            className="bg-surface-raised border-b border-divider px-1.5 py-1.5 gap-1.5"
             accessibilityLabel="Vehicles list filter and sort"
           >
             <Text className="text-caption text-text-secondary font-tabular">
@@ -114,16 +143,24 @@ export default function VehiclesList() {
               />
             ) : null}
             <SelectInput
-              label="Sort"
-              value={sort}
-              placeholder="Default"
-              options={[
-                { value: "default", label: "Default" },
-                { value: "expiration_asc", label: "Soonest expiration" },
-                { value: "expiration_desc", label: "Furthest expiration" },
-              ]}
-              onChange={(v) => setSort(v as VehicleListSort)}
+              label="Sort by"
+              value={sortMode}
+              placeholder="Default order"
+              options={sortByOptions}
+              onChange={(v) => setSortMode(v as SortMode)}
             />
+            {sortMode !== "default" ? (
+              <SelectInput
+                label="Order"
+                value={sortDir}
+                placeholder="Soonest first"
+                options={[
+                  { value: "asc", label: "Soonest first" },
+                  { value: "desc", label: "Furthest first" },
+                ]}
+                onChange={(v) => setSortDir(v as VehicleListSortDirection)}
+              />
+            ) : null}
           </View>
           {visible.length === 0 ? (
             <View className="gap-1 py-2">

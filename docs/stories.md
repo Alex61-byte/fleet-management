@@ -2363,25 +2363,25 @@ Contracts for docs, issues, owner daily-usage report/CSV, service-due list, dige
 
 **Account kind:** **Filter In/Out** — **Company** only (Individual open-Out N/A; filter control omitted or All-only). **Sort by expirations** — Company **and** Individual. **Drivers:** not this surface.
 
-**Cross-links:** Uses list `open_out` (**US-119** / ADR-028). Expiration dates = built-in insurance/inspection/road tax **plus** each custom `expires_on` (**US-86–US-89**); **`registration_on` never** in sort key (A1 / ADR-004). Client-side on already-loaded list is OK this slice (no required new list query params).
+**Cross-links:** Uses list `open_out` (**US-119** / ADR-028). Expiration sort fields = **Any** (insurance/inspection/road tax/customs; **not** registration), each built-in including **registration**, and each custom id/label on the fleet (**US-86–US-89**). Client-side on already-loaded list is OK this slice (no required new list query params).
 
 **Acceptance**
 
 - **Given** I open the Owner/Admin **vehicles list** (web or mobile) as **Company** OA with a non-empty fleet  
   **When** the list chrome is ready  
-  **Then** I can set custody filter **All** | **Out** | **In** and a sort control for expirations (default + soonest/furthest or equivalent).
+  **Then** I can set custody filter **All** | **Out** | **In**, **Sort by** (Default · Any · each built-in type · each custom label present), and **Order** Soonest/Furthest when Sort by ≠ Default.
 
 - **Given** some vehicles have **open Out** and others do not  
   **When** I filter **Out**  
   **Then** only vehicles with open Out remain; **In** shows only vehicles without open Out; **All** shows the full set (subject to sort).
 
 - **Given** vehicles have mixed built-in and **custom** expiration dates  
-  **When** I sort by soonest expiration  
-  **Then** order uses the **earliest** relevant date per vehicle among insurance, inspection, road tax, and custom `expires_on` (registration excluded); vehicles with **no** such dates sort after dated ones (stable secondary key OK).
+  **When** I Sort by **Any expiration** + Soonest first  
+  **Then** order uses the **earliest** relevant date per vehicle among insurance, inspection, road tax, and custom `expires_on` (registration excluded from **Any**); vehicles with **no** such dates sort after dated ones (stable secondary key OK).
 
-- **Given** I sort by furthest expiration  
+- **Given** I Sort by a **single** type (e.g. Insurance, Registration, or a custom label) + Furthest first  
   **When** the list updates  
-  **Then** order uses the **latest** relevant date per vehicle (same field set); undated vehicles last or first consistently with Design.
+  **Then** order uses only that field’s date (asc/desc per Order); missing that date sorts after dated vehicles.
 
 - **Given** Individual Owner  
   **When** I use the vehicles list  
