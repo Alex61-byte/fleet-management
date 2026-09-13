@@ -95,7 +95,7 @@ panel handoverForm  aria-label Handover Out | Handover In
 
 **Units:** Derived from active vehicle country / payload unit (A34, A51). Changing next-travel vehicle updates unit labels immediately; **no** conversion of typed values. **No** unit picker.
 
-**Monotonic floor (display only, optional Should):** When `vehicle.mileage` known, `caption` under mileage: “Must be at least {n} {mi\|km}.” On In, also respect Out mileage — prefer one calm caption with the **higher** floor if both apply; Architect/FE may supply a single `min_mileage` hint.
+**Monotonic floor (display only, optional Should):** One calm `caption` under mileage: “Must be at least {n} {mi\|km}.” Floor = **max** of known sources: `vehicle.mileage`, latest **closed** Daily usage **End of Day** `end_distance` on the active vehicle, and (on **In**) open **Out** mileage. Same unit as handover (A34).
 
 ### Damage images (driver attach) — US-54
 

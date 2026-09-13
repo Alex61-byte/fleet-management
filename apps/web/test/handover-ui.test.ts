@@ -35,8 +35,12 @@ describe("vehicle handovers UI (US-51–US-60 web)", () => {
     assert.match(travel, /Back to Home|DriverBackLink/);
     assert.match(handoverPage, /DriverHandoverPanel/);
     assert.match(handoverPage, /onHandoverSaved/);
+    assert.match(handoverPage, /router\.replace\("\/driver"\)/);
     assert.match(handoverPage, /Go to Next travel/);
     assert.match(panel, /getDriverActiveHandover/);
+    assert.match(panel, /listDriverDailyUsage/);
+    assert.match(panel, /lastClosedEndDistance|end_distance/);
+    assert.match(panel, /Must be at least/);
     assert.match(panel, /createDriverHandover/);
     assert.match(panel, /Submit Handover Out/);
     assert.match(panel, /Submit Handover In/);
@@ -72,11 +76,14 @@ describe("vehicle handovers UI (US-51–US-60 web)", () => {
   it("US-120 list filter custody and sort by expiration", () => {
     const list = readFileSync(join(root, "app/vehicles/page.tsx"), "utf8");
     const ui = readFileSync(join(root, "components/ui.tsx"), "utf8");
+    const themeTokens = readFileSync(join(root, "../../design/tailwind.theme.ts"), "utf8");
     assert.match(list, /projectVehiclesList/);
     assert.match(list, /collectVehicleListCustomSortFields/);
     assert.match(list, /VEHICLE_LIST_SORT_BUILTIN_FIELDS/);
     assert.match(list, /SelectInput/);
     assert.match(ui, /selectControl|selectNative/);
+    assert.match(ui, /role=\"listbox\"|createPortal/);
+    assert.match(themeTokens, /selectMenu:/);
     assert.match(list, /label="Custody"/);
     assert.match(list, /label="Sort by"/);
     assert.match(list, /label="Order"/);

@@ -1,6 +1,7 @@
 import {
   FleetApiError,
   odometerUnitLabel,
+  type DailyUsage,
   type DriverTravel,
   type HandoverActive,
   type HandoverType,
@@ -8,7 +9,7 @@ import {
   type SideImageUploadFile,
 } from "@fleet/sdk";
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, Pressable, Text, TextInput as RNTextInput, View } from "react-native";
 import { Banner, Field, PrimaryButton, SecondaryButton, TextInput } from "./ui";
 import { VehicleSideImageViewer } from "./vehicle-side-image-viewer";
@@ -72,6 +73,8 @@ export function DriverHandoverPanel({
   const [preparing, setPreparing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [vehicleMileage, setVehicleMileage] = useState<number | null>(null);
+  const [usageItems, setUsageItems] = useState<DailyUsage[] | null>(null);
 
   const hasTravel = Boolean(travel?.vehicle_id);
   const travelVehicleId = travel?.vehicle_id ?? null;
@@ -80,17 +83,31 @@ export function DriverHandoverPanel({
     if (!hasTravel) {
       setActive(null);
       setLoadError(null);
+      setVehicleMileage(null);
+      setUsageItems(null);
       return;
     }
     setLoadError(null);
     try {
-      const res = await api.getDriverActiveHandover();
-      setActive(res.handover);
+      const [handoverRes, usageRes, vehiclesRes] = await Promise.all([
+        api.getDriverActiveHandover(),
+        api.listDriverDailyUsage().catch(() => ({ items: [] as DailyUsage[] })),
+        api.listDriverVehicles().catch(() => null),
+      ]);
+      setActive(handoverRes.handover);
+      setUsageItems(usageRes.items);
+      const vehicles = vehiclesRes?.data?.items ?? [];
+      const v = travelVehicleId
+        ? vehicles.find((item) => item.id === travelVehicleId)
+        : undefined;
+      setVehicleMileage(v?.mileage ?? null);
     } catch (err) {
       setActive(null);
+      setUsageItems(null);
+      setVehicleMileage(null);
       setLoadError(err instanceof FleetApiError ? err.message : "Could not load handover status.");
     }
-  }, [hasTravel]);
+  }, [hasTravel, travelVehicleId]);
 
   useEffect(() => {
     void loadActive();
@@ -106,6 +123,20 @@ export function DriverHandoverPanel({
     setAttachError(null);
     setPending([]);
   }
+
+  const lastClosedEndDistance = useMemo(() => {
+    if (!travelVehicleId || !usageItems) return null;
+    const closed = usageItems.filter(
+      (u) =>
+        u.vehicle_id === travelVehicleId &&
+        u.status === "closed" &&
+        u.end_distance != null &&
+        Number.isFinite(u.end_distance),
+    );
+    if (closed.length === 0) return null;
+    // list is newest-first; first match is latest End of Day on this vehicle
+    return closed[0]!.end_distance;
+  }, [travelVehicleId, usageItems]);
 
   if (!hasTravel) return null;
 
@@ -127,7 +158,16 @@ export function DriverHandoverPanel({
         ? `${active.vehicle.label} · ${active.vehicle.license_plate}`
         : "Active next-travel vehicle";
 
-  const minMileageHint = mode === "in" && openOnThisVehicle ? active!.mileage : undefined;
+  /** Display floor: max(vehicle.mileage, latest closed End of Day end_distance, Out mileage on In). */
+  const minMileageHint = (() => {
+    const floors: number[] = [];
+    if (vehicleMileage != null && Number.isFinite(vehicleMileage)) floors.push(vehicleMileage);
+    if (lastClosedEndDistance != null) floors.push(lastClosedEndDistance);
+    if (mode === "in" && openOnThisVehicle && active?.mileage != null) {
+      floors.push(active.mileage);
+    }
+    return floors.length > 0 ? Math.max(...floors) : undefined;
+  })();
 
   async function onAddPhotos() {
     setAttachError(null);
