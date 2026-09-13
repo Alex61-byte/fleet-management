@@ -486,6 +486,8 @@ When an open Handover Out exists (Company only):
 ### `GET /v1/vehicles` · `GET /v1/vehicles?expiring=true`
 `{ "items": Vehicle[] }` — each item includes `mileage`, `mileage_unit`, `custom_expirations`, `has_side_images`, `side_images`, and **`open_out`**. `expiring=true` filters `warnings.length > 0` (includes custom-only warnings).
 
+**US-120 list filter/sort (client):** Custody **All/Out/In** and expiration sort (including custom dates) are **client-projected** over this payload this slice — **no** additional query params required. `expiring=true` remains the only server-side list filter.
+
 **ETag** on 200 (distinct for `expiring`); `If-None-Match` → **304** empty (ADR-020). Optional `limit`/`cursor` → `{ items, next_cursor }`.
 
 **Owner/Admin Global Header notifications (US-68–US-76 / ADR-017; custom **Could** US-89 / ADR-019):** **No** `GET /v1/notifications`. Clients project menu items from this list’s server `warnings[]` via `@fleet/sdk` (`complianceNotificationItems`). HTTP surface unchanged.

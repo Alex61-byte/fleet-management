@@ -69,6 +69,17 @@ describe("vehicle handovers UI (US-51–US-60 web)", () => {
     assert.match(form, /Vehicle custody/);
   });
 
+  it("US-120 list filter custody and sort by expiration", () => {
+    const list = readFileSync(join(root, "app/vehicles/page.tsx"), "utf8");
+    assert.match(list, /projectVehiclesList/);
+    assert.match(list, /Filter by custody/);
+    assert.match(list, /Sort by expiration/);
+    assert.match(list, /Soonest expiration/);
+    assert.match(list, /Furthest expiration/);
+    assert.match(list, /No vehicles match/);
+    assert.match(list, /account_kind === "company"/);
+  });
+
   it("damage viewer reuses side viewer with optional title", () => {
     assert.match(viewer, /title\?: string/);
     assert.match(panel, /Damage photo \$\{/);

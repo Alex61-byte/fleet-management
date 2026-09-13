@@ -6,6 +6,8 @@ import {
   notificationMenuItems,
   daysUntilUtc,
   mapAuthError,
+  projectVehiclesList,
+  vehicleSoonestExpiration,
   vehiclesNavA11yLabel,
   vehiclesNavUrgency,
   warningA11y,
@@ -113,6 +115,63 @@ test("vehiclesNavUrgency worst-wins red over orange", () => {
   assert.equal(vehiclesNavA11yLabel("critical"), "Vehicles, critical expiry within 7 days");
   assert.equal(vehiclesNavA11yLabel("warning"), "Vehicles, expiry in 7 days");
   assert.equal(vehiclesNavA11yLabel("none"), "Vehicles");
+});
+
+test("US-120 projectVehiclesList filter custody and sort expirations", () => {
+  const a = {
+    id: "a",
+    make: "A",
+    model: "1",
+    license_plate: "AAA",
+    insurance_on: "2026-12-01",
+    inspection_on: null,
+    road_tax_on: null,
+    registration_on: "2020-01-01",
+    custom_expirations: [{ expires_on: "2026-06-01" }],
+    open_out: { handover_id: "h1" },
+  };
+  const b = {
+    id: "b",
+    make: "B",
+    model: "2",
+    license_plate: "BBB",
+    insurance_on: "2026-03-01",
+    inspection_on: null,
+    road_tax_on: null,
+    registration_on: null,
+    custom_expirations: [],
+    open_out: null,
+  };
+  const c = {
+    id: "c",
+    make: "C",
+    model: "3",
+    license_plate: "CCC",
+    insurance_on: null,
+    inspection_on: null,
+    road_tax_on: null,
+    registration_on: "2019-01-01",
+    custom_expirations: [],
+    open_out: null,
+  };
+  assert.equal(vehicleSoonestExpiration(a), "2026-06-01");
+  assert.equal(vehicleSoonestExpiration(c), null);
+  assert.deepEqual(
+    projectVehiclesList([a, b, c], { custody: "out" }).map((v) => v.id),
+    ["a"],
+  );
+  assert.deepEqual(
+    projectVehiclesList([a, b, c], { custody: "in" }).map((v) => v.id),
+    ["b", "c"],
+  );
+  assert.deepEqual(
+    projectVehiclesList([a, b, c], { sort: "expiration_asc" }).map((v) => v.id),
+    ["b", "a", "c"],
+  );
+  assert.deepEqual(
+    projectVehiclesList([a, b, c], { sort: "expiration_desc" }).map((v) => v.id),
+    ["a", "b", "c"],
+  );
 });
 
 test("complianceNotificationItems expands warnings, sorts, caps, ignores registration", () => {

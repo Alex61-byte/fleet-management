@@ -71,6 +71,17 @@ describe("vehicle handovers UI (US-51–US-60 mobile)", () => {
     assert.match(form, /Vehicle custody/);
   });
 
+  it("US-120 list filter custody and sort by expiration", () => {
+    const list = readFileSync(join(root, "app/(owner)/vehicles/index.tsx"), "utf8");
+    assert.match(list, /projectVehiclesList/);
+    assert.match(list, /label="Custody"/);
+    assert.match(list, /label="Sort"/);
+    assert.match(list, /Soonest expiration/);
+    assert.match(list, /Furthest expiration/);
+    assert.match(list, /No vehicles match/);
+    assert.match(list, /account_kind === "company"/);
+  });
+
   it("damage viewer supports optional title override", () => {
     assert.match(viewer, /title\?: string/);
     assert.match(panel, /Damage photo \$\{/);

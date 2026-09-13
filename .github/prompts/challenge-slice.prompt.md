@@ -19,9 +19,10 @@ Follow [.github/copilot-instructions.md](../copilot-instructions.md) and the **C
 
 ## Token rules
 
-- Grep/read target paths first; no monorepo tour
+- Size tier: challenge is focused — grep/read **target paths** first; no monorepo tour; no transcript replay
+- Subagent prompts ≤15 lines; Paths/Delta/Decisions/Next ≤3 each (findings as compact table)
 - Tests: name-pattern or file under risk; tail failing lines only
-- User reply per stage: **Paths · Delta · Decisions · Next** (≤5 each); findings as table
+- User reply per stage ≤10 lines
 
 ## Done
 

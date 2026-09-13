@@ -76,40 +76,53 @@ Stay in **current specialist role per stage**. Orchestrator auto-advances.
 
 ## Token budget (hard — quality stays, usage stays low)
 
-**Default posture: minimum context, minimum prose, maximum file edits.**
+**Default posture: minimum context, minimum prose, maximum file edits.**  
+**Target:** micro/commit turns stay **small**; a localized list/UI feature must **not** cost a full multi-stage research epic. Prefer under-reading over over-reading.
+
+### Size tier (pick one first — drives tools)
+
+| Tier | Examples | Pipeline | Tools (soft caps) |
+| --- | --- | --- | --- |
+| **Commit / git** | commit, push, PR, checkout, pull, branch | **None** — only [commit-push-pr](skills/commit-push-pr/SKILL.md) / [create-branch](skills/create-branch/SKILL.md) | `status -sb`, `diff --stat`, `log -5 --oneline`; **no** Explore/subagents; **no** full `git diff` unless staging is unclear |
+| **Micro** | spacing, copy, chevron, one-liner bug, obvious miswire | In-place edit only | ≤3 file reads; 0 subagents; 1 targeted test if behavior changed |
+| **Small feature** | client filter/sort on existing list; badge; toolbar; SDK pure helper; BE no-op + FE | **Skip** BA/Design/Arch **subagents**. Orchestrator: **minimal amend** stories/rules/design (or 1 short ADR if contract policy changes) → implement → verify | ≤1 grep batch + ≤5 ranged reads; **0** Explore unless paths unknown; **0–1** specialist only if blocked; no transcript replay |
+| **Full slice** | new API surface, new screen flow, authz model, multi-entity behavior | BA→…→FE but **skip complete stages** (1-path spot-check) | Subagents only for incomplete stages; prompts ≤15 lines |
+
+If unsure between **Small** and **Full**: choose **Small** when data already on the wire (e.g. `open_out`, dates on `GET /v1/vehicles`) and UI is additive chrome.
 
 ### Orchestrator
-- **One Explore (quick)** *or* grep before any specialist if you lack paths — not both full dumps.
-- Subagent prompts: **≤25 lines**, include paths + acceptance only; forbid “read all docs”.
-- Subagent returns: treat as **handoff notes**, not chat essays — **≤20 lines** summary to user per stage (table/bullets + path links).
-- **Never** paste subagent full dumps, ADR bodies, or contracts into the user thread.
-- **Never** re-read a file already summarized this turn; use session memory or prior notes.
-- Skip stages with **existing** stories/design/ADR/contract for the slice (spot-check 1 path, don’t re-run BA).
-- Parallel subagents **only** when work is independent (e.g. Design ‖ Architect after BA locked). **Never** BA‖Design‖BE together.
-- Prefer **direct edits** over subagents for micro fixes and for FE/BE when contracts already exist and the change is localized.
-- User-facing replies: **short** — what changed, where to look, verify one-liner. No pipeline restatements.
+- **Commit/git requests:** never open product docs, never run feature pipeline, never “review the whole slice” unless user asked for a challenge/PR description beyond skill defaults.
+- **One** path discovery max: grep **or** Explore **quick** — never both, never Explore for commit/micro.
+- Subagent prompts: **≤15 lines** (paths + acceptance only). Forbid “read all docs” / “explore broadly”.
+- Subagent → user: **≤10 lines** per stage (Paths/Delta only). **Never** paste subagent dumps, ADR bodies, contracts, or tool logs into chat.
+- **Never** re-read a file already in this turn’s context or session summary; trust handoff notes.
+- **Never** load conversation transcripts to “recover” code you can `read` from the repo.
+- Skip stages with existing stories/design/ADR/contract (spot-check **1** path). Prefer **amend** over new US/ADR when extending a just-shipped slice.
+- Prefer **direct orchestrator edits** for Small feature + all Micro. Specialists only when stage artifacts are missing **and** non-trivial.
+- Parallel subagents **only** if independent after BA lock. **Never** BA‖Design‖BE.
+- User reply: **≤12 lines** — what/where/verify. No pipeline recap.
 
 ### Context loading
-- Prefer `grep`/path-targeted `read` with **line ranges** over whole files.
-- Docs: read **delta sections** only (new US/rules/ADR), not entire `stories.md`.
-- Terminal: `tail` tests; quote **failing lines only**. No full build logs in chat.
-- Diffs: `git diff --stat` first; full diff only for files you edit.
-- **Never** search, read, open, or attach: `node_modules/`, `.next/`, `dist/`, `coverage/`, `.turbo/`, `.expo/`, lockfile bodies, `*.tsbuildinfo`. Use app/package source only.
+- `grep` + **ranged** `read` only; default read ≤80 lines unless editing that file.
+- Docs: append/amend **end sections** only — do not read whole `stories.md` / `business-rules.md` / `http-v1.md`.
+- Terminal: `tail -30` tests; chat gets **fail lines / exit codes** only.
+- Git: `diff --stat` first; full diff **only** for paths you will stage, and only if stat is ambiguous.
+- **Never** touch: `node_modules/`, `.next/`, `dist/`, `coverage/`, `.turbo/`, `.expo/`, lockfile bodies, `*.tsbuildinfo`.
 
 ### Subagent / specialist
-- Return format mandatory: `Paths` · `Delta` · `Decisions` · `Next` (each ≤5 bullets).
-- Write artifacts to **repo files**; chat = pointers.
-- Cap exploration **thoroughness: quick** unless blocked; escalate once.
-- Do not regenerate completed ADRs/stories; **amend** minimally.
+- Return: `Paths` · `Delta` · `Decisions` · `Next` (≤3 bullets each).
+- Write to **repo files**; chat = pointers.
+- Thoroughness **quick**; one escalate max.
+- No completed ADR/story regenerations.
 
 ### Forbidden waste
-- Touching or indexing **`node_modules`** (or other exclude dirs above) for any reason.
-- Mega-prompts mixing BA+Design+Arch+BE+FE in one agent call when stages need isolation — **except** micro in-place fixes.
-- Re-running the full feature pipeline for polish, chevron, copy, or “can’t see UI” layout bugs (use tech/micro path).
-- Speculative features, second frameworks, “while I’m here”.
-- Inventing routes/screens when Architect said **no-op**.
-- Fresh chat mid-slice to “save tokens” if it forces re-discovery — finish current request first; fresh chat only for **unrelated** next work.
+- Full BA→FE (or Design+Arch subagents) for **Small feature** / polish / commit.
+- Explore + multi-file doc tour before a single known edit path.
+- Re-running pipeline after merge to add list chrome on the same surface.
+- Pasting npm/tsc full logs; re-typechecking packages you did not touch.
+- Speculative features, drive-by refactors, second frameworks.
+- Fresh chat mid-slice if it forces re-discovery — finish first.
 
 ### Verify cheaply
-- Test **name-pattern** or single file tests for the slice first; full workspace suite only before ship/PR.
-- Typecheck only packages touched.
+- One test file or `--test-name-pattern` for the slice; typecheck **touched packages only**.
+- Ship/PR: still no monorepo-wide suite unless user asks or prior slice failures.

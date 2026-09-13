@@ -72,7 +72,9 @@ Chat only — **Paths · Findings · Decisions · Next** (≤5 bullets each exce
 Then **Architect triage findings** handoff (first pass) or **done** (clean re-challenge).
 
 ## Token budget (hard)
-
-- **Never** read/search `node_modules/`, `.next/`, `dist/`, `coverage/`, `.turbo/`, `.expo/`, lockfiles, `*.tsbuildinfo`.
-- Grep + ranged read; thoroughness **quick** unless blocked once.
-- No whole-doc paste. No restating other stages.
+- Obey orchestrator **size tier** (Commit/Micro/Small/Full). Do not expand Small into Full research.
+- **Never** read/search `node_modules/`, `.next/`, `dist/`, `coverage/`, `.turbo/`, `.expo/`, `*.tsbuildinfo`.
+- Load **only** paths needed; `grep` + ranged read (≤80 lines default); no whole-doc paste; no transcript replay.
+- Chat/output: **Paths · Delta · Decisions · Next** (≤3 bullets each). Write details to repo files.
+- Do not restate other stages. Do not dump tool logs. Prefer amend over rewrite.
+- Exploration thoroughness **quick** unless blocked once. Return ≤10 lines to orchestrator.

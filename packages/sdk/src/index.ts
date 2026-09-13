@@ -196,6 +196,108 @@ export function vehiclesNavA11yLabel(urgency: VehiclesNavUrgency): string {
   }
 }
 
+/** US-120 — custody filter on OA vehicles list (Company). */
+export type VehicleCustodyFilter = "all" | "out" | "in";
+
+/** US-120 — expiration sort on OA vehicles list. */
+export type VehicleListSort = "default" | "expiration_asc" | "expiration_desc";
+
+type VehicleListViewRow = {
+  id: string;
+  make?: string | null;
+  model?: string | null;
+  license_plate?: string | null;
+  insurance_on?: string | null;
+  inspection_on?: string | null;
+  road_tax_on?: string | null;
+  registration_on?: string | null;
+  custom_expirations?: Iterable<Pick<VehicleCustomExpiration, "expires_on">> | null;
+  open_out?: { handover_id: string } | null;
+};
+
+/** Relevant expiration ISO dates for sort (registration excluded). */
+export function vehicleExpirationDates(
+  vehicle: VehicleListViewRow,
+): string[] {
+  const dates: string[] = [];
+  for (const field of VEHICLE_SECTION_FIELDS) {
+    const value = vehicle[field];
+    if (value) dates.push(value);
+  }
+  for (const row of vehicle.custom_expirations ?? []) {
+    if (row.expires_on) dates.push(row.expires_on);
+  }
+  return dates;
+}
+
+/** Soonest (min) expiration ISO or null when undated. */
+export function vehicleSoonestExpiration(
+  vehicle: VehicleListViewRow,
+): string | null {
+  const dates = vehicleExpirationDates(vehicle);
+  if (!dates.length) return null;
+  return dates.reduce((a, b) => (a < b ? a : b));
+}
+
+/** Furthest (max) expiration ISO or null when undated. */
+export function vehicleFurthestExpiration(
+  vehicle: VehicleListViewRow,
+): string | null {
+  const dates = vehicleExpirationDates(vehicle);
+  if (!dates.length) return null;
+  return dates.reduce((a, b) => (a > b ? a : b));
+}
+
+export function filterVehiclesByCustody<T extends VehicleListViewRow>(
+  vehicles: Iterable<T>,
+  filter: VehicleCustodyFilter,
+): T[] {
+  const items = Array.from(vehicles);
+  if (filter === "all") return items;
+  if (filter === "out") return items.filter((v) => v.open_out != null);
+  return items.filter((v) => v.open_out == null);
+}
+
+function vehicleIdentityKey(v: VehicleListViewRow): string {
+  const label = `${(v.make ?? "").trim()} ${(v.model ?? "").trim()}`.trim().toLowerCase();
+  const plate = (v.license_plate ?? "").trim().toLowerCase();
+  return `${label}\0${plate}\0${v.id}`;
+}
+
+/**
+ * US-120 — sort vehicles. `default` preserves input order.
+ * expiration_asc = soonest first; expiration_desc = furthest first; undated last.
+ */
+export function sortVehiclesByExpiration<T extends VehicleListViewRow>(
+  vehicles: Iterable<T>,
+  sort: VehicleListSort,
+): T[] {
+  const items = Array.from(vehicles);
+  if (sort === "default") return items;
+  const asc = sort === "expiration_asc";
+  return items.slice().sort((a, b) => {
+    const da = asc ? vehicleSoonestExpiration(a) : vehicleFurthestExpiration(a);
+    const db = asc ? vehicleSoonestExpiration(b) : vehicleFurthestExpiration(b);
+    if (da == null && db == null) return vehicleIdentityKey(a).localeCompare(vehicleIdentityKey(b));
+    if (da == null) return 1;
+    if (db == null) return -1;
+    if (da !== db) {
+      if (asc) return da < db ? -1 : 1;
+      return da > db ? -1 : 1;
+    }
+    return vehicleIdentityKey(a).localeCompare(vehicleIdentityKey(b));
+  });
+}
+
+/** Filter then sort for list views (US-120). */
+export function projectVehiclesList<T extends VehicleListViewRow>(
+  vehicles: Iterable<T>,
+  opts: { custody?: VehicleCustodyFilter; sort?: VehicleListSort } = {},
+): T[] {
+  const filtered = filterVehiclesByCustody(vehicles, opts.custody ?? "all");
+  return sortVehiclesByExpiration(filtered, opts.sort ?? "default");
+}
+
 /** US-72 / US-89 compliance notification menu item (client-derived; ADR-017 / ADR-019). */
 export type ComplianceNotificationField = Exclude<
   WarningField,

@@ -518,6 +518,24 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | A141 | Holding driver “when known” = identity available on the open Out; if driver removed/unavailable after void path, cue follows void/clear rules (85) rather than inventing a name |
 | A142 | Create-vehicle form has no open Out (new asset); cue applies to list + existing vehicle detail/edit |
 
+## OA vehicles list filter & sort (US-120; extends US-11, US-89, US-119)
+
+192. **List custody filter (Must, Company):** Owner/Admin vehicles list **must** allow filtering by custody: **All**, **Out** (open Out present), **In** (no open Out). Semantics match **177** / **191**. **Individual:** filter **N/A** (**A132**). **Drivers:** not this surface.
+
+193. **List expiration sort (Must):** Owner/Admin (Company and Individual) vehicles list **must** support sorting by expiration using the **soonest** or **furthest** relevant date among non-null **insurance_on**, **inspection_on**, **road_tax_on**, and each **custom** `expires_on`. **`registration_on` never** participates. Vehicles with no relevant dates sort after dated vehicles. Default order remains product default (e.g. load order / identity) when sort is unset.
+
+194. **Client projection (Must this slice):** Filter/sort **may** run on the client over `GET /v1/vehicles` payloads (`open_out`, dates, `custom_expirations`). No required new server query params this slice (**A143**).
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E115 | Filter Out with no open Outs | Empty-filter state; not “No vehicles yet” create empty |
+| E116 | Individual seeks In/Out filter | Control absent / N/A |
+| E117 | Sort key would use registration only | Registration ignored; undated if no other dates |
+
+| ID | Assumption |
+| --- | --- |
+| A143 | Full-list client filter/sort is enough until fleets need server-side page+filter |
+
 ## Daily usage → remaining service (US-116–US-118; extends US-61–67, US-97, US-109; A62 held)
 
 183. **Trigger (Must):** Authoritative remaining **distance to service** and **time to service** move when a Daily usage row is **closed** by **End of Day**. Inputs: closed **`end_distance`**; Day Start **`usage_date`** already on the row. Day Start alone does not apply **end_distance** progress **(A135, E106)**.
