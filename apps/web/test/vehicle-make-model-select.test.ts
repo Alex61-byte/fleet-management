@@ -24,5 +24,8 @@ describe("vehicle make/model catalog select (web)", () => {
     assert.match(form, /Select model/);
     assert.match(form, /Make \(custom\)/);
     assert.match(form, /Model \(custom\)/);
+    assert.match(form, /vehicleMakeSelectValue\(make\)/);
+    assert.match(form, /vehicleModelSelectValue\(make, model\)/);
+    assert.match(form, /forceOtherMake/);
   });
 });

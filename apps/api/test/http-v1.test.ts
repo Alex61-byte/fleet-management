@@ -776,6 +776,83 @@ describe("HTTP /v1 first slice", () => {
     });
     assert.equal(me.status, 200);
     assert.equal(me.body.role, "driver");
+    assert.equal(me.body.first_name, "");
+    assert.equal(me.body.last_name, "");
+    assert.equal(me.body.second_last_name, "");
+    assert.equal(me.body.driver_name_required, true);
+  });
+
+  it("US-121 driver self-complete name; Owner forbidden; optional second last", async () => {
+    const driverLogin = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "driver@fleet.example", password: "new-driver", client: "web" },
+    });
+    assert.equal(driverLogin.status, 200);
+    const driverToken = driverLogin.body.access_token as string;
+
+    const meBefore = await json(inject, {
+      method: "GET",
+      url: "/v1/me",
+      token: driverToken,
+    });
+    assert.equal(meBefore.body.driver_name_required, true);
+
+    const blank = await json(inject, {
+      method: "PATCH",
+      url: "/v1/me/name",
+      token: driverToken,
+      payload: { first_name: "  ", last_name: "Garcia" },
+    });
+    assert.equal(blank.status, 400);
+
+    const owner = await json(inject, {
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "owner@fleet.example", password: "password1", client: "web" },
+    });
+    const ownerPatch = await json(inject, {
+      method: "PATCH",
+      url: "/v1/me/name",
+      token: owner.body.access_token,
+      payload: { first_name: "No", last_name: "pe" },
+    });
+    assert.equal(ownerPatch.status, 403);
+
+    const set = await json(inject, {
+      method: "PATCH",
+      url: "/v1/me/name",
+      token: driverToken,
+      payload: {
+        first_name: " Ana ",
+        last_name: " Garcia ",
+        second_last_name: " Lopez ",
+      },
+    });
+    assert.equal(set.status, 200);
+    assert.equal(set.body.first_name, "Ana");
+    assert.equal(set.body.last_name, "Garcia");
+    assert.equal(set.body.second_last_name, "Lopez");
+    assert.equal(set.body.driver_name_required, false);
+
+    const setNoSecond = await json(inject, {
+      method: "PATCH",
+      url: "/v1/me/name",
+      token: driverToken,
+      payload: { first_name: "Ana", last_name: "Garcia", second_last_name: "" },
+    });
+    assert.equal(setNoSecond.status, 200);
+    assert.equal(setNoSecond.body.second_last_name, "");
+    assert.equal(setNoSecond.body.driver_name_required, false);
+
+    const meAfter = await json(inject, {
+      method: "GET",
+      url: "/v1/me",
+      token: driverToken,
+    });
+    assert.equal(meAfter.body.driver_name_required, false);
+    assert.equal(meAfter.body.first_name, "Ana");
+    assert.equal(meAfter.body.last_name, "Garcia");
   });
 
   it("US-11/12/13 vehicles + warnings; registration_on not warned", async () => {

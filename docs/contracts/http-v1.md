@@ -276,6 +276,10 @@ Same session issuance rules as company register (new refresh family, US-30).
   "account_kind": "company",
   "company_name": "Fleet Co",
   "company_name_required": false,
+  "first_name": null,
+  "last_name": null,
+  "second_last_name": null,
+  "driver_name_required": false,
   "must_change_password": false,
   "login_enabled": true,
   "totp_enabled": false
@@ -284,6 +288,9 @@ Same session issuance rules as company register (new refresh family, US-30).
 
 - `company_name`: display name when `account_kind = company` (may be `""` for legacy); `null` for individual.
 - `company_name_required`: `true` only for **company Owner** when name is empty (prompt to set). Admins/drivers: `false`.
+- `first_name` / `last_name` / `second_last_name`: for **drivers**, always strings (may be `""` until set). For non-drivers: `null` or `""` is OK (unused this slice).
+- `driver_name_required`: `true` only when `role = driver` and (trim `first_name` empty **or** trim `last_name` empty). Owner/Admin: always `false`. [ADR-030](../adr/ADR-030-driver-legal-name.md) · US-121.
+- **Schema:** `principals.first_name`, `last_name`, `second_last_name` — `TEXT NOT NULL DEFAULT ''`.
 
 ### `PATCH /v1/company/name`
 
@@ -296,6 +303,30 @@ Same session issuance rules as company register (new refresh family, US-30).
 
 **200** — same shape as `GET /v1/me` after update.  
 **400** `validation_error`. **403** `forbidden` (Admin/Driver/Individual).
+
+### `PATCH /v1/me/name`
+
+**Story:** US-121 driver legal name gate  
+**Auth:** session. **Driver self only** (caller updates own principal).  
+**ADR:** [ADR-030](../adr/ADR-030-driver-legal-name.md).
+
+```json
+{
+  "first_name": "string non-empty max 80",
+  "last_name": "string non-empty max 80",
+  "second_last_name": "string max 80 optional"
+}
+```
+
+- Trim all fields before emptiness/length checks.
+- `first_name`, `last_name` required non-empty after trim; max **80**.
+- `second_last_name` optional; omit or `""` allowed; if present, max **80** after trim (empty after trim → store `""`).
+
+**200** — same shape as `GET /v1/me` after update (`driver_name_required` false when both required names set).  
+**400** `validation_error` (missing/empty required, overlong, bad types).  
+**403** `forbidden` (Owner/Admin or non-driver).
+
+Invite `POST /v1/drivers` stays **email-only**; OA driver roster name fields **out of scope** this slice.
 
 Auth success `principal` objects (register*, login, totp/verify, invite/accept) include `account_kind`. Drivers are always `"company"` when present.
 

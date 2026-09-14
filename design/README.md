@@ -275,6 +275,7 @@ Shared: [pages/_patterns.md](pages/_patterns.md)
 | Driver invite accept | [pages/driver-invite-accept.md](pages/driver-invite-accept.md) | US-09 — web + mobile set password |
 | Driver password change | [pages/driver-password-change.md](pages/driver-password-change.md) | **Retired** stub → invite accept |
 | Driver home | [pages/driver-home.md](pages/driver-home.md) | US-10, US-14 — **web + mobile** minimal shell |
+| Driver name prompt | [pages/driver-name-prompt.md](pages/driver-name-prompt.md) | US-121 — non-dismissable name modal |
 | Denied | [pages/denied.md](pages/denied.md) | US-14 / E8, US-15 — **no** E7 driver-web blanket |
 
 Each spec: purpose, density, regions, `themeClasses` names, heights, states (default/loading/empty/error/offline/denied), a11y **Name**.

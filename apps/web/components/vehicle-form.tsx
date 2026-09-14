@@ -203,10 +203,15 @@ export function VehicleForm({
   const companyTenant = me?.account_kind !== "individual";
   const [make, setMake] = useState(initial?.make ?? "");
   const [model, setModel] = useState(initial?.model ?? "");
-  const [makeSelect, setMakeSelect] = useState(() => vehicleMakeSelectValue(initial?.make));
-  const [modelSelect, setModelSelect] = useState(() =>
-    vehicleModelSelectValue(initial?.make, initial?.model),
-  );
+  /** Empty Other until the user types; non-empty text always re-resolves against the catalog. */
+  const [forceOtherMake, setForceOtherMake] = useState(false);
+  const [forceOtherModel, setForceOtherModel] = useState(false);
+  const derivedMakeSelect = vehicleMakeSelectValue(make);
+  const makeSelect =
+    derivedMakeSelect || (forceOtherMake ? VEHICLE_CATALOG_OTHER : "");
+  const derivedModelSelect = vehicleModelSelectValue(make, model);
+  const modelSelect =
+    derivedModelSelect || (forceOtherModel ? VEHICLE_CATALOG_OTHER : "");
   const [plate, setPlate] = useState(initial?.license_plate ?? "");
   const [country, setCountry] = useState(initial?.country_of_registration ?? "");
   const [mileage, setMileage] = useState(
@@ -262,6 +267,10 @@ export function VehicleForm({
   function applyVehicle(next: Vehicle) {
     const normalized = normalizeVehicle(next);
     setVehicle(normalized);
+    setMake(normalized.make);
+    setModel(normalized.model);
+    setForceOtherMake(false);
+    setForceOtherModel(false);
     setCustomExpirations(draftsFromVehicle(normalized));
     setCustomErrors({});
     onVehicleChange?.(normalized);
@@ -327,9 +336,19 @@ export function VehicleForm({
     setCustomErrors({});
     setBusy(true);
     try {
+      const makeTrimmed = make.trim();
+      const modelTrimmed = model.trim();
+      const makeCanonical = vehicleMakeSelectValue(makeTrimmed);
+      const modelCanonical = vehicleModelSelectValue(makeTrimmed, modelTrimmed);
       const next = await onSubmit({
-        make: make.trim(),
-        model: model.trim(),
+        make:
+          makeCanonical && makeCanonical !== VEHICLE_CATALOG_OTHER
+            ? makeCanonical
+            : makeTrimmed,
+        model:
+          modelCanonical && modelCanonical !== VEHICLE_CATALOG_OTHER
+            ? modelCanonical
+            : modelTrimmed,
         license_plate: plate.trim(),
         country_of_registration: country || null,
         mileage: mileage.trim() === "" ? null : mileage.trim(),
@@ -537,22 +556,24 @@ export function VehicleForm({
               aria-label="Make"
               onChange={(e) => {
                 const next = e.target.value;
-                setMakeSelect(next);
                 if (!next) {
                   setMake("");
                   setModel("");
-                  setModelSelect("");
+                  setForceOtherMake(false);
+                  setForceOtherModel(false);
                   return;
                 }
                 if (next === VEHICLE_CATALOG_OTHER) {
                   setMake("");
                   setModel("");
-                  setModelSelect(VEHICLE_CATALOG_OTHER);
+                  setForceOtherMake(true);
+                  setForceOtherModel(true);
                   return;
                 }
                 setMake(next);
                 setModel("");
-                setModelSelect("");
+                setForceOtherMake(false);
+                setForceOtherModel(false);
               }}
             >
               <option value="">Select make</option>
@@ -568,7 +589,10 @@ export function VehicleForm({
             <Field label="Make (custom)">
               <TextInput
                 value={make}
-                onChange={(e) => setMake(e.target.value)}
+                onChange={(e) => {
+                  setMake(e.target.value);
+                  setForceOtherMake(false);
+                }}
                 required
                 disabled={busy}
                 aria-label="Custom make"
@@ -583,16 +607,18 @@ export function VehicleForm({
               aria-label="Model"
               onChange={(e) => {
                 const next = e.target.value;
-                setModelSelect(next);
                 if (!next) {
                   setModel("");
+                  setForceOtherModel(false);
                   return;
                 }
                 if (next === VEHICLE_CATALOG_OTHER) {
                   setModel("");
+                  setForceOtherModel(true);
                   return;
                 }
                 setModel(next);
+                setForceOtherModel(false);
               }}
             >
               <option value="">{makeSelect ? "Select model" : "Select make first"}</option>
@@ -608,7 +634,10 @@ export function VehicleForm({
             <Field label="Model (custom)">
               <TextInput
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
+                onChange={(e) => {
+                  setModel(e.target.value);
+                  setForceOtherModel(false);
+                }}
                 required
                 disabled={busy}
                 aria-label="Custom model"

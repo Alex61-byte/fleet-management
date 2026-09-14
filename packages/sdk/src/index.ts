@@ -45,6 +45,12 @@ export type Me = Principal & {
   company_name: string | null;
   /** True when company Owner must set a missing display name (legacy tenants). */
   company_name_required: boolean;
+  /** Driver legal name parts; strings for drivers, null for non-drivers. */
+  first_name: string | null;
+  last_name: string | null;
+  second_last_name: string | null;
+  /** True when driver must self-complete missing first/last name. */
+  driver_name_required: boolean;
 };
 
 export type AuthSuccess = {
@@ -1524,6 +1530,15 @@ export class FleetClient {
   /** Owner — set company display name (register required; legacy backfill). */
   setCompanyName(input: { name: string }) {
     return this.request<Me>("PATCH", "/v1/company/name", { body: input });
+  }
+
+  /** Driver self — set legal name parts when missing (US-121). */
+  setMyName(input: {
+    first_name: string;
+    last_name: string;
+    second_last_name?: string;
+  }) {
+    return this.request<Me>("PATCH", "/v1/me/name", { body: input });
   }
 
   registerIndividual(input: { email: string; password: string }) {

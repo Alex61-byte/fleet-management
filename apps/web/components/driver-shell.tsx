@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppFooter } from "./app-footer";
+import { DriverNameDialog } from "./driver-name-dialog";
 import { BrandMark, OfflineBanner, SecondaryButton } from "./ui";
 import { themeClasses } from "../../../design/tailwind.theme";
 import { useAuth } from "../lib/auth-context";
@@ -20,6 +21,7 @@ export function DriverShell({
 
   return (
     <div className={`${themeClasses.page} min-h-screen flex flex-col`}>
+      <DriverNameDialog />
       <header
         className="sticky top-0 z-20 h-app-bar w-full bg-surface-raised border-b border-divider border-t-brand-bar border-t-brand-accent px-content-gutter-compact flex flex-row items-center gap-2"
         aria-label="Driver"

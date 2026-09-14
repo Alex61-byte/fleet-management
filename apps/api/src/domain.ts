@@ -30,6 +30,10 @@ export type Principal = {
   totpPendingSecret: string | null;
   inviteTokenHash: string | null;
   inviteExpiresAt: number | null;
+  /** Driver legal name parts (US-121); empty until self-complete. */
+  firstName: string;
+  lastName: string;
+  secondLastName: string;
 };
 
 export type CompanyProfile = {

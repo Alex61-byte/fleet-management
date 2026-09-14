@@ -2480,3 +2480,52 @@ No new screens. Confirm Service due / notification menu copy still API-driven; D
 ## Architect handoff — Daily usage → remaining service (US-116–US-118)
 
 Contract/ADR: service-due uses service_progress_odometer + as_of_date including closed Daily usage; A62 held; API-only math.
+
+
+## US-121 — Driver self-complete legal name **(Must)**
+
+**As** a signed-in **Driver** whose stored **first name** or **last name** is missing  
+**I need** a **non-dismissable** prompt for **Name**, **Last Name**, and optional **Second Last Name**  
+**So that** my principal has required name fields before I use driver app surfaces (web `/driver`, mobile `(driver)`).
+
+**MoSCoW:** **Must** — driver self-complete only. **Should / out of this slice:** Owner/Admin roster display of driver names. **Won't:** names required at invite create (US-07 stays email-only); Owner/Admin setting driver names via this prompt.
+
+**Mirrors:** Company empty-name Owner gate (`company_name_required` / CompanyNameDialog) — block until saved.
+
+**Acceptance**
+
+- **Given** I am signed in as **Driver** and after trim `first_name` is empty **or** `last_name` is empty  
+  **When** I open any driver app surface (web `/driver` or mobile `(driver)`)  
+  **Then** I see a **non-dismissable** name prompt and **cannot** use driver features until names are saved successfully.
+
+- **Given** the name prompt is shown  
+  **When** I submit **first_name** (required), **last_name** (required), and **second_last_name** (optional; may be empty string), each ≤ **80** characters after product trim rules  
+  **Then** my principal stores those values and the prompt does not reappear while both required fields remain non-empty after trim.
+
+- **Given** the name prompt is shown  
+  **When** I omit/blank **first_name** or **last_name** (after trim), or exceed max length  
+  **Then** save is rejected and I remain blocked on the prompt.
+
+- **Given** I am Driver and both required names are already set (non-empty after trim)  
+  **When** I open driver surfaces  
+  **Then** I am **not** prompted for names.
+
+- **Given** I am Owner or Admin  
+  **When** I use management surfaces  
+  **Then** I am **not** shown this driver name prompt (company name gate unchanged for Owner).
+
+- **Given** invite create (US-07)  
+  **When** Owner/Admin invites a driver by email  
+  **Then** names are **not** required at create; missing names are completed by the driver under this story after sign-in.
+
+- **Given** another principal (Owner/Admin)  
+  **When** this prompt/flow is used  
+  **Then** they **cannot** set this driver’s names through it — **only the signed-in driver** updates **their own** names.
+
+## Design Specialist handoff — Driver name prompt (US-121)
+
+Non-dismissable modal on driver web/mobile shells; fields Name, Last Name, optional Second Last Name. Mirror company-name-prompt a11y/blocking.
+
+## Architect handoff — Driver name prompt (US-121)
+
+Persist names on principal; `GET /v1/me` flag + driver self PATCH; invite create unchanged.

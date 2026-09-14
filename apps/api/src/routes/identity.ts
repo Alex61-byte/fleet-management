@@ -1,6 +1,7 @@
 import type { Client } from "../domain.ts";
 import {
   companyNameBody,
+  meNameBody,
   emailPassword,
   loginBody,
   registerBody,
@@ -179,6 +180,19 @@ export function registerIdentityRoutes(ctx: RouteContext): void {
     async (req) => {
       const body = req.body as { name: string };
       return identity.setCompanyName(req.claims!, body.name);
+    },
+  );
+
+  app.patch(
+    "/v1/me/name",
+    { preHandler: requireSession, schema: { body: meNameBody } },
+    async (req) => {
+      const body = req.body as {
+        first_name: string;
+        last_name: string;
+        second_last_name?: string;
+      };
+      return identity.setMyName(req.claims!, body);
     },
   );
 
