@@ -576,3 +576,37 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 | A139 | No FE remaining-service formulas; formatting/labels only |
 | A140 | Handover remains sole service baseline author |
 
+
+
+## Driver principal legal name (US-121; mirrors 49 / A29a company name gate)
+
+195. **Driver name fields (Must):** A **Driver** principal may store **`first_name`**, **`last_name`**, and optional **`second_last_name`**. **`first_name`** and **`last_name`** are required for continued driver app use once the driver is signed in with password set. **`second_last_name`** may be empty string **(A144)**.
+
+196. **Missing-name gate (Must):** When role is **driver** and (trim(`first_name`) is empty **or** trim(`last_name`) is empty), product **must** show a **non-dismissable** self-complete prompt and **block all driver app use** until a successful save — same blocking posture as empty company name for Owner **(49, A29a, E33a, A145)**.
+
+197. **Self-only write (Must):** Only the **signed-in driver** may set **their own** name fields via this flow. Owner/Admin **must not** complete this prompt on the driver’s behalf **(A146, E118)**.
+
+198. **Invite create unchanged (Must):** Driver **create/invite** remains **email-only** this slice (**10–14**, US-07). Names are **not** required at invite **(A147, E119)**.
+
+199. **Field limits (Must):** Each of `first_name`, `last_name`, `second_last_name`: trim on validate; max length **80** per field. Required fields must be non-empty after trim **(A144, E120)**.
+
+200. **Surfaces (Must):** Gate applies to signed-in driver **web** (`/driver`) and **mobile** (`(driver)`). Does not replace invite-accept password gate (**11–14**, US-09) **(A148)**.
+
+201. **OA roster names (Should / out):** Owner/Admin **display** of driver first/last on rosters is **not Must** this slice; prefer driver self-complete only **(A149)**.
+
+| ID | Situation | Outcome |
+| --- | --- | --- |
+| E118 | Owner/Admin attempts to set driver names via driver name prompt | Not offered / denied; driver self-only |
+| E119 | Invite create without names | Allowed; email-only create stands |
+| E120 | Save with empty first/last after trim or length > 80 | Rejected; driver remains gated |
+| E121 | Driver with both required names set | No name prompt; normal driver app |
+| E122 | Driver dismisses/skips name prompt without save | Not allowed; app use stays blocked |
+
+| ID | Assumption |
+| --- | --- |
+| A144 | Fields: first_name + last_name required; second_last_name optional empty; max 80 each |
+| A145 | Trigger: role=driver AND (trim first empty OR trim last empty); block like company_name_required |
+| A146 | Only the driver principal updates self names in this slice |
+| A147 | No names at US-07 invite create |
+| A148 | Applies after driver can sign in; does not change Owner company-name prompt audience |
+| A149 | OA roster name columns deferred unless a later story requires them |

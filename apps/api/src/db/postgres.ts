@@ -34,6 +34,9 @@ function mapPrincipal(row: pg.QueryResultRow): Principal {
     inviteExpiresAt: row.invite_expires_at
       ? new Date(row.invite_expires_at).getTime()
       : null,
+    firstName: row.first_name ?? "",
+    lastName: row.last_name ?? "",
+    secondLastName: row.second_last_name ?? "",
   };
 }
 
@@ -328,9 +331,11 @@ export class PostgresStore implements Store {
       `INSERT INTO principals (
         id, company_id, email, role, password_hash, must_change_password,
         login_enabled, totp_enabled, totp_secret, totp_pending_secret,
-        invite_token_hash, invite_expires_at
+        invite_token_hash, invite_expires_at,
+        first_name, last_name, second_last_name
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
-        CASE WHEN $12::bigint IS NULL THEN NULL ELSE to_timestamp($12/1000.0) END)`,
+        CASE WHEN $12::bigint IS NULL THEN NULL ELSE to_timestamp($12/1000.0) END,
+        $13,$14,$15)`,
       [
         p.id,
         p.companyId,
@@ -344,6 +349,9 @@ export class PostgresStore implements Store {
         p.totpPendingSecret,
         p.inviteTokenHash,
         p.inviteExpiresAt,
+        p.firstName,
+        p.lastName,
+        p.secondLastName,
       ],
     );
   }
@@ -363,7 +371,8 @@ export class PostgresStore implements Store {
       `UPDATE principals SET email=$2, password_hash=$3, must_change_password=$4,
         login_enabled=$5, totp_enabled=$6, totp_secret=$7, totp_pending_secret=$8,
         invite_token_hash=$9,
-        invite_expires_at=CASE WHEN $10::bigint IS NULL THEN NULL ELSE to_timestamp($10/1000.0) END
+        invite_expires_at=CASE WHEN $10::bigint IS NULL THEN NULL ELSE to_timestamp($10/1000.0) END,
+        first_name=$11, last_name=$12, second_last_name=$13
        WHERE id=$1`,
       [
         p.id,
@@ -376,6 +385,9 @@ export class PostgresStore implements Store {
         p.totpPendingSecret,
         p.inviteTokenHash,
         p.inviteExpiresAt,
+        p.firstName,
+        p.lastName,
+        p.secondLastName,
       ],
     );
   }

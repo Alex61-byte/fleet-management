@@ -197,10 +197,15 @@ export function VehicleForm({
   const companyTenant = me?.account_kind !== "individual";
   const [make, setMake] = useState(initial?.make ?? "");
   const [model, setModel] = useState(initial?.model ?? "");
-  const [makeSelect, setMakeSelect] = useState(() => vehicleMakeSelectValue(initial?.make));
-  const [modelSelect, setModelSelect] = useState(() =>
-    vehicleModelSelectValue(initial?.make, initial?.model),
-  );
+  /** Empty Other until the user types; non-empty text always re-resolves against the catalog. */
+  const [forceOtherMake, setForceOtherMake] = useState(false);
+  const [forceOtherModel, setForceOtherModel] = useState(false);
+  const derivedMakeSelect = vehicleMakeSelectValue(make);
+  const makeSelect =
+    derivedMakeSelect || (forceOtherMake ? VEHICLE_CATALOG_OTHER : "");
+  const derivedModelSelect = vehicleModelSelectValue(make, model);
+  const modelSelect =
+    derivedModelSelect || (forceOtherModel ? VEHICLE_CATALOG_OTHER : "");
   const [plate, setPlate] = useState(initial?.license_plate ?? "");
   const [country, setCountry] = useState(initial?.country_of_registration ?? "");
   const [mileage, setMileage] = useState(
@@ -258,6 +263,10 @@ export function VehicleForm({
   function applyVehicle(next: Vehicle) {
     const normalized = normalizeVehicle(next);
     setVehicle(normalized);
+    setMake(normalized.make);
+    setModel(normalized.model);
+    setForceOtherMake(false);
+    setForceOtherModel(false);
     setCustomExpirations(draftsFromVehicle(normalized));
     setCustomErrors({});
     onVehicleChange?.(normalized);
@@ -310,9 +319,19 @@ export function VehicleForm({
     setCustomErrors({});
     setBusy(true);
     try {
+      const makeTrimmed = make.trim();
+      const modelTrimmed = model.trim();
+      const makeCanonical = vehicleMakeSelectValue(makeTrimmed);
+      const modelCanonical = vehicleModelSelectValue(makeTrimmed, modelTrimmed);
       const next = await onSubmit({
-        make: make.trim(),
-        model: model.trim(),
+        make:
+          makeCanonical && makeCanonical !== VEHICLE_CATALOG_OTHER
+            ? makeCanonical
+            : makeTrimmed,
+        model:
+          modelCanonical && modelCanonical !== VEHICLE_CATALOG_OTHER
+            ? modelCanonical
+            : modelTrimmed,
         license_plate: plate.trim(),
         country_of_registration: country || null,
         mileage: mileage.trim() === "" ? null : mileage.trim(),
@@ -538,28 +557,37 @@ export function VehicleForm({
               placeholder="Select make"
               options={makeOptions}
               onChange={(next) => {
-                setMakeSelect(next);
                 if (!next) {
                   setMake("");
                   setModel("");
-                  setModelSelect("");
+                  setForceOtherMake(false);
+                  setForceOtherModel(false);
                   return;
                 }
                 if (next === VEHICLE_CATALOG_OTHER) {
                   setMake("");
                   setModel("");
-                  setModelSelect(VEHICLE_CATALOG_OTHER);
+                  setForceOtherMake(true);
+                  setForceOtherModel(true);
                   return;
                 }
                 setMake(next);
                 setModel("");
-                setModelSelect("");
+                setForceOtherMake(false);
+                setForceOtherModel(false);
               }}
             />
           </Field>
           {makeSelect === VEHICLE_CATALOG_OTHER ? (
             <Field label="Make (custom)">
-              <TextInput value={make} onChangeText={setMake} accessibilityLabel="Custom make" />
+              <TextInput
+                value={make}
+                onChangeText={(value) => {
+                  setMake(value);
+                  setForceOtherMake(false);
+                }}
+                accessibilityLabel="Custom make"
+              />
             </Field>
           ) : null}
           <Field label="Model">
@@ -570,22 +598,31 @@ export function VehicleForm({
               options={modelOptions}
               disabled={!makeSelect}
               onChange={(next) => {
-                setModelSelect(next);
                 if (!next) {
                   setModel("");
+                  setForceOtherModel(false);
                   return;
                 }
                 if (next === VEHICLE_CATALOG_OTHER) {
                   setModel("");
+                  setForceOtherModel(true);
                   return;
                 }
                 setModel(next);
+                setForceOtherModel(false);
               }}
             />
           </Field>
           {modelSelect === VEHICLE_CATALOG_OTHER ? (
             <Field label="Model (custom)">
-              <TextInput value={model} onChangeText={setModel} accessibilityLabel="Custom model" />
+              <TextInput
+                value={model}
+                onChangeText={(value) => {
+                  setModel(value);
+                  setForceOtherModel(false);
+                }}
+                accessibilityLabel="Custom model"
+              />
             </Field>
           ) : null}
           <Field label="License plate">

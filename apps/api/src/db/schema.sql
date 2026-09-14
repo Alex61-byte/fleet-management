@@ -30,12 +30,18 @@ CREATE TABLE IF NOT EXISTS principals (
   totp_pending_secret TEXT,
   invite_token_hash TEXT,
   invite_expires_at TIMESTAMPTZ,
+  first_name TEXT NOT NULL DEFAULT '',
+  last_name TEXT NOT NULL DEFAULT '',
+  second_last_name TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 ALTER TABLE principals ALTER COLUMN password_hash DROP NOT NULL;
 ALTER TABLE principals ADD COLUMN IF NOT EXISTS invite_token_hash TEXT;
 ALTER TABLE principals ADD COLUMN IF NOT EXISTS invite_expires_at TIMESTAMPTZ;
+ALTER TABLE principals ADD COLUMN IF NOT EXISTS first_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE principals ADD COLUMN IF NOT EXISTS last_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE principals ADD COLUMN IF NOT EXISTS second_last_name TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS principals_company_id ON principals (company_id);
 CREATE INDEX IF NOT EXISTS principals_invite_token_hash ON principals (invite_token_hash);

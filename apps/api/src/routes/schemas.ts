@@ -21,6 +21,17 @@ export const companyNameBody = {
   },
 } as const;
 
+export const meNameBody = {
+  type: "object",
+  required: ["first_name", "last_name"],
+  additionalProperties: false,
+  properties: {
+    first_name: { type: "string", minLength: 1, maxLength: 80 },
+    last_name: { type: "string", minLength: 1, maxLength: 80 },
+    second_last_name: { type: "string", maxLength: 80 },
+  },
+} as const;
+
 export const emailPassword = {
   type: "object",
   required: ["email", "password"],

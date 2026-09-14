@@ -30,6 +30,26 @@ function requireCompanyField(value: string, max: number, label: string): string 
   return trimmed;
 }
 
+function blankNameFields(): Pick<Principal, "firstName" | "lastName" | "secondLastName"> {
+  return { firstName: "", lastName: "", secondLastName: "" };
+}
+
+function requirePersonName(value: string, max: number, label: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > max) {
+    throw errors.validation(`${label} is required.`);
+  }
+  return trimmed;
+}
+
+function optionalPersonName(value: string | undefined, max: number, label: string): string {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length > max) {
+    throw errors.validation(`${label} must be at most ${max} characters.`);
+  }
+  return trimmed;
+}
+
 function mapUnique(err: unknown): never {
   if (isUniqueViolation(err)) throw errors.emailInUse();
   throw err;
@@ -73,6 +93,7 @@ export class IdentityService {
       totpSecret: null,
       totpPendingSecret: null,
       ...blankInviteFields(),
+      ...blankNameFields(),
     };
     try {
       await this.store.withTransaction(async (tx) => {
@@ -114,6 +135,7 @@ export class IdentityService {
       totpSecret: null,
       totpPendingSecret: null,
       ...blankInviteFields(),
+      ...blankNameFields(),
     };
     try {
       await this.store.withTransaction(async (tx) => {
@@ -237,6 +259,9 @@ export class IdentityService {
     const company = await this.store.findCompany(principal.companyId);
     const account_kind = company?.accountKind === "individual" ? "individual" : "company";
     const company_name = (company?.name ?? "").trim();
+    const first_name = principal.role === "driver" ? principal.firstName : null;
+    const last_name = principal.role === "driver" ? principal.lastName : null;
+    const second_last_name = principal.role === "driver" ? principal.secondLastName : null;
     return {
       id: principal.id,
       email: principal.email,
@@ -246,6 +271,12 @@ export class IdentityService {
       company_name: account_kind === "company" ? company_name : null,
       company_name_required:
         account_kind === "company" && principal.role === "owner" && !company_name,
+      first_name,
+      last_name,
+      second_last_name,
+      driver_name_required:
+        principal.role === "driver" &&
+        (!principal.firstName.trim() || !principal.lastName.trim()),
       must_change_password: principal.mustChangePassword,
       login_enabled: principal.loginEnabled,
       totp_enabled: principal.role === "driver" ? false : principal.totpEnabled,
@@ -259,6 +290,25 @@ export class IdentityService {
     if (!company || company.accountKind !== "company") throw errors.forbidden();
     const name = requireCompanyField(nameRaw, 120, "Company name");
     await this.store.updateCompany({ ...company, name });
+    return this.me(claims);
+  }
+
+  /** Driver self-only: set legal name parts when missing (US-121). */
+  async setMyName(
+    claims: AccessClaims,
+    input: { first_name: string; last_name: string; second_last_name?: string },
+  ) {
+    if (claims.role !== "driver") throw errors.forbidden();
+    const principal = await this.requirePrincipal(claims.sub);
+    if (principal.role !== "driver") throw errors.forbidden();
+    principal.firstName = requirePersonName(input.first_name, 80, "Name");
+    principal.lastName = requirePersonName(input.last_name, 80, "Last Name");
+    principal.secondLastName = optionalPersonName(
+      input.second_last_name,
+      80,
+      "Second Last Name",
+    );
+    await this.store.updatePrincipal(principal);
     return this.me(claims);
   }
 
@@ -352,6 +402,7 @@ export class IdentityService {
       totpSecret: null,
       totpPendingSecret: null,
       ...blankInviteFields(),
+      ...blankNameFields(),
     };
     try {
       await this.store.insertPrincipal(principal);
@@ -388,6 +439,7 @@ export class IdentityService {
       totpPendingSecret: null,
       inviteTokenHash: sha256(rawToken),
       inviteExpiresAt: Date.now() + INVITE_TTL_MS,
+      ...blankNameFields(),
     };
     try {
       await this.store.insertPrincipal(principal);

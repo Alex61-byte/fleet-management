@@ -20,6 +20,10 @@ function meFromPrincipal(principal: Principal, mustChangePassword = false): Me {
     totp_enabled: false,
     company_name: null,
     company_name_required: false,
+    first_name: principal.role === "driver" ? "" : null,
+    last_name: principal.role === "driver" ? "" : null,
+    second_last_name: principal.role === "driver" ? "" : null,
+    driver_name_required: principal.role === "driver",
   };
 }
 

@@ -31,8 +31,12 @@ describe("vehicle makes/models catalog", () => {
     assert.equal(vehicleMakeSelectValue(" ford "), "Ford");
     assert.equal(vehicleMakeSelectValue("Acme Motors"), VEHICLE_CATALOG_OTHER);
     assert.equal(vehicleMakeSelectValue(""), "");
+    assert.equal(vehicleMakeSelectValue("Volkswagen"), "Volkswagen");
+    assert.equal(vehicleMakeSelectValue("volkswagen"), "Volkswagen");
 
     assert.equal(vehicleModelSelectValue("Ford", "Transit"), "Transit");
+    assert.equal(vehicleModelSelectValue("Volkswagen", "Golf"), "Golf");
+    assert.equal(vehicleModelSelectValue("Volkswagen", "golf"), "Golf");
     assert.equal(vehicleModelSelectValue("Ford", "Custom Van"), VEHICLE_CATALOG_OTHER);
     assert.equal(vehicleModelSelectValue("Acme Motors", "X1"), VEHICLE_CATALOG_OTHER);
     assert.equal(vehicleCatalogModelsForMake(VEHICLE_CATALOG_OTHER).length, 0);

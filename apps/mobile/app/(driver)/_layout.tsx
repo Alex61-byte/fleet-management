@@ -1,5 +1,6 @@
 import { Redirect, Stack } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
+import { DriverNameDialog } from "../../components/driver-name-dialog";
 import { useAuth } from "../../lib/auth";
 
 export default function DriverLayout() {
@@ -13,5 +14,10 @@ export default function DriverLayout() {
   }
   if (!me) return <Redirect href="/sign-in" />;
   if (me.role !== "driver") return <Redirect href="/(owner)" />;
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <>
+      <DriverNameDialog />
+      <Stack screenOptions={{ headerShown: false }} />
+    </>
+  );
 }
