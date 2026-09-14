@@ -12,9 +12,9 @@ Company OA must show open custody + holding driver on **vehicle list and detail*
 ## Decision
 
 1. **Embed** on the **Vehicle** resource (all OA Vehicle reads that return Vehicle):  
-   `open_out: null | { handover_id, driver: { id, email } | null, created_at }`  
+   `open_out: null | { handover_id, driver: { id, email, first_name, last_name, second_last_name } | null, created_at }`  
    - Open Out only (not closed/voided). At most one per vehicle (existing invariant).  
-   - `driver` matches handover list ref; `null` if unknown/removed (A141).  
+   - `driver` matches handover list ref (email + legal name parts); `null` if unknown/removed (A141). Name parts may be empty until the driver completes US-121.  
    - **Individual:** always `null` (no company driver handovers). Field still present for stable JSON.  
    - **Not** accepted on POST/PATCH body.
 

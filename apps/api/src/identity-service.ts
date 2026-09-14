@@ -572,6 +572,9 @@ function driverJson(p: Principal) {
   return {
     id: p.id,
     email: p.email,
+    first_name: p.firstName ?? "",
+    last_name: p.lastName ?? "",
+    second_last_name: p.secondLastName ?? "",
     must_change_password: p.mustChangePassword,
     login_enabled: p.loginEnabled,
   };

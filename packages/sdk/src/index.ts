@@ -71,9 +71,25 @@ export type LoginResult = AuthSuccess | TotpRequired;
 export type Driver = {
   id: string;
   email: string;
+  /** Legal name parts (US-121); may be empty until driver self-completes. */
+  first_name: string;
+  last_name: string;
+  second_last_name: string;
   must_change_password: boolean;
   login_enabled: boolean;
 };
+
+/** Display full legal name from name parts; empty when unset. */
+export function formatDriverFullName(parts: {
+  first_name?: string | null;
+  last_name?: string | null;
+  second_last_name?: string | null;
+}): string {
+  return [parts.first_name, parts.last_name, parts.second_last_name]
+    .map((p) => (p ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
 
 export type Warning = { field: WarningField; state: WarningState };
 
@@ -998,7 +1014,13 @@ export function odometerUnitForCountry(country: string | null | undefined): Odom
 /** Open Handover Out summary on OA Vehicle reads (US-119 / ADR-028). */
 export type VehicleOpenOut = {
   handover_id: string;
-  driver: { id: string; email: string } | null;
+  driver: {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    second_last_name: string;
+  } | null;
   created_at: string;
 };
 
@@ -1090,7 +1112,13 @@ export type DriverTravel = {
 export type HandoverType = "out" | "in";
 export type HandoverStatus = "open" | "closed" | "voided";
 
-export type HandoverDriverRef = { id: string; email: string } | null;
+export type HandoverDriverRef = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  second_last_name: string;
+} | null;
 
 export type HandoverVehicleSummary = {
   id: string;

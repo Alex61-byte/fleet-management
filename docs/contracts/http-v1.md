@@ -393,12 +393,16 @@ Owner or Admin. Drivers: **403**.
 {
   "id": "uuid",
   "email": "...",
+  "first_name": "",
+  "last_name": "",
+  "second_last_name": "",
   "must_change_password": true,
   "login_enabled": true
 }
 ```
 
 **Invite pending:** `must_change_password === true` (no usable password).
+**Name parts:** always strings on driver reads (may be `""` until the driver self-completes via `PATCH /v1/me/name`). OA roster remains email-only on write; names are **read-only** on driver list/detail.
 
 ### `GET /v1/drivers` → `{ items: [driver] }`
 
@@ -492,7 +496,13 @@ When an open Handover Out exists (Company only):
 ```json
 "open_out": {
   "handover_id": "uuid",
-  "driver": { "id": "uuid", "email": "driver@fleet.example" },
+  "driver": {
+    "id": "uuid",
+    "email": "driver@fleet.example",
+    "first_name": "Alex",
+    "last_name": "Driver",
+    "second_last_name": ""
+  },
   "created_at": "2026-09-07T10:00:00.000Z"
 }
 ```
@@ -509,7 +519,7 @@ When an open Handover Out exists (Company only):
 | `warnings` | Server-computed on reads: insurance/inspection/road_tax **and** `custom:<uuid>` for each custom row in the A1 window. **`registration_on` never.** Same UTC 30-day rule (ADR-004). |
 | `has_side_images` | `true` if any side has a stored path (**Should** list presence cue) |
 | `side_images` | Always keys `FRONT` \| `LEFT` \| `RIGHT` \| `BACK`. Empty: `null`. Filled: `{ "path", "url" }` (`path` = Storage key; `url` = signed GET ~1h) |
-| `open_out` | Read-only. Always present on Vehicle reads. `null` = no open Out (never Out, closed In, voided) **or** Individual tenant. Object = open custody summary: `handover_id`, `driver` (`{id,email}` \| `null` if unknown/removed), `created_at` (Out created ISO). **Not** on write. Company OA list+detail (US-119, [ADR-028](../adr/ADR-028-vehicle-open-out-summary.md)). One open Out per vehicle. |
+| `open_out` | Read-only. Always present on Vehicle reads. `null` = no open Out (never Out, closed In, voided) **or** Individual tenant. Object = open custody summary: `handover_id`, `driver` (`{id,email,first_name,last_name,second_last_name}` \| `null` if unknown/removed), `created_at` (Out created ISO). Name parts may be `""` until set. **Not** on write. Company OA list+detail (US-119, [ADR-028](../adr/ADR-028-vehicle-open-out-summary.md)). One open Out per vehicle. |
 | Image bytes | **Not** on POST/PATCH vehicle. Upload only via side routes after vehicle exists |
 
 **Removed:** `car`. Storage: [ADR-013](../adr/ADR-013-vehicle-side-images.md). Mileage: [ADR-014](../adr/ADR-014-vehicle-mileage.md). Custom expirations: [ADR-019](../adr/ADR-019-vehicle-custom-expirations.md). Open Out summary: [ADR-028](../adr/ADR-028-vehicle-open-out-summary.md). Owner/Admin only; drivers **403** on fleet vehicle + image routes.

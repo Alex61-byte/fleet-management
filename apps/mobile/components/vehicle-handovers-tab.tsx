@@ -1,5 +1,6 @@
 import {
   FleetApiError,
+  formatDriverFullName,
   odometerUnitLabel,
   type HandoverDetail,
   type HandoverListItem,
@@ -34,7 +35,10 @@ function typeBadgeClass(type: HandoverType): string {
 }
 
 function driverLabel(item: Pick<HandoverListItem, "driver">): string {
-  if (item.driver?.email) return item.driver.email;
+  if (!item.driver) return "Unavailable";
+  const fullName = formatDriverFullName(item.driver);
+  if (fullName) return fullName;
+  if (item.driver.email?.trim()) return item.driver.email;
   return "Unavailable";
 }
 

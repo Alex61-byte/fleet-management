@@ -584,6 +584,9 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(driver.body.must_change_password, true);
     assert.equal(driver.body.login_enabled, true);
     assert.equal(driver.body.invite_email_sent, true);
+    assert.equal(driver.body.first_name, "");
+    assert.equal(driver.body.last_name, "");
+    assert.equal(driver.body.second_last_name, "");
 
     const dup = await json(inject, {
       method: "POST",
@@ -853,6 +856,18 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(meAfter.body.driver_name_required, false);
     assert.equal(meAfter.body.first_name, "Ana");
     assert.equal(meAfter.body.last_name, "Garcia");
+
+    const roster = await json(inject, {
+      method: "GET",
+      url: "/v1/drivers",
+      token: owner.body.access_token,
+    });
+    assert.equal(roster.status, 200);
+    const row = roster.body.items.find((d: { email: string }) => d.email === "driver@fleet.example");
+    assert.ok(row);
+    assert.equal(row.first_name, "Ana");
+    assert.equal(row.last_name, "Garcia");
+    assert.equal(row.second_last_name, "");
   });
 
   it("US-11/12/13 vehicles + warnings; registration_on not warned", async () => {
@@ -3062,6 +3077,9 @@ describe("HTTP /v1 first slice", () => {
     const listRow = vehiclesOpen.body.items.find((i: { id: string }) => i.id === vehicleId);
     assert.ok(listRow?.open_out);
     assert.equal(listRow.open_out.driver.email, driverEmail);
+    assert.equal(typeof listRow.open_out.driver.first_name, "string");
+    assert.equal(typeof listRow.open_out.driver.last_name, "string");
+    assert.equal(typeof listRow.open_out.driver.second_last_name, "string");
     assert.ok(listRow.open_out.handover_id);
     assert.ok(listRow.open_out.created_at);
 
@@ -3072,6 +3090,7 @@ describe("HTTP /v1 first slice", () => {
     });
     assert.equal(vehicleDetail.status, 200);
     assert.equal(vehicleDetail.body.open_out?.driver?.email, driverEmail);
+    assert.equal(typeof vehicleDetail.body.open_out?.driver?.first_name, "string");
     assert.equal(vehicleDetail.body.open_out?.handover_id, listRow.open_out.handover_id);
 
     const driverOpenList = await json(inject, {

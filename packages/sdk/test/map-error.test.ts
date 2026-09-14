@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   complianceNotificationItems,
   complianceNotificationsA11yLabel,
+  formatDriverFullName,
   notificationMenuItems,
   daysUntilUtc,
   mapAuthError,
@@ -13,6 +14,16 @@ import {
   warningA11y,
   warningFieldLabel,
 } from "../src/index.ts";
+
+test("formatDriverFullName joins trimmed parts", () => {
+  assert.equal(
+    formatDriverFullName({ first_name: " Ana ", last_name: "Garcia", second_last_name: "Lopez" }),
+    "Ana Garcia Lopez",
+  );
+  assert.equal(formatDriverFullName({ first_name: "Ana", last_name: "Garcia", second_last_name: "" }), "Ana Garcia");
+  assert.equal(formatDriverFullName({ first_name: "", last_name: "", second_last_name: "" }), "");
+  assert.equal(formatDriverFullName({ first_name: null, last_name: null, second_last_name: null }), "");
+});
 
 test("mapAuthError hides credential details", () => {
   assert.equal(mapAuthError("invalid_credentials", "x"), "Sign-in details are not correct.");

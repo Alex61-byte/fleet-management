@@ -17,12 +17,13 @@ pageHeader
 toolbar
   caption font-tabular “{n} drivers”
 tableWrap
-  Email | Login status
+  Name | Email | Login status
 ```
 
 | Column | Class | Content |
 | --- | --- | --- |
-| Email | `tableCellLink` | Driver email — identity cell; no underline at rest; hover `tableCellLinkHover` |
+| Name | `tableCellLink` / `label` | Full legal name when set (`first` + `last` + optional second last). When empty (invite pending / not yet completed): omit primary name line and keep **Email** as identity. |
+| Email | `tableCellLink` or `caption` | Driver email — primary identity when name empty; secondary `caption` under name when name present |
 | Login status | badge + text | `badgeOk` “Can sign in” \| `badgeNeutral` “Invite pending” \| `badgeExpired` “Login disabled” |
 
 Row hover `tableRowHover`; entire row opens edit. Sticky header. **Not** a stack of `raised` cards.
@@ -35,7 +36,7 @@ Row hover `tableRowHover`; entire row opens edit. Sticky header. **Not** a stack
 
 ## List — mobile
 
-`appBarMobile` “Drivers” + Add. `listRow` 56px: email `label`; status `caption` + matching badge. Hairline `border-divider` only. Tap row → edit. **No** swipe-to-delete or row delete control.
+`appBarMobile` “Drivers” + Add. `listRow` ≥56px: **full name** `label` when set; email `label` (or `caption` under name); status `caption` + matching badge. Hairline `border-divider` only. Tap row → edit. **No** swipe-to-delete or row delete control.
 
 ## Empty / loading / error (list)
 

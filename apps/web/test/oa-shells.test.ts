@@ -37,6 +37,7 @@ describe("OA shells (drivers, vehicles, admins, security)", () => {
     assert.match(drivers, /account_kind === "individual"/);
     assert.match(drivers, /Login disabled/);
     assert.match(drivers, /Invite pending/);
+    assert.match(drivers, /formatDriverFullName/);
     assert.match(drivers, /href="\/drivers\/new"/);
     assert.match(drivers, /href=\{`\/drivers\/\$\{d\.id\}`\}/);
   });
