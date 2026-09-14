@@ -3012,9 +3012,20 @@ describe("HTTP /v1 first slice", () => {
     assert.equal(report.body.items[0].status, "closed");
     assert.equal(report.body.items[0].refuel_amount, 12);
 
+    const byVehicle = await json(inject, {
+      method: "GET",
+      url: `/v1/reports/daily-usage?vehicle_id=${vehicleId}`,
+      token: ownerToken,
+    });
+    assert.equal(byVehicle.status, 200);
+    assert.ok(byVehicle.body.items.length >= 1);
+    assert.ok(
+      byVehicle.body.items.every((i: { vehicle_id: string }) => i.vehicle_id === vehicleId),
+    );
+
     const csv = await inject({
       method: "GET",
-      url: "/v1/reports/daily-usage.csv",
+      url: `/v1/reports/daily-usage.csv?vehicle_id=${vehicleId}`,
       headers: { authorization: `Bearer ${ownerToken}` },
     });
     assert.equal(csv.statusCode, 200);

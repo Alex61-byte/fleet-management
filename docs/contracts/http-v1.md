@@ -892,6 +892,20 @@ Driver only. Completes the caller’s **open** row (no id required).
 
 **Default “today”** is client-only on Day Start; API does not inject date.
 
+### `GET /v1/reports/daily-usage` · `GET /v1/reports/daily-usage.csv` (US-96)
+
+Company Owner/Admin only. Individual / Driver → **403**.
+
+| Query | Required | Notes |
+| --- | --- | --- |
+| `vehicle_id` | no | UUID; company vehicle; unknown → **404** |
+| `from` | no | `YYYY-MM-DD` inclusive |
+| `to` | no | `YYYY-MM-DD` inclusive; must be ≥ `from` when both set |
+
+**JSON 200** `{ "items": CompanyDailyUsage[] }` — newest first; filter by vehicle/dates when provided.  
+**CSV 200** `text/csv` same row scope; attachment `daily-usage.csv`.
+
+Web UX is **vehicle-first** (list vehicles, then filter); API still allows omit `vehicle_id` for full-company list (tests / export tooling).
 
 ---
 

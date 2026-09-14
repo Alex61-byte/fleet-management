@@ -933,7 +933,7 @@ export class PostgresStore implements Store {
 
   async listDailyUsageForCompany(
     companyId: string,
-    opts?: { from?: string; to?: string },
+    opts?: { from?: string; to?: string; vehicleId?: string },
   ): Promise<DriverDailyUsage[]> {
     const params: unknown[] = [companyId];
     let sql = `SELECT id, company_id, driver_id, vehicle_id,
@@ -943,6 +943,10 @@ export class PostgresStore implements Store {
               created_at, closed_at
        FROM driver_daily_usages
        WHERE company_id=$1`;
+    if (opts?.vehicleId) {
+      params.push(opts.vehicleId);
+      sql += ` AND vehicle_id = $${params.length}`;
+    }
     if (opts?.from) {
       params.push(opts.from);
       sql += ` AND usage_date >= $${params.length}`;

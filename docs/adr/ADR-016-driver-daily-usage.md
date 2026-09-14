@@ -56,7 +56,7 @@ Drivers log **Daily usage** against their **active next-travel** vehicle. Produc
 | `GET` | `/v1/driver/daily-usage` | Driver | List own entries (open + closed) newest first |
 | `POST` | `/v1/driver/daily-usage` | Driver | **Day Start** (create open) |
 | `POST` | `/v1/driver/daily-usage/end` | Driver | **End of Day** (close open) |
-| `GET` | `/v1/reports/daily-usage` (+ `.csv`) | Company OA | Company report including status + refuel |
+| `GET` | `/v1/reports/daily-usage` (+ `.csv`) | Company OA | Report + CSV; optional `vehicle_id`, `from`, `to` (status + refuel) |
 
 - **No** `vehicle_id` on Day Start body.
 - **No** general PATCH/DELETE.

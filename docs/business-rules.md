@@ -189,7 +189,7 @@ Testable rules for company access, drivers, and fleet records. Assumptions are m
 93. **Date and times (Must):** `usage_date` local calendar (default **today** on Day Start). Times local `HH:mm`; on End of Day **end_time ≥ start_time** **(A63, E63)**.
 94. **Optional refuel (Must):** On **either** Day Start or End of Day, optional **`refuel_amount`** and/or **`refuel_at_mileage`**, independently. If present: ≥ 0, max 1 decimal **(E70)**. No fuel cost/type. Refuel does **not** write `vehicle.mileage` **(A62)**.
 95. **Multiplicity (Must):** Multiple **closed** rows per driver per date allowed; at most **one open** per driver **(A64)**.
-96. **Who reads (Must):** Driver lists **own** rows (open+closed, newest first) with status + refuel when set. **Company** Owner/Admin report + CSV include status + refuel (**US-96**); Individual → forbidden **(A65)**.
+96. **Who reads (Must):** Driver lists **own** rows (open+closed, newest first) with status + refuel when set. **Company** Owner/Admin report is **vehicle-first**: list company vehicles, then usage (+ CSV) scoped by **`vehicle_id`** with optional `from`/`to`; includes status + refuel (**US-96**); Individual → forbidden **(A65)**.
 97. **Immutability (Must):** **Closed** rows: no free-form edit/delete **(A66, E65)**. **Open** rows: complete **only** via End of Day; not general PATCH of start fields **(A66)**.
 98. **Company isolation (Must):** Day Start / End of Day / list scoped to caller company and principal **(A8, E66)**.
 99. **Surfaces (Must):** Day Start and End of Day on **web and mobile** driver experience; hub entry; not auto-opened on login **(A67)**.

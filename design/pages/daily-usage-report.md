@@ -1,12 +1,15 @@
 # Daily usage report (company)
 
 **Stories:** US-96 (amended) · US-113–US-115  
-Company Owner/Admin company-wide daily usage list + CSV export.
+Company Owner/Admin **vehicle-first** daily usage + CSV export.
 
-## Row content
+## Flow
+1. **Vehicle list** — company vehicles (label · plate); select one.
+2. **Selected vehicle** — back control; optional **From** / **To** + Apply; usage rows for that vehicle; Export CSV in shell action (same scope).
+
+## Row content (after vehicle selected)
 - Date · **status** (open|closed) · driver email
-- Vehicle label · plate
-- Places · distances · times
+- Places · distances · times (vehicle already chosen — plate optional in row)
 - **Refuel** amount (+ unit) and refuel-at-mileage when set
 
 ## CSV columns
@@ -14,10 +17,11 @@ Company Owner/Admin company-wide daily usage list + CSV export.
 
 ## States
 - Individual: explanatory empty (feature N/A)
-- Filters from/to dates
-- Loading / empty / error
-- CSV download control in shell action
+- Vehicle list: loading / empty / error
+- After select: date filters; usage loading / empty / error
+- CSV disabled until vehicle selected; disabled offline
 
 ## A11y
+- Vehicle rows are buttons/links with accessible names (label + plate)
 - Form labels on date filters
-- Export button disabled offline
+- Export button disabled offline / no vehicle

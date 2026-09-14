@@ -49,7 +49,9 @@ describe("manager loop UI (US-93–99 web)", () => {
     assert.match(serviceDue, /service_progress_odometer/);
     assert.match(serviceDue, /days_elapsed/);
     assert.match(serviceDue, /distance_remaining/);
+    assert.match(report, /listVehicles/);
     assert.match(report, /listCompanyDailyUsage/);
+    assert.match(report, /vehicleId: selected\.id/);
     assert.match(report, /downloadCompanyDailyUsageCsv/);
   });
 

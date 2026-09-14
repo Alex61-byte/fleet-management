@@ -179,13 +179,15 @@ export class FleetService {
 
   listCompanyDailyUsage(
     claims: AccessClaims,
-    opts?: { from?: string; to?: string },) {
+    opts?: { from?: string; to?: string; vehicleId?: string },
+  ) {
     return this.reports.listCompanyDailyUsage(claims, opts);
   }
 
   companyDailyUsageCsv(
     claims: AccessClaims,
-    opts?: { from?: string; to?: string },) {
+    opts?: { from?: string; to?: string; vehicleId?: string },
+  ) {
     return this.reports.companyDailyUsageCsv(claims, opts);
   }
 
