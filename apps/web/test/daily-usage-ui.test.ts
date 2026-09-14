@@ -53,7 +53,10 @@ describe("daily usage UI (US-61–US-67 · US-113–US-115 web)", () => {
     assert.match(page, /last recorded end distance/);
   });
 
-  it("OA report shows status and refuel", () => {
+  it("OA report is vehicle-first then status and refuel", () => {
+    assert.match(report, /listVehicles/);
+    assert.match(report, /Select a vehicle/);
+    assert.match(report, /vehicleId: selected\.id/);
     assert.match(report, /row\.status/);
     assert.match(report, /refuel_amount/);
     assert.match(report, /refuel_at_mileage/);

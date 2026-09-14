@@ -1933,18 +1933,22 @@ Public web only. Catalog: [pricing-plans.md](pricing-plans.md). Spec: [design/pa
 ## US-96 — Owner/Admin Daily usage report **(Must)**
 
 **As** a Company Owner or Admin  
-**I need** to list Daily usage across my company and export CSV  
-**So that** I can review driver activity without spreadsheets.
+**I need** to pick a vehicle, then list its Daily usage (optional dates) and export CSV  
+**So that** I can review activity per car without spreadsheets.
 
 **Acceptance**
 
 - **Given** I am Company Owner/Admin  
-  **When** I open Daily usage report (optional `from`/`to` dates)  
-  **Then** I see company-scoped rows (driver email, vehicle, **status**, places, distances, times, **refuel amount/unit and refuel-at-mileage when set**), newest first.
+  **When** I open Daily usage report  
+  **Then** I first see my company **vehicle list** (not a company-wide usage dump).
 
-- **Given** I request CSV  
+- **Given** I select a vehicle  
+  **When** the vehicle is chosen  
+  **Then** I see optional `from`/`to` date filters and usage rows for **that vehicle only** (driver email, **status**, places, distances, times, **refuel when set**), newest first. API may use `vehicle_id` (+ optional dates).
+
+- **Given** I request CSV with a vehicle selected  
   **When** export runs  
-  **Then** I receive `text/csv` of the same scope including status + refuel columns.
+  **Then** I receive `text/csv` of the **same vehicle (+ date) scope** including status + refuel columns.
 
 - **Given** I am Individual Owner or Driver  
   **When** I call owner daily-usage report  

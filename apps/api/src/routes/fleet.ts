@@ -116,15 +116,23 @@ export function registerFleetRoutes(ctx: RouteContext): void {
     },
   );
 
-  // US-96 — Owner/Admin company daily usage report
+  // US-96 — Owner/Admin company daily usage report (optional vehicle_id + from/to)
   app.get("/v1/reports/daily-usage", { preHandler: requireSession }, async (req) => {
-    const q = req.query as { from?: string; to?: string };
-    return fleet.listCompanyDailyUsage(req.claims!, { from: q.from, to: q.to });
+    const q = req.query as { from?: string; to?: string; vehicle_id?: string };
+    return fleet.listCompanyDailyUsage(req.claims!, {
+      from: q.from,
+      to: q.to,
+      vehicleId: q.vehicle_id,
+    });
   });
 
   app.get("/v1/reports/daily-usage.csv", { preHandler: requireSession }, async (req, reply) => {
-    const q = req.query as { from?: string; to?: string };
-    const csv = await fleet.companyDailyUsageCsv(req.claims!, { from: q.from, to: q.to });
+    const q = req.query as { from?: string; to?: string; vehicle_id?: string };
+    const csv = await fleet.companyDailyUsageCsv(req.claims!, {
+      from: q.from,
+      to: q.to,
+      vehicleId: q.vehicle_id,
+    });
     return reply
       .header("content-type", "text/csv; charset=utf-8")
       .header("content-disposition", 'attachment; filename="daily-usage.csv"')

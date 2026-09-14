@@ -63,11 +63,12 @@ export class FleetReports {
   constructor(private readonly ctx: FleetContext) {}
   async listCompanyDailyUsage(
     claims: AccessClaims,
-    opts?: { from?: string; to?: string },
+    opts?: { from?: string; to?: string; vehicleId?: string },
   ) {
     await assertCompanyTenantUser(this.ctx.store, claims);
     const from = opts?.from?.trim();
     const to = opts?.to?.trim();
+    const vehicleId = opts?.vehicleId?.trim();
     if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
       throw errors.validation("from must be YYYY-MM-DD");
     }
@@ -77,10 +78,20 @@ export class FleetReports {
     if (from && to && from > to) {
       throw errors.validation("from must be on or before to");
     }
+    if (vehicleId) {
+      if (!isUuid(vehicleId)) {
+        throw errors.validation("vehicle_id must be a UUID");
+      }
+      const vehicle = await this.ctx.store.findVehicle(vehicleId, claims.company_id);
+      if (!vehicle) {
+        throw errors.notFound();
+      }
+    }
 
     const rows = await this.ctx.store.listDailyUsageForCompany(claims.company_id, {
       from: from || undefined,
       to: to || undefined,
+      vehicleId: vehicleId || undefined,
     });
     const items = [];
     for (const row of rows) {
@@ -114,7 +125,7 @@ export class FleetReports {
 
   async companyDailyUsageCsv(
     claims: AccessClaims,
-    opts?: { from?: string; to?: string },
+    opts?: { from?: string; to?: string; vehicleId?: string },
   ): Promise<string> {
     const { items } = await this.listCompanyDailyUsage(claims, opts);
     const header = [

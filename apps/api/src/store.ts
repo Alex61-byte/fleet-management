@@ -110,7 +110,7 @@ export interface Store {
   listDailyUsageForDriver(driverId: string, companyId: string): Promise<DriverDailyUsage[]>;
   listDailyUsageForCompany(
     companyId: string,
-    opts?: { from?: string; to?: string },
+    opts?: { from?: string; to?: string; vehicleId?: string },
   ): Promise<DriverDailyUsage[]>;
   /** Closed rows with end_distance for service progress (US-116–118). */
   listClosedDailyUsageServiceSignals(
@@ -539,11 +539,12 @@ export class MemoryStore implements Store {
 
   async listDailyUsageForCompany(
     companyId: string,
-    opts?: { from?: string; to?: string },
+    opts?: { from?: string; to?: string; vehicleId?: string },
   ): Promise<DriverDailyUsage[]> {
     return [...this.dailyUsages.values()]
       .filter((u) => {
         if (u.companyId !== companyId) return false;
+        if (opts?.vehicleId && u.vehicleId !== opts.vehicleId) return false;
         if (opts?.from && u.usageDate < opts.from) return false;
         if (opts?.to && u.usageDate > opts.to) return false;
         return true;

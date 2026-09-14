@@ -1850,9 +1850,10 @@ export class FleetClient {
     return this.request<void>("DELETE", `/v1/vehicles/${vehicleId}/documents/${docId}`);
   }
 
-  /** US-96 — company daily usage report. */
-  listCompanyDailyUsage(opts?: { from?: string; to?: string }) {
+  /** US-96 — company daily usage report (optional vehicle + date range). */
+  listCompanyDailyUsage(opts?: { from?: string; to?: string; vehicleId?: string }) {
     const q = new URLSearchParams();
+    if (opts?.vehicleId) q.set("vehicle_id", opts.vehicleId);
     if (opts?.from) q.set("from", opts.from);
     if (opts?.to) q.set("to", opts.to);
     const qs = q.toString();
@@ -1868,8 +1869,13 @@ export class FleetClient {
   }
 
   /** US-96 — company daily usage CSV as blob/text via low-level fetch. */
-  async downloadCompanyDailyUsageCsv(opts?: { from?: string; to?: string }): Promise<string> {
+  async downloadCompanyDailyUsageCsv(opts?: {
+    from?: string;
+    to?: string;
+    vehicleId?: string;
+  }): Promise<string> {
     const q = new URLSearchParams();
+    if (opts?.vehicleId) q.set("vehicle_id", opts.vehicleId);
     if (opts?.from) q.set("from", opts.from);
     if (opts?.to) q.set("to", opts.to);
     const qs = q.toString();
