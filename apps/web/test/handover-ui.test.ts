@@ -66,6 +66,7 @@ describe("vehicle handovers UI (US-51–US-60 web)", () => {
     const ui = readFileSync(join(root, "components/ui.tsx"), "utf8");
     assert.match(ui, /OpenOutCustodyCue/);
     assert.match(ui, /Out open/);
+    assert.match(ui, /formatDriverFullName/);
     assert.match(list, /OpenOutCustodyCue/);
     assert.match(list, /open_out/);
     assert.match(form, /OpenOutCustodyCue/);

@@ -56,8 +56,7 @@ export function VehicleDocumentsTab({
     void load();
   }, [load]);
 
-  async function onUpload(e: React.FormEvent) {
-    e.preventDefault();
+  async function onUpload() {
     setFormError(null);
     setFormOk(null);
     if (offline) {
@@ -102,7 +101,8 @@ export function VehicleDocumentsTab({
 
   return (
     <div className="flex flex-col gap-3">
-      <form onSubmit={(e) => void onUpload(e)} className="flex flex-col gap-2">
+      {/* Nested form tags are invalid under parent VehicleForm. */}
+      <div className="flex flex-col gap-2">
         <h2 className={themeClasses.label}>Upload document</h2>
         {formError ? <Banner tone="danger">{formError}</Banner> : null}
         {formOk ? <p className={themeClasses.caption} role="status">{formOk}</p> : null}
@@ -137,10 +137,10 @@ export function VehicleDocumentsTab({
             className="block w-full text-body text-text-primary"
           />
         </Field>
-        <PrimaryButton type="submit" disabled={busy || offline}>
+        <PrimaryButton type="button" disabled={busy || offline} onClick={() => void onUpload()}>
           {busy ? "Working…" : "Upload"}
         </PrimaryButton>
-      </form>
+      </div>
 
       <div className="flex flex-col gap-1">
         <h2 className={themeClasses.label}>Documents</h2>

@@ -27,6 +27,15 @@ describe("manager loop UI (US-93–99 web)", () => {
     assert.match(form, /Issues/);
   });
 
+  it("documents and issues avoid nested forms under VehicleForm", () => {
+    assert.doesNotMatch(docs, /<form[\s>]/);
+    assert.doesNotMatch(issues, /<form[\s>]/);
+    assert.match(docs, /type="button"/);
+    assert.match(issues, /type="button"/);
+    assert.match(docs, /onClick=\{\(\) => void onUpload\(\)\}/);
+    assert.match(issues, /onClick=\{\(\) => void onCreate\(\)\}/);
+  });
+
   it("documents and issues call SDK methods", () => {
     assert.match(docs, /uploadVehicleDocument/);
     assert.match(docs, /listVehicleDocuments/);

@@ -2,7 +2,12 @@
 
 import { themeClasses } from "../../../design/tailwind.theme";
 import { AppFooter } from "./app-footer";
-import type { VehicleCustomExpiration, VehicleOpenOut, Warning } from "@fleet/sdk";
+import {
+  formatDriverFullName,
+  type VehicleCustomExpiration,
+  type VehicleOpenOut,
+  type Warning,
+} from "@fleet/sdk";
 import { warningFieldLabel } from "@fleet/sdk";
 import Link from "next/link";
 import {
@@ -402,7 +407,10 @@ export function ExpiryBadges({
 /** US-119 — open Out + holding driver on OA vehicle list/Details. */
 export function openOutHolderLabel(openOut: VehicleOpenOut | null | undefined): string | null {
   if (!openOut) return null;
-  return openOut.driver?.email?.trim() ? openOut.driver.email : "Unavailable";
+  if (!openOut.driver) return "Unavailable";
+  const fullName = formatDriverFullName(openOut.driver);
+  if (fullName) return fullName;
+  return openOut.driver.email?.trim() ? openOut.driver.email : "Unavailable";
 }
 
 export function openOutCustodyA11y(openOut: VehicleOpenOut | null | undefined): string {

@@ -58,10 +58,19 @@ import {
   toTravelJson,
 } from "./shared.ts";
 
+/** OA driver ref on handovers / open_out (email + legal name parts). */
+export type DriverRefJson = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  second_last_name: string;
+};
+
 /** Read-only open Out custody summary on Vehicle JSON (US-119 / ADR-028). */
 export type VehicleOpenOutJson = {
   handover_id: string;
-  driver: { id: string; email: string } | null;
+  driver: DriverRefJson | null;
   created_at: string;
 };
 
@@ -134,11 +143,17 @@ export class FleetContext {
     return map;
   }
 
-  async driverRef(driverId: string | null) {
+  async driverRef(driverId: string | null): Promise<DriverRefJson | null> {
     if (!driverId) return null;
     const p = await this.store.findPrincipalById(driverId);
     if (!p) return null;
-    return { id: p.id, email: p.email };
+    return {
+      id: p.id,
+      email: p.email,
+      first_name: p.firstName ?? "",
+      last_name: p.lastName ?? "",
+      second_last_name: p.secondLastName ?? "",
+    };
   }
 
   vehicleSummary(vehicle: Vehicle) {

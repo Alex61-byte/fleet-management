@@ -1,4 +1,4 @@
-import type { Driver } from "@fleet/sdk";
+import { formatDriverFullName, type Driver } from "@fleet/sdk";
 import { Link, Stack } from "expo-router";
 import { OwnerHeaderNotifications } from "../../../components/owner-header-notifications";
 import { useEffect, useState } from "react";
@@ -82,17 +82,31 @@ export default function DriversList() {
           <PrimaryLink href="/(owner)/drivers/new" title="Add driver" />
         </>
       ) : (
-        items?.map((d) => (
-          <Link key={d.id} href={`/(owner)/drivers/${d.id}`} asChild>
-            <Pressable
-              className="bg-surface-raised border border-border rounded-md p-2 min-h-hit"
-              accessibilityLabel={`${d.email} ${statusCopy(d)}`}
-            >
-              <Text className="font-medium text-label text-text-primary">{d.email}</Text>
-              <Text className="text-caption text-text-secondary">{statusCopy(d)}</Text>
-            </Pressable>
-          </Link>
-        ))
+        items?.map((d) => {
+          const fullName = formatDriverFullName(d);
+          return (
+            <Link key={d.id} href={`/(owner)/drivers/${d.id}`} asChild>
+              <Pressable
+                className="bg-surface-raised border border-border rounded-md p-2 min-h-hit"
+                accessibilityLabel={[fullName, d.email, statusCopy(d)].filter(Boolean).join(", ")}
+              >
+                {fullName ? (
+                  <Text className="font-medium text-label text-text-primary">{fullName}</Text>
+                ) : null}
+                <Text
+                  className={
+                    fullName
+                      ? "text-caption text-text-secondary"
+                      : "font-medium text-label text-text-primary"
+                  }
+                >
+                  {d.email}
+                </Text>
+                <Text className="text-caption text-text-secondary">{statusCopy(d)}</Text>
+              </Pressable>
+            </Link>
+          );
+        })
       )}
     </ScrollView>
   );

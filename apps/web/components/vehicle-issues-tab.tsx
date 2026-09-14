@@ -35,8 +35,7 @@ export function VehicleIssuesTab({
     void load();
   }, [load]);
 
-  async function onCreate(e: React.FormEvent) {
-    e.preventDefault();
+  async function onCreate() {
     setFormError(null);
     if (offline) {
       setFormError("You are offline. Try again when connected.");
@@ -79,7 +78,8 @@ export function VehicleIssuesTab({
 
   return (
     <div className="flex flex-col gap-3">
-      <form onSubmit={(e) => void onCreate(e)} className="flex flex-col gap-2">
+      {/* Nested form tags are invalid under parent VehicleForm. */}
+      <div className="flex flex-col gap-2">
         <h2 className={themeClasses.label}>Report issue</h2>
         {formError ? <Banner tone="danger">{formError}</Banner> : null}
         <Field label="Title">
@@ -99,10 +99,10 @@ export function VehicleIssuesTab({
             disabled={busy || offline}
           />
         </Field>
-        <PrimaryButton type="submit" disabled={busy || offline}>
+        <PrimaryButton type="button" disabled={busy || offline} onClick={() => void onCreate()}>
           {busy ? "Working…" : "Create issue"}
         </PrimaryButton>
-      </form>
+      </div>
 
       <div className="flex flex-col gap-1">
         <h2 className={themeClasses.label}>Issues</h2>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Driver } from "@fleet/sdk";
+import { formatDriverFullName, type Driver } from "@fleet/sdk";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell, Denied, ErrorRetry } from "../../components/app-shell";
@@ -69,18 +69,22 @@ export default function DriversPage() {
         </div>
       ) : (
         <ul className="flex flex-col gap-1">
-          {items?.map((d) => (
-            <li key={d.id}>
-              <Link
-                href={`/drivers/${d.id}`}
-                className={`${themeClasses.raised} p-2 min-h-hit flex flex-col`}
-                aria-label={`${d.email} ${statusCopy(d)}`}
-              >
-                <span className={themeClasses.label}>{d.email}</span>
-                <span className={themeClasses.caption}>{statusCopy(d)}</span>
-              </Link>
-            </li>
-          ))}
+          {items?.map((d) => {
+            const fullName = formatDriverFullName(d);
+            return (
+              <li key={d.id}>
+                <Link
+                  href={`/drivers/${d.id}`}
+                  className={`${themeClasses.raised} p-2 min-h-hit flex flex-col`}
+                  aria-label={[fullName, d.email, statusCopy(d)].filter(Boolean).join(", ")}
+                >
+                  {fullName ? <span className={themeClasses.label}>{fullName}</span> : null}
+                  <span className={fullName ? themeClasses.caption : themeClasses.label}>{d.email}</span>
+                  <span className={themeClasses.caption}>{statusCopy(d)}</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </AppShell>
